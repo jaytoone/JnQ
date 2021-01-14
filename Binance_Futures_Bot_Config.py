@@ -8,6 +8,9 @@ request_client = RequestClient(api_key=g_api_key, secret_key=g_secret_key)
 
 
 class LabelType:
+    OPEN = 'Open'
+    CLOSE = 'Close'
+    PROFIT = 'Profit'
     TRAIN = 'Train'
     TEST = 'Test'
 
@@ -16,7 +19,7 @@ config_json = dict()
 
 config_json["FUNDMTL"] = {
     'run': True,
-    'symbol': "DASHUSDT",
+    'symbol': "ALGOUSDT",
     'bar_close_second': 59,  # <-- in 1m bar
     'accumulated_income': 0.0,
 }

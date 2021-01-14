@@ -26,7 +26,8 @@ pd.set_option('display.max_columns', 2500)
 request_client = RequestClient(api_key=g_api_key, secret_key=g_secret_key)
 
 
-def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, save_path=None, excel=0, get_fig=0, only_profit=False, show_time=False, label_type='Profit'):
+def profitage(df, second_df, third_df, fourth_df, symbol=None, date=None, save_path=None, excel=0, get_fig=0,
+              only_profit=False, show_time=False, label_type='Test'):
     # limit = None  # <-- should be None, if you want all data from concated chart
 
     if date is None:
@@ -46,7 +47,8 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
     # df['senkou_a'], df['senkou_b'] = ichimoku(df)
     second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
+    df = df.join(
+        pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
 
     # second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
     # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]),
@@ -62,10 +64,9 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['h_sar']))
 
     # df['bbw'] = bb_width(df, 20, 2)
-    if fourth_df is not None:
-        fourth_df['b_upper'], fourth_df['b_lower'], fourth_df['bbw'] = bb_width(fourth_df, 20, 2)
-        df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [i for i in range(-3, 0, 1)]),
-                                  columns=['b_upper', 'b_lower', 'bbw']))
+    fourth_df['b_upper'], fourth_df['b_lower'], fourth_df['bbw'] = bb_width(fourth_df, 20, 2)
+    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [i for i in range(-3, 0, 1)]),
+                              columns=['b_upper', 'b_lower', 'bbw']))
 
     # print(df.tail(20))
     # quit()
@@ -82,8 +83,12 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     fisher_upper = 1.5
     fisher_lower = -1.5
     df['fisher_state'] = np.nan
-    df['fisher_state'] = np.where((df['fisher'] > df['fisher'].shift(1)) & (df['fisher'].shift(1) < df['fisher'].shift(2)) & (df['fisher'].shift(1) < fisher_lower), 1, df['fisher_state'])
-    df['fisher_state'] = np.where((df['fisher'] < df['fisher'].shift(1)) & (df['fisher'].shift(1) > df['fisher'].shift(2)) & (df['fisher'].shift(1) > fisher_upper), 0, df['fisher_state'])
+    df['fisher_state'] = np.where(
+        (df['fisher'] > df['fisher'].shift(1)) & (df['fisher'].shift(1) < df['fisher'].shift(2)) & (
+                    df['fisher'].shift(1) < fisher_lower), 1, df['fisher_state'])
+    df['fisher_state'] = np.where(
+        (df['fisher'] < df['fisher'].shift(1)) & (df['fisher'].shift(1) > df['fisher'].shift(2)) & (
+                    df['fisher'].shift(1) > fisher_upper), 0, df['fisher_state'])
 
     third_df['h_fisher'] = fisher(third_df, 30)
     # print(third_df['h_fisher'].tail(50))
@@ -96,13 +101,11 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     # # print(ha_second_df.tail(10))
     # # quit()
     #
+    fourth_df['major_ST1_Up'], fourth_df['major_ST1_Down'], fourth_df['major_ST1_Trend'] = supertrend(fourth_df, 10, 2)
+    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-3, -2, -1]),
+                              columns=['major_ST1_Up', 'major_ST1_Down', 'major_ST1_Trend']))
 
-    if fourth_df is not None:
-        fourth_df['major_ST1_Up'], fourth_df['major_ST1_Down'], fourth_df['major_ST1_Trend'] = supertrend(fourth_df, 10, 2)
-        df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-3, -2, -1]),
-                                  columns=['major_ST1_Up', 'major_ST1_Down', 'major_ST1_Trend']))
-
-        df['major_ST1'] = np.where(df['major_ST1_Trend'] == 1, df['major_ST1_Down'], df['major_ST1_Up'])
+    df['major_ST1'] = np.where(df['major_ST1_Trend'] == 1, df['major_ST1_Down'], df['major_ST1_Up'])
 
     # second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7,
     #                                                                                                   2)
@@ -125,8 +128,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     # print(df.iloc[:, -8:-2].tail(20))
     # quit()
 
-    if label_type == 'Close':
-        return df
+    # if label_type == 'Train':
 
     long_marker_x = list()
     long_marker_y = list()
@@ -175,20 +177,20 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             else:
 
-            #       Fisher Set 2        @
-            # if not np.sum(df['fisher_state'].iloc[back_i:i + 1] == 1) >= 2:
-            #     continue
-            #
-            # else:
+                #       Fisher Set 2        @
+                # if not np.sum(df['fisher_state'].iloc[back_i:i + 1] == 1) >= 2:
+                #     continue
+                #
+                # else:
 
-            #           SAR Set         #
-            # if df['low'].iloc[i] >= df['sar'].iloc[i]:
+                #           SAR Set         #
+                # if df['low'].iloc[i] >= df['sar'].iloc[i]:
 
-            #          MACD Set         #
-            # if df['macd_hist'].iloc[i] > 0:
-            #
-            #         if not df['macd_hist'].iloc[i] >= df['macd_hist'].iloc[i - macd_interval]:
-            #             continue
+                #          MACD Set         #
+                # if df['macd_hist'].iloc[i] > 0:
+                #
+                #         if not df['macd_hist'].iloc[i] >= df['macd_hist'].iloc[i - macd_interval]:
+                #             continue
 
                 #           EMA Set         #
                 # if np.minimum(df['close'].iloc[back_i:i], df['ema'].iloc[back_i:i]).equals(other=df['ema'].iloc[back_i:i]):
@@ -199,55 +201,55 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 # if df['close'].iloc[back_i:i].min() >= np.minimum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):#and \
                 # if df['close'].iloc[i] >= np.minimum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):#and \
                 # if df['ema'].iloc[back_i:i + 1].min() >= np.minimum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):#and \
-                        # df['open'].iloc[i] >= np.minimum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):
+                # df['open'].iloc[i] >= np.minimum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):
 
                 #          AD Set          #
                 # if df['ad'].iloc[i] > df['ad_ema'].iloc[i]:
 
-                    df['trade_state'].iloc[i] = 1
-                    df['ep'].iloc[i] = df['close'].iloc[i]
+                df['trade_state'].iloc[i] = 1
+                df['ep'].iloc[i] = df['close'].iloc[i]
 
-                    df['sl_level'].iloc[i] = df['low'].iloc[back_i:i + 1].min()
-                    # df['sl_level'].iloc[i] = df['low'].iloc[i + 1 - fisher_lookback:i + 1].min()
+                df['sl_level'].iloc[i] = df['low'].iloc[back_i:i + 1].min()
+                # df['sl_level'].iloc[i] = df['low'].iloc[i + 1 - fisher_lookback:i + 1].min()
 
-                    #       tp by gap_ratio     #
-                    # df['tp_level'].iloc[i] = df['close'].iloc[i] + \
-                    #                          (df['close'].iloc[i] - df['low'].iloc[
-                    #                                                 i + 1 - candle_lookback:i + 1].min()) * tp_gap
+                #       tp by gap_ratio     #
+                # df['tp_level'].iloc[i] = df['close'].iloc[i] + \
+                #                          (df['close'].iloc[i] - df['low'].iloc[
+                #                                                 i + 1 - candle_lookback:i + 1].min()) * tp_gap
 
-                    #       tp by tp_ratio      #
-                    # df['tp_level'].iloc[i] = df['ep'].iloc[i] + abs(
-                    #     df['ep'].iloc[i] - df['sl_level'].iloc[i]) * tp_ratio
+                #       tp by tp_ratio      #
+                # df['tp_level'].iloc[i] = df['ep'].iloc[i] + abs(
+                #     df['ep'].iloc[i] - df['sl_level'].iloc[i]) * tp_ratio
 
-                    #       tp by pips      #
-                    # df['tp_level'].iloc[i] = df['ep'].iloc[i] + (10 ** -price_precision) * tp_pips
+                #       tp by pips      #
+                # df['tp_level'].iloc[i] = df['ep'].iloc[i] + (10 ** -price_precision) * tp_pips
 
-                    #       tp by target_tp     #
-                    # df['tp_level'].iloc[i] = df['ep'].iloc[i] + target_tp_percent * df['ep'].iloc[i]
+                #       tp by target_tp     #
+                # df['tp_level'].iloc[i] = df['ep'].iloc[i] + target_tp_percent * df['ep'].iloc[i]
 
-                    #       leverage by sl      #
-                    try:
-                        df['leverage'].iloc[i] = int(target_sl_percent / (
-                                abs(df['ep'].iloc[i] - df['sl_level'].iloc[i]) / df['ep'].iloc[i]))
-                    except Exception as e:
-                        df['leverage'].iloc[i] = max_leverage
-                    else:
-                        df['leverage'].iloc[i] = min(max_leverage, df['leverage'].iloc[i])
+                #       leverage by sl      #
+                try:
+                    df['leverage'].iloc[i] = int(target_sl_percent / (
+                            abs(df['ep'].iloc[i] - df['sl_level'].iloc[i]) / df['ep'].iloc[i]))
+                except Exception as e:
+                    df['leverage'].iloc[i] = max_leverage
+                else:
+                    df['leverage'].iloc[i] = min(max_leverage, df['leverage'].iloc[i])
 
-                    #       leverage by tp      #
-                    # try:
-                    #     df['leverage'].iloc[i] = int(target_tp_percent / (
-                    #             abs(df['ep'].iloc[i] - df['tp_level'].iloc[i]) / df['ep'].iloc[i]))
-                    # except Exception as e:
-                    #     df['leverage'].iloc[i] = 75
-                    # else:
-                    #     df['leverage'].iloc[i] = min(75, df['leverage'].iloc[i])
+                #       leverage by tp      #
+                # try:
+                #     df['leverage'].iloc[i] = int(target_tp_percent / (
+                #             abs(df['ep'].iloc[i] - df['tp_level'].iloc[i]) / df['ep'].iloc[i]))
+                # except Exception as e:
+                #     df['leverage'].iloc[i] = 75
+                # else:
+                #     df['leverage'].iloc[i] = min(75, df['leverage'].iloc[i])
 
-                    #       fixed leverage      #
-                    # df['leverage'].iloc[i] = fixed_leverage
+                #       fixed leverage      #
+                # df['leverage'].iloc[i] = fixed_leverage
 
-                    long_marker_x.append(df.index[i])
-                    long_marker_y.append(df['close'].iloc[i])
+                long_marker_x.append(df.index[i])
+                long_marker_y.append(df['close'].iloc[i])
 
         #           Short            #
 
@@ -286,60 +288,57 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 # if df['close'].iloc[back_i:i].max() <= np.maximum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):# and \
                 # if df['close'].iloc[i] <= np.maximum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):#and \
                 # if df['ema'].iloc[back_i:i + 1].max() <= np.maximum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):# and \
-                    # df['open'].iloc[i] <= np.maximum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):
+                # df['open'].iloc[i] <= np.maximum(df['senkou_a'].iloc[i], df['senkou_b'].iloc[i]):
 
                 #           AD Set          #
                 # if df['ad'].iloc[i] < df['ad_ema'].iloc[i]:
 
-                    df['trade_state'].iloc[i] = 0
-                    df['ep'].iloc[i] = df['close'].iloc[i]
+                df['trade_state'].iloc[i] = 0
+                df['ep'].iloc[i] = df['close'].iloc[i]
 
-                    df['sl_level'].iloc[i] = df['high'].iloc[back_i:i + 1].max()
-                    # df['sl_level'].iloc[i] = df['high'].iloc[i + 1 - fisher_lookback:i + 1].max()
+                df['sl_level'].iloc[i] = df['high'].iloc[back_i:i + 1].max()
+                # df['sl_level'].iloc[i] = df['high'].iloc[i + 1 - fisher_lookback:i + 1].max()
 
-                    #       tp by gap_ratio     #
-                    # df['tp_level'].iloc[i] = df['close'].iloc[i] + \
-                    #                          (df['close'].iloc[i] - df['high'].iloc[
-                    #                                                 i + 1 - candle_lookback:i + 1].max()) * tp_gap
+                #       tp by gap_ratio     #
+                # df['tp_level'].iloc[i] = df['close'].iloc[i] + \
+                #                          (df['close'].iloc[i] - df['high'].iloc[
+                #                                                 i + 1 - candle_lookback:i + 1].max()) * tp_gap
 
-                    #       tp by tp_ratio      #
-                    # df['tp_level'].iloc[i] = df['ep'].iloc[i] - abs(
-                    #     df['ep'].iloc[i] - df['sl_level'].iloc[i]) * tp_ratio
+                #       tp by tp_ratio      #
+                # df['tp_level'].iloc[i] = df['ep'].iloc[i] - abs(
+                #     df['ep'].iloc[i] - df['sl_level'].iloc[i]) * tp_ratio
 
-                    #       tp by pips      #
-                    # df['tp_level'].iloc[i] = df['ep'].iloc[i] - (10 ** -price_precision) * tp_pips
+                #       tp by pips      #
+                # df['tp_level'].iloc[i] = df['ep'].iloc[i] - (10 ** -price_precision) * tp_pips
 
-                    #       tp by target_tp     #
-                    # df['tp_level'].iloc[i] = df['ep'].iloc[i] - target_tp_percent * df['ep'].iloc[i]
+                #       tp by target_tp     #
+                # df['tp_level'].iloc[i] = df['ep'].iloc[i] - target_tp_percent * df['ep'].iloc[i]
 
-                    #       leverage by sl      #
-                    try:
-                        df['leverage'].iloc[i] = int(target_sl_percent / (
-                                abs(df['ep'].iloc[i] - df['sl_level'].iloc[i]) / df['ep'].iloc[i]))
-                    except Exception as e:
-                        df['leverage'].iloc[i] = max_leverage
-                    else:
-                        df['leverage'].iloc[i] = min(max_leverage, df['leverage'].iloc[i])
+                #       leverage by sl      #
+                try:
+                    df['leverage'].iloc[i] = int(target_sl_percent / (
+                            abs(df['ep'].iloc[i] - df['sl_level'].iloc[i]) / df['ep'].iloc[i]))
+                except Exception as e:
+                    df['leverage'].iloc[i] = max_leverage
+                else:
+                    df['leverage'].iloc[i] = min(max_leverage, df['leverage'].iloc[i])
 
-                    #       leverage by tp      #
-                    # try:
-                    #     df['leverage'].iloc[i] = int(target_tp_percent / (
-                    #             abs(df['ep'].iloc[i] - df['tp_level'].iloc[i]) / df['ep'].iloc[i]))
-                    # except Exception as e:
-                    #     df['leverage'].iloc[i] = 75
-                    # else:
-                    #     df['leverage'].iloc[i] = min(75, df['leverage'].iloc[i])
+                #       leverage by tp      #
+                # try:
+                #     df['leverage'].iloc[i] = int(target_tp_percent / (
+                #             abs(df['ep'].iloc[i] - df['tp_level'].iloc[i]) / df['ep'].iloc[i]))
+                # except Exception as e:
+                #     df['leverage'].iloc[i] = 75
+                # else:
+                #     df['leverage'].iloc[i] = min(75, df['leverage'].iloc[i])
 
-                    # df['leverage'].iloc[i] = fixed_leverage
+                # df['leverage'].iloc[i] = fixed_leverage
 
-                    short_marker_x.append(df.index[i])
-                    short_marker_y.append(df['close'].iloc[i])
+                short_marker_x.append(df.index[i])
+                short_marker_y.append(df['close'].iloc[i])
 
     # print(df.trade_state)
     # quit()
-
-    if label_type == 'Open':
-        return df
 
     length = len(df.index) - 1  # 데이터 갯수 = 1, m = 0  >> 데이터 갯수가 100 개면 m 번호는 99 까지 ( 1 - 100 )
 
@@ -349,7 +348,6 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     Profits = pd.DataFrame(index=df.index, columns=["Profits"])
 
     Profits.Profits = 1.0
-    Loss = 1.0
     exit_fluc = 0
     exit_count = 0
 
@@ -524,9 +522,9 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
                 else:
                     if df['fisher_state'].iloc[m] == 0:
-                    # if df['fisher_state'].iloc[m] == 0 and df['sar'].iloc[m] <= df['low'].iloc[m]:
-                    #     if df['close'].iloc[m] >= ep:
-                            TP_switch = True
+                        # if df['fisher_state'].iloc[m] == 0 and df['sar'].iloc[m] <= df['low'].iloc[m]:
+                        #     if df['close'].iloc[m] >= ep:
+                        TP_switch = True
 
                 # -------------------- SL -------------------- #
                 #           By SAR          #
@@ -549,10 +547,10 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 #     SL_switch = True
 
                 #            By Price           #
-                # if df['low'].iloc[m] < sl_level:
-                if df['close'].iloc[m] < sl_level:
-                    close_state.iloc[m] = 'Price SL'
-                    SL_switch = True
+                # # if df['low'].iloc[m] < sl_level:
+                # if df['close'].iloc[m] < sl_level:
+                #     close_state.iloc[m] = 'Price SL'
+                #     SL_switch = True
 
             #               Short Type              #
             elif order_type == 'Short':
@@ -577,9 +575,9 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
                 else:
                     if df['fisher_state'].iloc[m] == 1:
-                    # if df['fisher_state'].iloc[m] == 1 and df['sar'].iloc[m] >= df['high'].iloc[m]:
-                    #     if df['close'].iloc[m] <= ep:
-                            TP_switch = True
+                        # if df['fisher_state'].iloc[m] == 1 and df['sar'].iloc[m] >= df['high'].iloc[m]:
+                        #     if df['close'].iloc[m] <= ep:
+                        TP_switch = True
 
                 # -------------------- SL -------------------- #
                 #           By SAR          #
@@ -602,10 +600,10 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 #     SL_switch = True
 
                 #            By Price           #
-                # if df['high'].iloc[m] > sl_level:
-                if df['close'].iloc[m] > sl_level:
-                    close_state.iloc[m] = 'Price SL'
-                    SL_switch = True
+                # # if df['high'].iloc[m] > sl_level:
+                # if df['close'].iloc[m] > sl_level:
+                #     close_state.iloc[m] = 'Price SL'
+                #     SL_switch = True
 
             if not (TP_switch or SL_switch):
 
@@ -632,37 +630,66 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
                 if TP_switch:
 
-                    tp_count -= 1
-                    tp_marker_x.append(df.index[m])
+                    if tp_count == total_tp_cnt:
 
-                    if not pd.isna(tp_level):
-                        profit_gap = ((tp_level / ep - trade_fee) - 1) * qty_list.pop(tp_count) * leverage
+                        #       첫 open 부터 tp 까지의 open signal 을 조회        #
+                        #       진입 가능했던 부분의 ep, qty, leverage 조사 후 수익 계산       #
+                        #       혹시라도 나중 partial close 조합을 고려한다면, 첫 tp 에만 init 하는 로직 추가      #
+                        if order_type == 'Long':
+                            open_part = np.argwhere(df['trade_state'].iloc[open_signal_m:m] == 1) + open_signal_m
+                        else:
+                            open_part = np.argwhere(df['trade_state'].iloc[open_signal_m:m] == 0) + open_signal_m
+
+                        open_qty_list = [0.1, 0.2, 0.3, 0.4]
+                        ep_list, leverage_list = list(), list()
+                        for opart_i in open_part:
+                            ep_list.append(df['ep'].iloc[opart_i].values)
+                            leverage_list.append(df['leverage'].iloc[opart_i].values)
+                            if len(ep_list) >= 4:
+                                break
+                        # print('ep_list, leverage_list :', ep_list, leverage_list)
+                        # quit()
+
+                    tp_count -= 1
+                    # tp_count = 0
+                    tp_marker_x.append(df.index[m])
+                    # print('open_part :', list(map(lambda x: df.index[x], list(open_part))))
+                    # quit()
+
+                    if not pd.isna(tp_level):   # --> End Asset / Start Asset ?
+                        # profit_gap = ((tp_level / ep - trade_fee) - 1) * qty_list.pop(tp_count) * leverage
                         tp_marker_y.append(tp_level)
+
+                        for _ in range(len(ep_list)):
+                            profit += (tp_level / ep_list.pop(0) - trade_fee - 1) * open_qty_list.pop(0) * leverage_list.pop(0)
 
                     else:
                         # print('exit_price used')
                         # print(exit_price, ep, qty_list, leverage, end=' ')
-                        profit_gap = ((exit_price / ep - trade_fee) - 1) * qty_list.pop(tp_count) * leverage
+                        # profit_gap = ((exit_price / ep - trade_fee) - 1) * qty_list.pop(tp_count) * leverage
                         # print(profit_gap)
                         tp_marker_y.append(exit_price)
 
-                    profit += profit_gap
+                        for _ in range(len(ep_list)):
+                            profit += (exit_price / ep_list.pop(0) - trade_fee - 1) * open_qty_list.pop(0) * leverage_list.pop(0)
 
-                else:
-                    tp_count = 0
-                    sl_marker_x.append(df.index[m])
+                    # profit += profit_gap
 
-                    if not pd.isna(sl_level):
-                        profit_gap = ((sl_level / ep - trade_fee) - 1) * sum(qty_list) * leverage
-                        sl_marker_y.append(sl_level)
-
-                    else:
-                        # print(exit_price, ep, qty_list, leverage, end=' ')
-                        profit_gap = ((exit_price / ep - trade_fee) - 1) * sum(qty_list) * leverage
-                        # print(profit_gap)
-                        sl_marker_y.append(exit_price)
-
-                    profit += profit_gap
+                # else:
+                #     tp_count = 0
+                #     sl_marker_x.append(df.index[m])
+                #
+                #     if not pd.isna(sl_level):
+                #         profit_gap = ((sl_level / ep - trade_fee) - 1) * sum(qty_list) * leverage
+                #         sl_marker_y.append(sl_level)
+                #
+                #     else:
+                #         # print(exit_price, ep, qty_list, leverage, end=' ')
+                #         profit_gap = ((exit_price / ep - trade_fee) - 1) * sum(qty_list) * leverage
+                #         # print(profit_gap)
+                #         sl_marker_y.append(exit_price)
+                #
+                #     profit += profit_gap
 
                 if tp_count == 0:
 
@@ -671,10 +698,15 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                     else:
                         Profits.iloc[m] = 1 - profit
 
+                    #       청산      #
+                    if Profits.iloc[m].values < 0:
+                        Profits.iloc[m] = 0
+
+                    # print('Profits.iloc[m] :', Profits.iloc[m])
+
                     #           Lose           #
                     if float(Profits.iloc[m]) < 1:
                         # print('Minus Profits at %s %.3f' % (m, float(Profits.iloc[m])))
-                        Loss *= float(Profits.iloc[m])
 
                         if order_type == 'Long':
                             long_lose_cnt += 1
@@ -765,7 +797,6 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
             cum_short_profit = 0
 
         if not only_profit:
-
             #           ohlc          #
             ohlc_ply = go.Candlestick(x=df.index, open=df['open'], close=df['close'], high=df['high'], low=df['low'],
                                       name='ohlc')
@@ -773,9 +804,10 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
             #       indicator       #
             senkou_a_ply = go.Scatter(x=df.index, y=df['senkou_a'], name='senkou_a', line={'color': 'green'})
             senkou_b_ply = go.Scatter(x=df.index, y=df['senkou_b'], name='senkou_b', line={'color': 'red'})
-            sar_ply = go.Scatter(x=df.index, y=df['sar'], name='sar', mode='markers', marker=dict(size=3, color='dodgerblue'))
+            sar_ply = go.Scatter(x=df.index, y=df['sar'], name='sar', mode='markers',
+                                 marker=dict(size=3, color='dodgerblue'))
             # h_sar_ply = go.Scatter(x=df.index, y=df['h_sar'], name='h_sar', line={'color': 'dodgerblue'})
-            # st_ply = go.Scatter(x=df.index, y=df['major_ST1'], name='major_ST1', line={'color': 'gold'})
+            st_ply = go.Scatter(x=df.index, y=df['major_ST1'], name='major_ST1', line={'color': 'gold'})
 
             fisher_ply = go.Scatter(x=df.index, y=df['fisher'], name='fisher', line={'color': 'lime'})
             h_fisher_ply = go.Scatter(x=df.index, y=df['h_fisher'], name='h_fisher', line={'color': 'lime'})
@@ -785,24 +817,24 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             macd_ply = go.Scatter(x=df.index, y=df['macd_hist'], name='macd_hist', line={'color': 'dodgerblue'})
 
-            # bbw_ply = go.Scatter(x=df.index, y=df['bbw'], name='bbw', line={'color': 'dodgerblue'})
+            bbw_ply = go.Scatter(x=df.index, y=df['bbw'], name='bbw', line={'color': 'dodgerblue'})
 
         profit_ply = go.Scatter(x=df.index, y=df['Profits'].cumprod(), name='profits', fill='tozeroy')
-        profit_ma_ply = go.Scatter(x=df.index, y=df['Profits'].cumprod().rolling(2000).mean(), name='profits_ma', line={'color': 'lime'})
 
         if not only_profit:
-
             #       marker      #
             l_marker_ply = go.Scatter(x=long_marker_x, y=long_marker_y, mode='markers',
                                       marker=dict(symbol=5, size=10, color='lime'), name='long')
             s_marker_ply = go.Scatter(x=short_marker_x, y=short_marker_y, mode='markers',
                                       marker=dict(symbol=6, size=10, color='yellow'), name='short')
-            tp_marker_ply = go.Scatter(x=tp_marker_x, y=tp_marker_y, mode='markers', marker=dict(size=10, color='blue'), name='tp')
-            sl_marker_ply = go.Scatter(x=sl_marker_x, y=sl_marker_y, mode='markers', marker=dict(size=10, color='red'), name='sl')
+            tp_marker_ply = go.Scatter(x=tp_marker_x, y=tp_marker_y, mode='markers', marker=dict(size=10, color='blue'),
+                                       name='tp')
+            sl_marker_ply = go.Scatter(x=sl_marker_x, y=sl_marker_y, mode='markers', marker=dict(size=10, color='red'),
+                                       name='sl')
 
             #       sum it up       #
             # price_data = [ohlc_ply, senkou_a_ply, senkou_b_ply]
-            price_data = [ohlc_ply, sar_ply, senkou_a_ply, senkou_b_ply,
+            price_data = [ohlc_ply, sar_ply, senkou_a_ply, senkou_b_ply, st_ply,
                           l_marker_ply, s_marker_ply, tp_marker_ply, sl_marker_ply]
             # ad_data = [ad_ply, ad_ema_ply]
 
@@ -814,10 +846,11 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
             row, col = 4, 1
             fig = subplots.make_subplots(row, col, shared_xaxes=True, row_width=[0.2, 0.2, 0.2, 0.4])
         title_text = 'Profit (Total, L, S, Max, Min) : %.3f %.3f %.3f %.3f %.3f, Win Ratio (L, S, Total) : %.3f %.3f %.3f' \
-                                                            % (float(profits.iloc[-1]), cum_long_profit, cum_short_profit,
-                                                               np.max(df['Profits']), np.min(df['Profits']),
-                                                               long_win_ratio, short_win_ratio, total_win_ratio)
-        fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, title={'text': title_text, 'x': 0.5}, dragmode='pan')
+                     % (float(profits.iloc[-1]), cum_long_profit, cum_short_profit,
+                        np.max(df['Profits']), np.min(df['Profits']),
+                        long_win_ratio, short_win_ratio, total_win_ratio)
+        fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, title={'text': title_text, 'x': 0.5},
+                          dragmode='pan')
 
         if not only_profit:
 
@@ -827,11 +860,13 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             for trade_num in range(len(spanlist_win)):
                 x0, x1 = spanlist_win[trade_num]
-                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % win_profit[trade_num], annotation_position='top left',
+                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % win_profit[trade_num],
+                              annotation_position='top left',
                               fillcolor="cyan", opacity=0.25, line_width=0, row=row, col=col)
             for trade_num in range(len(spanlist_lose)):
                 x0, x1 = spanlist_lose[trade_num]
-                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % lose_profit[trade_num], annotation_position='top left',
+                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % lose_profit[trade_num],
+                              annotation_position='top left',
                               fillcolor="magenta", opacity=0.25, line_width=0, row=row, col=col)
 
             row, col = 2, 1
@@ -844,17 +879,19 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             for trade_num in range(len(spanlist_win)):
                 x0, x1 = spanlist_win[trade_num]
-                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % win_profit[trade_num], annotation_position='top left',
+                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % win_profit[trade_num],
+                              annotation_position='top left',
                               fillcolor="cyan", opacity=0.25, line_width=0, row=row, col=col)
             for trade_num in range(len(spanlist_lose)):
                 x0, x1 = spanlist_lose[trade_num]
-                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % lose_profit[trade_num], annotation_position='top left',
+                fig.add_vrect(x0=df.index[x0], x1=df.index[x1], annotation_text='%.3f' % lose_profit[trade_num],
+                              annotation_position='top left',
                               fillcolor="magenta", opacity=0.25, line_width=0, row=row, col=col)
 
             row, col = 3, 1
             # fig.append_trace(macd_ply, row, col)
             # fig.add_hline(y=0., row=row, col=col, line_dash="dash", line_width=1)
-            # fig.append_trace(bbw_ply, row, col)
+            fig.append_trace(bbw_ply, row, col)
             fig.add_hline(y=0.015, row=row, col=col, line_dash="dash", line_width=1)
             # for trace in ad_data:
             #     fig.append_trace(trace, row, col)
@@ -864,14 +901,13 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
             row, col = 1, 1
 
         fig.append_trace(profit_ply, row, col)
-        fig.append_trace(profit_ma_ply, row, col)
 
         # offline.offline.build_save_image_post_script(script_decorator(offline.offline.build_save_image_post_script))
         # offline.iplot(fig)
         if save_path is not None:
             fig.write_html('%s/%s.html' % (save_path, date), auto_open=True)
         else:
-            fig.write_html('Invest_Stability/Temp/%s.html' % date, auto_open=True)
+            fig.write_html('%s.html' % date, auto_open=True)
 
         if show_time:
             print('time consumed by plotly :', time.time() - startTime)
@@ -894,7 +930,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     # std = np.std(max_abs_scaler(df[df['trade_state'] == 2.]['MACD_OSC']))
     # print(std)
 
-    return float(profits.iloc[-1]), float(profits.iloc[-1]) / Loss, Loss, profits_avg[
+    return float(profits.iloc[-1]), _, _, profits_avg[
         0], np.min(Profits.values), exit_fluc_mean
 
 

@@ -49,6 +49,8 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
             # print(result.tail())
             # quit()
 
+            assert len(df) != 0, "Candlestick Data Doesn't Exist"
+
             if day_cnt == 0:
                 sum_df = df
             else:
@@ -58,6 +60,9 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 
         except Exception as e:
             print('Error in get_candlestick_data :', e)
+
+            if len(df) == 0:
+                quit()
 
     # end_date = str(datetime.fromtimestamp(endTime / 1000)).split(' ')[0]
     # print(len(sum_df[~sum_df.index.duplicated(keep='first')]))

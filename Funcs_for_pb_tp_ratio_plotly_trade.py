@@ -775,7 +775,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
             senkou_b_ply = go.Scatter(x=df.index, y=df['senkou_b'], name='senkou_b', line={'color': 'red'})
             sar_ply = go.Scatter(x=df.index, y=df['sar'], name='sar', mode='markers', marker=dict(size=3, color='dodgerblue'))
             # h_sar_ply = go.Scatter(x=df.index, y=df['h_sar'], name='h_sar', line={'color': 'dodgerblue'})
-            # st_ply = go.Scatter(x=df.index, y=df['major_ST1'], name='major_ST1', line={'color': 'gold'})
+            st_ply = go.Scatter(x=df.index, y=df['major_ST1'], name='major_ST1', line={'color': 'gold'})
 
             fisher_ply = go.Scatter(x=df.index, y=df['fisher'], name='fisher', line={'color': 'lime'})
             h_fisher_ply = go.Scatter(x=df.index, y=df['h_fisher'], name='h_fisher', line={'color': 'lime'})
@@ -785,7 +785,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             macd_ply = go.Scatter(x=df.index, y=df['macd_hist'], name='macd_hist', line={'color': 'dodgerblue'})
 
-            # bbw_ply = go.Scatter(x=df.index, y=df['bbw'], name='bbw', line={'color': 'dodgerblue'})
+            bbw_ply = go.Scatter(x=df.index, y=df['bbw'], name='bbw', line={'color': 'dodgerblue'})
 
         profit_ply = go.Scatter(x=df.index, y=df['Profits'].cumprod(), name='profits', fill='tozeroy')
         profit_ma_ply = go.Scatter(x=df.index, y=df['Profits'].cumprod().rolling(2000).mean(), name='profits_ma', line={'color': 'lime'})
@@ -802,7 +802,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             #       sum it up       #
             # price_data = [ohlc_ply, senkou_a_ply, senkou_b_ply]
-            price_data = [ohlc_ply, sar_ply, senkou_a_ply, senkou_b_ply,
+            price_data = [ohlc_ply, sar_ply, senkou_a_ply, senkou_b_ply, st_ply,
                           l_marker_ply, s_marker_ply, tp_marker_ply, sl_marker_ply]
             # ad_data = [ad_ply, ad_ema_ply]
 
@@ -854,7 +854,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
             row, col = 3, 1
             # fig.append_trace(macd_ply, row, col)
             # fig.add_hline(y=0., row=row, col=col, line_dash="dash", line_width=1)
-            # fig.append_trace(bbw_ply, row, col)
+            fig.append_trace(bbw_ply, row, col)
             fig.add_hline(y=0.015, row=row, col=col, line_dash="dash", line_width=1)
             # for trace in ad_data:
             #     fig.append_trace(trace, row, col)
@@ -871,7 +871,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
         if save_path is not None:
             fig.write_html('%s/%s.html' % (save_path, date), auto_open=True)
         else:
-            fig.write_html('Invest_Stability/Temp/%s.html' % date, auto_open=True)
+            fig.write_html('%s.html' % date, auto_open=True)
 
         if show_time:
             print('time consumed by plotly :', time.time() - startTime)

@@ -1,11 +1,9 @@
 from Binance_Futures_Modules import *
 from Funcs_For_Trade import *
 # from Funcs_Indicator import *
-from Funcs_for_Open_Ichimoku_modified import profitage
-from Funcs_for_Close_Ichimoku_modified import profitage as c_profitage
+from Funcs_for_pb_tp_ratio_plotly_trade import profitage
 from Binance_Futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
-
 
 #            Initialize Part by Symbol           #
 #            First Configuration       #
@@ -33,7 +31,7 @@ else:
 
 print()
 print('Trade Running Now...')
-
+m = -1
 
 while 1:
 
@@ -69,23 +67,21 @@ while 1:
         try:
             first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
             second_df, _ = concat_candlestick(fundamental.symbol, '3m', days=1)
-            third_df, _ = concat_candlestick(fundamental.symbol, '30m', days=1)
+            third_df, _ = concat_candlestick(fundamental.symbol, '15m', days=1)
 
-            df = profitage(first_df, second_df, third_df, label_type=LabelType.TEST)
+            df = profitage(first_df, second_df, third_df, label_type=LabelType.OPEN)
             print('df.index[-1] :', df.index[-1])
 
         except Exception as e:
             print('Error in making Test set :', e)
             continue
 
-        last_i = -1
-
         #           Open Condition          #
         #               Long & Short               #
-        if df['trade_state'].iloc[last_i] == 1:
+        if df['trade_state'].iloc[m] == 1:
             open_side = OrderSide.BUY
 
-        elif df['trade_state'].iloc[last_i] == 0:
+        elif df['trade_state'].iloc[m] == 0:
             open_side = OrderSide.SELL
 
         if open_side is not None:
@@ -95,9 +91,7 @@ while 1:
     print('We Got Open Signal.')
     print('open_side :', open_side)
 
-    #             Set Leverage              #
-    target_percentage = 0.05
-
+    #             Load Trade Options              #
     if order.entry_type == OrderType.MARKET:
         #             ep with Market            #
         try:
@@ -106,37 +100,12 @@ while 1:
             print('Error in get_market_price :', e)
     else:
         #             ep with Limit             #
-        ep = df['ep'].iloc[last_i]
+        ep = df['ep'].iloc[m]
 
     #           TP & SL             #
-    sl_level = df['sl_level'].iloc[last_i]
-    tp_level = df['tp_level'].iloc[last_i]
-    leverage = df['leverage'].iloc[last_i]
-
-    partial_num = 3
-    partial_qty_divider = 1.5
-
-    tp_list = list()
-    if open_side == OrderSide.BUY:
-
-        for part_i in range(partial_num, 0, -1):
-            tmp_tp_level = ep + abs(tp_level - ep) * (part_i / partial_num)
-            tp_list.append(tmp_tp_level)
-
-        if order.entry_type == OrderType.MARKET:
-            if ep <= sl_level:
-                print('ep <= level : %s <= %s' % (ep, sl_level))
-                continue
-    else:
-
-        for part_i in range(partial_num, 0, -1):
-            tmp_tp_level = ep - abs(tp_level - ep) * (part_i / partial_num)
-            tp_list.append(tmp_tp_level)
-
-        if order.entry_type == OrderType.MARKET:
-            if ep >= sl_level:
-                print('ep >= level : %s >= %s' % (ep, sl_level))
-                continue
+    sl_level = df['sl_level'].iloc[m]
+    tp_level = df['tp_level'].iloc[m]
+    leverage = df['leverage'].iloc[m]
 
     #         Get price, volume precision --> 가격 변동으로 인한 precision 변동 가능성       #
     try:
@@ -149,13 +118,40 @@ while 1:
         print('quantity_precision :', quantity_precision)
 
     sl_level = calc_with_precision(sl_level, price_precision)
-    tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
-    # leverage = int(target_percentage / (abs(ep - sl_level) / ep))
     leverage = min(limit_leverage, leverage)
     print('ep :', ep)
     print('sl_level :', sl_level)
-    print('tp_list :', tp_list)
     print('leverage :', leverage)
+
+    partial_num = 3
+    partial_qty_divider = 1.5
+
+    if not pd.isna(tp_level):
+
+        tp_list = list()
+        if open_side == OrderSide.BUY:
+
+            for part_i in range(partial_num, 0, -1):
+                tmp_tp_level = ep + abs(tp_level - ep) * (part_i / partial_num)
+                tp_list.append(tmp_tp_level)
+
+            if order.entry_type == OrderType.MARKET:
+                if ep <= sl_level:
+                    print('ep <= level : %s <= %s' % (ep, sl_level))
+                    continue
+        else:
+
+            for part_i in range(partial_num, 0, -1):
+                tmp_tp_level = ep - abs(tp_level - ep) * (part_i / partial_num)
+                tp_list.append(tmp_tp_level)
+
+            if order.entry_type == OrderType.MARKET:
+                if ep >= sl_level:
+                    print('ep >= level : %s >= %s' % (ep, sl_level))
+                    continue
+
+        tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
+        print('tp_list :', tp_list)
 
     try:
         request_client.change_initial_leverage(symbol=fundamental.symbol, leverage=leverage)
@@ -278,13 +274,15 @@ while 1:
 
         while 1:  # TP limit close loop
 
-            try:
-                partial_limit(fundamental.symbol, tp_list, close_side, quantity_precision, partial_qty_divider)
+            if not pd.isna(tp_level):
 
-            except Exception as e:
-                print('Error in partial_limit :', e)
-                time.sleep(1)
-                continue
+                try:
+                    partial_limit(fundamental.symbol, tp_list, close_side, quantity_precision, partial_qty_divider)
+
+                except Exception as e:
+                    print('Error in partial_limit :', e)
+                    time.sleep(1)
+                    continue
 
             TP_switch, SL_switch = False, False
             while 1:
@@ -298,9 +296,9 @@ while 1:
                     try:
                         first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
                         second_df, _ = concat_candlestick(fundamental.symbol, '3m', days=1)
-                        third_df, _ = concat_candlestick(fundamental.symbol, '30m', days=1)
+                        third_df, _ = concat_candlestick(fundamental.symbol, '15m', days=1)
 
-                        df = c_profitage(first_df, second_df, third_df, label_type=LabelType.TEST)
+                        df = profitage(first_df, second_df, third_df, label_type=LabelType.CLOSE)
 
                     except Exception as e:
                         print('Error in making Test set :', e)
@@ -310,29 +308,42 @@ while 1:
                     try:
                         #               Long                #
                         if open_side == OrderSide.BUY:
+
+                            #           TP by Fisher        #
+                            if df['fisher_state'].iloc[m] == 0:
+                                TP_switch = True
+
                             #           SL by Trix          #
-                            if df['trix'].iloc[last_i - 1] > 0 >= df['trix'].iloc[last_i]:
-                                SL_switch = True
-                                print('trix info :', df['trix'].iloc[last_i - 1], df['trix'].iloc[last_i])
+                            # if df['trix'].iloc[m - 1] > 0 >= df['trix'].iloc[m]:
+                            #     SL_switch = True
+                            #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
 
                         #               Short               #
                         else:
-                            #           By Trix         #
-                            if df['trix'].iloc[last_i - 1] < 0 <= df['trix'].iloc[last_i]:
-                                SL_switch = True
-                                print('trix info :', df['trix'].iloc[last_i - 1], df['trix'].iloc[last_i])
+                            #           TP by Fisher        #
+                            if df['fisher_state'].iloc[m] == 1:
+                                TP_switch = True
+
+                            #           SL By Trix         #
+                            # if df['trix'].iloc[m - 1] < 0 <= df['trix'].iloc[m]:
+                            #     SL_switch = True
+                            #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
 
                     except Exception as e:
                         print('Error in Close Condition :', e)
                         continue
 
-                else:
-                    #          Just Take Realtime price and watch SL condition      #
-                    try:
-                        realtime_price = get_market_price(fundamental.symbol)
-                    except Exception as e:
-                        print('Error in get_market_price :', e)
-                        continue
+                # else:  # <-- for non-wait bar closing time function
+
+                    # #          Just Take Realtime price and watch SL condition      #
+                    # try:
+                    #     realtime_price = get_market_price(fundamental.symbol)
+                    # except Exception as e:
+                    #     print('Error in get_market_price :', e)
+                    #     continue
+
+                    #           SL by Price with ClosePrice        #
+                    realtime_price = df['close'].iloc[m]
 
                     #           Close Condition          #
                     try:
@@ -344,6 +355,7 @@ while 1:
                                 print('realtime_price :', realtime_price)
                                 SL_switch = True
 
+                        #               Short                #
                         else:
                             #           SL by Price           #
                             if realtime_price > sl_level:
@@ -354,23 +366,24 @@ while 1:
                         print('Error in SL by Price :', e)
                         continue
 
-                #               Public : Check Remaining Quantity             #
-                try:
-                    quantity = get_remaining_quantity(fundamental.symbol)
-                except Exception as e:
-                    print('Error in get_remaining_quantity :', e)
-                    continue
+                if not pd.isna(tp_level):
 
-                if quantity == 0.0:
-                    TP_switch = True
+                    #               Public : Check Remaining Quantity             #
+                    try:
+                        quantity = get_remaining_quantity(fundamental.symbol)
+                    except Exception as e:
+                        print('Error in get_remaining_quantity :', e)
+                        continue
+
+                    if quantity == 0.0:
+                        TP_switch = True
 
                 if TP_switch or SL_switch:
                     break
-                # --- wait until close condition satisfied... ---
 
             print('We Got Close Signal.')
 
-            if TP_switch:  # Trade Done!
+            if TP_switch and not pd.isna(tp_level):  # Trade Done!
                 break
             else:
                 cancel_TP = False
@@ -421,19 +434,23 @@ while 1:
                         if not re_close:
 
                             if close_side == OrderSide.SELL:
-                                stop_price = calc_with_precision(realtime_price + 1 * 10 ** -price_precision, price_precision)
+                                stop_price = calc_with_precision(realtime_price + 5 * 10 ** -price_precision,
+                                                                 price_precision)
                             else:
-                                stop_price = calc_with_precision(realtime_price - 1 * 10 ** -price_precision, price_precision)
+                                stop_price = calc_with_precision(realtime_price - 5 * 10 ** -price_precision,
+                                                                 price_precision)
 
                             #           Stop Limit Order            #
                             request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol,
                                                       side=close_side,
                                                       ordertype=order.sl_type, stopPrice=str(stop_price),
-                                                      quantity=str(quantity), price=str(realtime_price), reduceOnly=True)
+                                                      quantity=str(quantity), price=str(realtime_price),
+                                                      reduceOnly=True)
 
                         else:
                             #           Market Order            #
-                            result = request_client.post_order(symbol=fundamental.symbol, side=close_side, ordertype=OrderType.MARKET,
+                            result = request_client.post_order(symbol=fundamental.symbol, side=close_side,
+                                                               ordertype=OrderType.MARKET,
                                                                quantity=str(quantity), reduceOnly=True)
 
                     except Exception as e:
@@ -466,7 +483,7 @@ while 1:
                         re_close = True
                         continue
 
-                break   # <--- Break for All Close Loop, Break Partial Limit Loop
+                break  # <--- Break for All Close Loop, Break Partial Limit Loop
 
         end_timestamp = int(time.time() * 1000)
         #           Get Total Income from this Trade       #

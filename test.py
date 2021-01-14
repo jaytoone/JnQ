@@ -1,6 +1,9 @@
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
+if 1 and not pd.isna(1):
+    print('break')
 # price = 1.0074
 #
 # try:
@@ -16,9 +19,10 @@ from datetime import datetime
 
 # print(datetime.fromtimestamp(1610197130835/ 1000))
 # print(int('08'))
-import numpy as np
-tlist = [2, 2, 1, 4, 2]
-print(np.cumprod(tlist))
+# import os
+
+# tlist = [2, 2, 1, 4, 2]
+# print(np.cumprod(tlist))
 # # print(tlist.pop(2))
 # # print(sum(tlist))
 # print(tlist[0:1])

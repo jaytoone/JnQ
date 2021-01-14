@@ -188,14 +188,14 @@ if __name__ == '__main__':
     model_num = 1228
     data_amount = 0
 
-    days = 3
-    # end_date = '2020-11-02'
-    end_date = '2020-08-24'
-    end_date = '2020-08-30'
-    # end_date = '2021-01-10'
-    # end_date = None
-    symbol = 'DASHUSDT'
-    label_type = LabelType.TRAIN
+    days = 1
+    end_date = '2020-12-09'
+    # end_date = '2020-08-24'
+    # end_date = '2020-08-27'
+    # end_date = '2021-01-13'
+    end_date = None
+    symbol = 'ALGOUSDT'
+    label_type = LabelType.PROFIT
 
     startTime = time.time()
 
@@ -204,11 +204,11 @@ if __name__ == '__main__':
     first_df, _ = concat_candlestick(symbol, '1m', days, end_date=end_date, show_process=True)
     second_df, _ = concat_candlestick(symbol, '3m', days, end_date=end_date, show_process=True)
     third_df, _ = concat_candlestick(symbol, '15m', days, end_date=end_date, show_process=True)
-    fourth_df, _ = concat_candlestick(symbol, '4h', days, end_date=end_date, show_process=True)
+    fourth_df, _ = concat_candlestick(symbol, '1h', days, end_date=end_date, show_process=True)
 
     print('elapsed by concat_candlestick :', time.time() - startTime)
 
-    result = profitage(first_df, second_df, third_df, fourth_df=fourth_df, date=end_date, symbol=symbol,
+    result = profitage(first_df, second_df, third_df, date=end_date, symbol=symbol,
                        label_type=label_type, get_fig=1, excel=1, only_profit=False, show_time=True)
     print(result)
 

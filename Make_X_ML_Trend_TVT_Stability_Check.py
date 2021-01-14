@@ -191,16 +191,17 @@ if __name__ == '__main__':
     data_amount = 0
 
     days = 30
-    date_iter = 10
+    date_iter = 5
     end_date = '2021-01-07'
+    # end_date = '2020-07-10'
     # end_date = None
-    symbol = 'DASHUSDT'
-    label_type = LabelType.TRAIN
+    symbol = 'BANDUSDT'
+    label_type = LabelType.PROFIT
 
     startTime = time.time()
 
     #           Make Save dir for html          #
-    save_path = "./Invest_Stability/%s" % to_timestamp(datetime.now())
+    save_path = "./Invest_Stability/%s %s" % (to_timestamp(datetime.now()), symbol)
     try:
         os.mkdir(save_path)
 
@@ -218,10 +219,11 @@ if __name__ == '__main__':
         first_df, _ = concat_candlestick(symbol, '1m', days, end_date=end_date, show_process=True)
         second_df, _ = concat_candlestick(symbol, '3m', days, end_date=end_date, show_process=True)
         third_df, _ = concat_candlestick(symbol, '15m', days, end_date=end_date, show_process=True)
+        fourth_df, _ = concat_candlestick(symbol, '1h', days, end_date=end_date, show_process=True)
 
         print('elapsed by concat_candlestick :', time.time() - startTime)
 
-        result = profitage(first_df, second_df, third_df, date=end_date, save_path=save_path, symbol=symbol, label_type=label_type, get_fig=1, excel=1, only_profit=True, show_time=True)
+        result = profitage(first_df, second_df, third_df, fourth_df, date=end_date, save_path=save_path, symbol=symbol, label_type=label_type, get_fig=1, excel=1, only_profit=True, show_time=True)
         print(result)
 
         print('elapsed by profitage :', time.time() - startTime)

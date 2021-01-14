@@ -20,8 +20,11 @@ __pycache__/
 # ppt
 *.pptx
 
+README.md
+
 # Exclude Folder
 pred_ohlcv/
+Tensorboard_graph/
 trading_bot/
 trading_bot
 model
