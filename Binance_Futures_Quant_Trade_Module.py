@@ -63,6 +63,8 @@ while 1:
         else:
             continue
 
+        temp_time = time.time()
+
         #       Check Condition      #
         try:
             first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
@@ -75,6 +77,8 @@ while 1:
         except Exception as e:
             print('Error in making Test set :', e)
             continue
+
+        print('checking time :', time.time() - temp_time)
 
         #           Open Condition          #
         #               Long & Short               #
@@ -287,63 +291,69 @@ while 1:
             TP_switch, SL_switch = False, False
             while 1:
 
-                time.sleep(.5)
+                time.sleep(.1)
 
                 #           Wait for bar closing time         #
-                if datetime.now().second >= fundamental.bar_close_second:
+                if datetime.now().second >= fundamental.bar_close_second - 1:  # approximate close
 
-                    #       Check Condition      #
-                    try:
-                        first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
-                        second_df, _ = concat_candlestick(fundamental.symbol, '3m', days=1)
-                        third_df, _ = concat_candlestick(fundamental.symbol, '15m', days=1)
+                    if datetime.now().second >= fundamental.bar_close_second:
 
-                        df = profitage(first_df, second_df, third_df, label_type=LabelType.CLOSE)
+                        temp_time = time.time()
 
-                    except Exception as e:
-                        print('Error in making Test set :', e)
-                        continue
+                        #       Check Condition      #
+                        try:
+                            first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
+                            second_df, _ = concat_candlestick(fundamental.symbol, '3m', days=1)
+                            third_df, _ = concat_candlestick(fundamental.symbol, '15m', days=1)
 
-                    #           Close Condition          #
-                    try:
-                        #               Long                #
-                        if open_side == OrderSide.BUY:
+                            df = profitage(first_df, second_df, third_df, label_type=LabelType.CLOSE)
 
-                            #           TP by Fisher        #
-                            if df['fisher_state'].iloc[m] == 0:
-                                TP_switch = True
+                        except Exception as e:
+                            print('Error in making Test set :', e)
+                            continue
 
-                            #           SL by Trix          #
-                            # if df['trix'].iloc[m - 1] > 0 >= df['trix'].iloc[m]:
-                            #     SL_switch = True
-                            #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
+                        print('checking time :', time.time() - temp_time)
 
-                        #               Short               #
-                        else:
-                            #           TP by Fisher        #
-                            if df['fisher_state'].iloc[m] == 1:
-                                TP_switch = True
+                        #           Close Condition          #
+                        try:
+                            #               Long                #
+                            if open_side == OrderSide.BUY:
 
-                            #           SL By Trix         #
-                            # if df['trix'].iloc[m - 1] < 0 <= df['trix'].iloc[m]:
-                            #     SL_switch = True
-                            #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
+                                #           TP by Fisher        #
+                                if df['fisher_state'].iloc[m] == 0:
+                                    TP_switch = True
 
-                    except Exception as e:
-                        print('Error in Close Condition :', e)
-                        continue
+                                #           SL by Trix          #
+                                # if df['trix'].iloc[m - 1] > 0 >= df['trix'].iloc[m]:
+                                #     SL_switch = True
+                                #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
 
-                # else:  # <-- for non-wait bar closing time function
+                            #               Short               #
+                            else:
+                                #           TP by Fisher        #
+                                if df['fisher_state'].iloc[m] == 1:
+                                    TP_switch = True
 
-                    # #          Just Take Realtime price and watch SL condition      #
-                    # try:
-                    #     realtime_price = get_market_price(fundamental.symbol)
-                    # except Exception as e:
-                    #     print('Error in get_market_price :', e)
-                    #     continue
+                                #           SL By Trix         #
+                                # if df['trix'].iloc[m - 1] < 0 <= df['trix'].iloc[m]:
+                                #     SL_switch = True
+                                #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
 
-                    #           SL by Price with ClosePrice        #
-                    realtime_price = df['close'].iloc[m]
+                            #           Exit by close        #
+                            realtime_price = df['close'].iloc[m]
+
+                        except Exception as e:
+                            print('Error in Close Condition :', e)
+                            continue
+
+                    else:
+
+                        #          Just Take Realtime price and watch SL condition      #
+                        try:
+                            realtime_price = get_market_price(fundamental.symbol)
+                        except Exception as e:
+                            print('Error in get_market_price :', e)
+                            continue
 
                     #           Close Condition          #
                     try:
@@ -351,14 +361,14 @@ while 1:
                         if open_side == OrderSide.BUY:
 
                             #            SL by Price           #
-                            if realtime_price < sl_level:
+                            if realtime_price <= sl_level:
                                 print('realtime_price :', realtime_price)
                                 SL_switch = True
 
                         #               Short                #
                         else:
                             #           SL by Price           #
-                            if realtime_price > sl_level:
+                            if realtime_price >= sl_level:
                                 print('realtime_price :', realtime_price)
                                 SL_switch = True
 
@@ -433,17 +443,24 @@ while 1:
                     try:
                         if not re_close:
 
-                            if close_side == OrderSide.SELL:
-                                stop_price = calc_with_precision(realtime_price + 5 * 10 ** -price_precision,
-                                                                 price_precision)
-                            else:
-                                stop_price = calc_with_precision(realtime_price - 5 * 10 ** -price_precision,
-                                                                 price_precision)
-
                             #           Stop Limit Order            #
+                            # if close_side == OrderSide.SELL:
+                            #     stop_price = calc_with_precision(realtime_price + 5 * 10 ** -price_precision,
+                            #                                      price_precision)
+                            # else:
+                            #     stop_price = calc_with_precision(realtime_price - 5 * 10 ** -price_precision,
+                            #                                      price_precision)
+
+                            # request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol,
+                            #                           side=close_side,
+                            #                           ordertype=order.sl_type, stopPrice=str(stop_price),
+                            #                           quantity=str(quantity), price=str(realtime_price),
+                            #                           reduceOnly=True)
+
+                            #           Limit Order             #
                             request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol,
                                                       side=close_side,
-                                                      ordertype=order.sl_type, stopPrice=str(stop_price),
+                                                      ordertype=order.sl_type,
                                                       quantity=str(quantity), price=str(realtime_price),
                                                       reduceOnly=True)
 
@@ -475,6 +492,13 @@ while 1:
 
                     if quantity == 0.0:
                         print('Close order executed.')
+
+                        try:
+                            price = get_trade_history_info(fundamental.symbol)
+                            print('expected_exit_price, real_exit_price :', realtime_price, price)
+                        except Exception as e:
+                            print('Error in get_trade_history_info :', e)
+
                         break
 
                     else:
@@ -488,9 +512,12 @@ while 1:
         end_timestamp = int(time.time() * 1000)
         #           Get Total Income from this Trade       #
         try:
-            accumulated_income += total_income(fundamental.symbol, start_timestamp, end_timestamp)
+            income = total_income(fundamental.symbol, start_timestamp, end_timestamp)
+            accumulated_income += income
         except Exception as e:
             print('Error in total_income :', e)
-        print('accumulated_income :', accumulated_income, 'USDT')
-        print('accumulated_profit : %.2f %%' % (accumulated_income / start_asset * 100))
+
+        print('accumulated_Income :', accumulated_income, 'USDT')
+        print('temporary_Income : %.3f %%' % (income / available_balance * 100))
+        print('accumulated_Profit : %.3f %%' % (accumulated_income / start_asset * 100))
         print()

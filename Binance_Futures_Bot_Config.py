@@ -30,7 +30,7 @@ config_json["ORDER"] = {
     'exit_execution_wait': 2 * 60,
     'breakout_qty_ratio': 2 / 3,  # if you use limit entry
     'tp_type': OrderType.LIMIT,
-    'sl_type': OrderType.TAKE_PROFIT,
+    'sl_type': OrderType.LIMIT,
 }
 
 config_json["AI"] = {

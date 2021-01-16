@@ -2,10 +2,15 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
-if 1 and not pd.isna(1):
-    print('break')
+# if 1 and not pd.isna(1):
+#     print('break')
 # price = 1.0074
 #
+# print('something new', end=' ')
+# print('something')
+tlist = [1, 2, 3, 4]
+tlist = [tlist, tlist]
+print(list(map(lambda x: sum(x), tlist)))
 # try:
 #     precision = len(str(price).split('.')[1])
 # except:

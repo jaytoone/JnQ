@@ -168,6 +168,15 @@ def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_d
     return
 
 
+def get_trade_history_info(symbol_):
+
+    result = request_client.get_account_trades(symbol=symbol_)
+    # for i in range(len(result)):
+    #     print(result[i].price, result[i].realizedPnl)
+
+    return result[-1].price
+
+
 if __name__ == '__main__':
     tp_list = [91.8, 91.7, 91.65]
     partial_qty_divider = 1.5
@@ -215,8 +224,8 @@ if __name__ == '__main__':
     # except Exception as e:
     #     print('Error in get_market_price :', e)
 
-    price = realtime_price
-    # price = 87.29
+    # price = realtime_price
+    price = 87.29
     quantity = 0.002
     price_precision = 2
     qty_precision = 3
@@ -239,10 +248,25 @@ if __name__ == '__main__':
 
     # print('price :', price)
     # print('amt_str :', amt_str)
+
     # #           Stop Order             #
     # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol="DASHUSDT", side=OrderSide.BUY,
     #                                    ordertype=OrderType.TAKE_PROFIT, stopPrice=str(trigger_price),
     #                                    quantity=str(quantity), price=str(price), reduceOnly=False)
+
+    #           Take Profit Order           #
+    # if close_side == OrderSide.SELL:
+    #     stop_price = calc_with_precision(realtime_price + 5 * 10 ** -price_precision,
+    #                                      price_precision)
+    # else:
+    #     stop_price = calc_with_precision(realtime_price - 5 * 10 ** -price_precision,
+    #                                      price_precision)
+
+    # request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol,
+    #                           side=close_side,
+    #                           ordertype=order.sl_type, stopPrice=str(stop_price),
+    #                           quantity=str(quantity), price=str(realtime_price),
+    #                           reduceOnly=True)
 
     #           Limit Order             #
     # request_client.post_order(timeInForce=TimeInForce.GTC, symbol=symbol, side=close_side,
@@ -286,11 +310,13 @@ if __name__ == '__main__':
     # print("==============")
 
     #               Account trades per coin History             #
-    # result = request_client.get_account_trades(symbol="SXPUSDT")
-    # PrintMix.print_data(result)
+    result = request_client.get_account_trades(symbol="ALGOUSDT")
+    PrintMix.print_data(result)
+    # price, pnl =
+    # print(get_trade_history_info("ALGOUSDT"))
 
     #           All order History per Pair         #
-    # result = request_client.get_all_orders(symbol="SXPUSDT")
+    # result = request_client.get_all_orders(symbol="ALGOUSDT")
     # PrintMix.print_data(result)
 
     #               Adl quantile --> 어느 symbol 에 어떠한 position 이 존재하는지 알려준다.                #
@@ -311,11 +337,16 @@ if __name__ == '__main__':
     # result = request_client.get_api_trading_stats()
     # PrintMix.print_data(result)
 
+    #   --------------------- ETC ---------------------  #
     # result = remaining_order_check()
     # print()
     # import time
     # print(get_precision('DOTUSDT'))
-    # print(total_income('DOTUSDT', startTime=None, endTime=None))
+    # print(total_income('ALGOUSDT', startTime=None, endTime=None))
+    # result = request_client.get_income_history(symbol='ALGOUSDT', startTime=None, endTime=None)
+    # print(result[0])
+    # PrintMix.print_data(result)
+
     # # print(int(time.time()))
     # # print(calc_with_precision(6.28 / 108.07 * 7, 3))
     # # print(calc_with_precision(6.2895214 / 108.07 * 7, 3))

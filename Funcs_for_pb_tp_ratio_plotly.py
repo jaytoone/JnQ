@@ -140,7 +140,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     df['leverage'] = np.nan
 
     #           Trading Fee          #
-    fee = 0.0002 * 2
+    fee = 0.0002 * 3
 
     ema_lookback = 50
     fisher_lookback = 30
