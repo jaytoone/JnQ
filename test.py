@@ -11,6 +11,12 @@ import numpy as np
 tlist = [1, 2, 3, 4]
 tlist = [tlist, tlist]
 print(list(map(lambda x: sum(x), tlist)))
+
+import sys
+import inspect
+
+clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
+print(clsmembers)
 # try:
 #     precision = len(str(price).split('.')[1])
 # except:

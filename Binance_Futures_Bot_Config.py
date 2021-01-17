@@ -19,15 +19,16 @@ config_json = dict()
 
 config_json["FUNDMTL"] = {
     'run': True,
-    'symbol': "ALGOUSDT",
+    'symbol': ["ALGOUSDT"],
     'bar_close_second': 59,  # <-- in 1m bar
     'accumulated_income': 0.0,
+    'accumulated_profit': 1.0,
 }
 
 config_json["ORDER"] = {
     'entry_type': OrderType.LIMIT,
     'entry_execution_wait': 2 * 60,   # if you use limit entry
-    'exit_execution_wait': 2 * 60,
+    'exit_execution_wait': 1 * 60,
     'breakout_qty_ratio': 2 / 3,  # if you use limit entry
     'tp_type': OrderType.LIMIT,
     'sl_type': OrderType.LIMIT,

@@ -15,7 +15,7 @@ accumulated_profit = fundamental.accumulated_profit
 
 #         1. Leverage type => Isolated          #
 try:
-    request_client.change_margin_type(symbol=fundamental.symbol, marginType=FuturesMarginType.ISOLATED)
+    request_client.change_margin_type(symbol=fundamental.symbol[0], marginType=FuturesMarginType.ISOLATED)
 except Exception as e:
     print('Error in change_margin_type :', e)
 else:
@@ -23,7 +23,7 @@ else:
 
 #         2. Confirm Limit Leverage          #
 try:
-    limit_leverage = get_limit_leverage(symbol_=fundamental.symbol)
+    limit_leverage = get_limit_leverage(symbol_=fundamental.symbol[0])
 except Exception as e:
     print('Error in get_limit_leverage :', e)
     quit()
@@ -68,18 +68,16 @@ while 1:
 
         #       Check Condition      #
         try:
-            first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
-            second_df, _ = concat_candlestick(fundamental.symbol, '3m', days=1)
-            third_df, _ = concat_candlestick(fundamental.symbol, '15m', days=1)
+            first_df, _ = concat_candlestick(fundamental.symbol[0], '1m', days=1)
+            second_df, _ = concat_candlestick(fundamental.symbol[0], '3m', days=1)
+            third_df, _ = concat_candlestick(fundamental.symbol[0], '15m', days=1)
 
             df = profitage(first_df, second_df, third_df, label_type=LabelType.OPEN)
-            print('df.index[-1] :', df.index[-1])
+            print('df.index[-1] :', df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
 
         except Exception as e:
             print('Error in making Test set :', e)
             continue
-
-        print('checking time :', time.time() - temp_time)
 
         #           Open Condition          #
         #               Long & Short               #
@@ -100,7 +98,7 @@ while 1:
     if order.entry_type == OrderType.MARKET:
         #             ep with Market            #
         try:
-            ep = get_market_price(fundamental.symbol)
+            ep = get_market_price(fundamental.symbol[0])
         except Exception as e:
             print('Error in get_market_price :', e)
     else:
@@ -114,7 +112,7 @@ while 1:
 
     #         Get price, volume precision --> 가격 변동으로 인한 precision 변동 가능성       #
     try:
-        price_precision, quantity_precision = get_precision(fundamental.symbol)
+        price_precision, quantity_precision = get_precision(fundamental.symbol[0])
     except Exception as e:
         print('Error in get price & volume precision :', e)
         continue
@@ -159,21 +157,26 @@ while 1:
         print('tp_list :', tp_list)
 
     try:
-        request_client.change_initial_leverage(symbol=fundamental.symbol, leverage=leverage)
+        request_client.change_initial_leverage(symbol=fundamental.symbol[0], leverage=leverage)
     except Exception as e:
         print('Error in change_initial_leverage :', e)
     else:
         print('leverage changed -->', leverage)
 
-    #          Get availableBalance          #
-    try:
-        available_balance = get_availableBalance() * 0.9
-    except Exception as e:
-        print('Error in get_availableBalance :', e)
-
     #          Define Start Asset          #
     if accumulated_income == 0.0:
+
+        #          Get availableBalance          #
+        # try:
+        #     available_balance = get_availableBalance() * 0.9
+        # except Exception as e:
+        #     print('Error in get_availableBalance :', e)
+
+        available_balance = 23  # USDT
         start_asset = available_balance
+
+    else:
+        available_balance = start_asset + accumulated_income
 
     #          Get available quantity         #
     quantity = available_balance / ep * leverage
@@ -185,12 +188,12 @@ while 1:
     if order.entry_type == OrderType.MARKET:
         try:
             #           Market Order            #
-            request_client.post_order(symbol=fundamental.symbol, side=open_side, ordertype=OrderType.MARKET,
+            request_client.post_order(symbol=fundamental.symbol[0], side=open_side, ordertype=OrderType.MARKET,
                                       quantity=str(quantity))
         except Exception as e:
             print('Error in Open Order :', e)
         else:
-            print('Open order succeed.')
+            print('Open order listed.')
 
         #       Enough time for quantity Consuming      #
         time.sleep(60 - fundamental.bar_close_second)
@@ -199,14 +202,14 @@ while 1:
         #       If Limit Order used, Set Order Execute Time & Check Remaining Order         #
         try:
             #           Limit Order            #
-            result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol, side=open_side,
+            result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol[0], side=open_side,
                                                ordertype=order.entry_type,
                                                quantity=str(quantity), price=str(ep),
                                                reduceOnly=False)
         except Exception as e:
             print('Error in Open Order :', e)
         else:
-            print('Open order succeed.')
+            print('Open order listed.')
 
         #       Set Order Execute Time & Check breakout_qty_ratio         #
         #       Check Realtime price cross sl_level         #
@@ -216,7 +219,7 @@ while 1:
                 break
 
             try:
-                exec_quantity = get_remaining_quantity(fundamental.symbol)
+                exec_quantity = get_remaining_quantity(fundamental.symbol[0])
             except Exception as e:
                 print('Error in exec_quantity check :', e)
 
@@ -225,7 +228,7 @@ while 1:
 
             #           realtime price compare with sl_level        #
             # try:
-            #     realtime_price = get_market_price(fundamental.symbol)
+            #     realtime_price = get_market_price(fundamental.symbol[0])
             # except Exception as e:
             #     print('Error in get_market_price :', e)
             #
@@ -249,8 +252,8 @@ while 1:
     if remained_orderId is not None:
         #           If Remained position exist, Cancel it       #
         try:
-            # result = request_client.cancel_order(symbol=fundamental.symbol, orderId=remained_orderId)
-            result = request_client.cancel_all_orders(symbol=fundamental.symbol)
+            # result = request_client.cancel_order(symbol=fundamental.symbol[0], orderId=remained_orderId)
+            result = request_client.cancel_all_orders(symbol=fundamental.symbol[0])
         except Exception as e:
             print('Error in Cancel remained open order :', e)
 
@@ -258,7 +261,7 @@ while 1:
     exec_quantity = 0.0
 
     try:
-        exec_quantity = get_remaining_quantity(fundamental.symbol)
+        exec_quantity = get_remaining_quantity(fundamental.symbol[0])
     except Exception as e:
         print('Error in exec_quantity check :', e)
 
@@ -282,7 +285,7 @@ while 1:
             if not pd.isna(tp_level):
 
                 try:
-                    partial_limit(fundamental.symbol, tp_list, close_side, quantity_precision, partial_qty_divider)
+                    partial_limit(fundamental.symbol[0], tp_list, close_side, quantity_precision, partial_qty_divider)
 
                 except Exception as e:
                     print('Error in partial_limit :', e)
@@ -294,18 +297,20 @@ while 1:
 
                 time.sleep(.1)
 
-                #           Wait for bar closing time         #
-                if datetime.now().second >= fundamental.bar_close_second - 1:  # approximate close
+                current_datetime = datetime.now()
 
-                    if datetime.now().second >= fundamental.bar_close_second:
+                #           Wait for bar closing time         #
+                if current_datetime.second >= fundamental.bar_close_second - 1:  # approximate close
+
+                    if current_datetime.second >= fundamental.bar_close_second:
 
                         temp_time = time.time()
 
-                        #       Check Condition      #
+                        #               Load Data             #
                         try:
-                            first_df, _ = concat_candlestick(fundamental.symbol, '1m', days=1)
-                            second_df, _ = concat_candlestick(fundamental.symbol, '3m', days=1)
-                            third_df, _ = concat_candlestick(fundamental.symbol, '15m', days=1)
+                            first_df, _ = concat_candlestick(fundamental.symbol[0], '1m', days=1)
+                            second_df, _ = concat_candlestick(fundamental.symbol[0], '3m', days=1)
+                            third_df, _ = concat_candlestick(fundamental.symbol[0], '15m', days=1)
 
                             df = profitage(first_df, second_df, third_df, label_type=LabelType.CLOSE)
 
@@ -313,9 +318,7 @@ while 1:
                             print('Error in making Test set :', e)
                             continue
 
-                        print('checking time :', time.time() - temp_time)
-
-                        #           Close Condition          #
+                        #           Signal Close            #
                         try:
                             #               Long                #
                             if open_side == OrderSide.BUY:
@@ -347,16 +350,19 @@ while 1:
                             print('Error in Close Condition :', e)
                             continue
 
+                        if TP_switch or SL_switch:
+                            print('df.index[-1] :', df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
+
                     else:
 
                         #          Just Take Realtime price and watch SL condition      #
                         try:
-                            realtime_price = get_market_price(fundamental.symbol)
+                            realtime_price = get_market_price(fundamental.symbol[0])
                         except Exception as e:
                             print('Error in get_market_price :', e)
                             continue
 
-                    #           Close Condition          #
+                    #               Price Close               #
                     try:
                         #               Long                #
                         if open_side == OrderSide.BUY:
@@ -371,6 +377,9 @@ while 1:
                             if realtime_price >= sl_level:
                                 SL_switch = True
 
+                        if SL_switch:
+                            print('df.index[-1] :', current_datetime)
+
                     except Exception as e:
                         print('Error in SL by Price :', e)
                         continue
@@ -379,7 +388,7 @@ while 1:
 
                     #               Public : Check Remaining Quantity             #
                     try:
-                        quantity = get_remaining_quantity(fundamental.symbol)
+                        quantity = get_remaining_quantity(fundamental.symbol[0])
                     except Exception as e:
                         print('Error in get_remaining_quantity :', e)
                         continue
@@ -411,7 +420,7 @@ while 1:
                         if remained_orderId is not None:
                             #           If Remained position exist, Cancel it       #
                             try:
-                                result = request_client.cancel_all_orders(symbol=fundamental.symbol)
+                                result = request_client.cancel_all_orders(symbol=fundamental.symbol[0])
                             except Exception as e:
                                 print('Error in Cancel remained TP Close order :', e)
                                 continue
@@ -420,14 +429,14 @@ while 1:
 
                     #          Get Remaining quantity         #
                     try:
-                        quantity = get_remaining_quantity(fundamental.symbol)
+                        quantity = get_remaining_quantity(fundamental.symbol[0])
                     except Exception as e:
                         print('Error in get_remaining_quantity :', e)
                         continue
 
                     #           Get price, volume precision       #
                     try:
-                        _, quantity_precision = get_precision(fundamental.symbol)
+                        _, quantity_precision = get_precision(fundamental.symbol[0])
                     except Exception as e:
                         print('Error in get price & volume precision :', e)
                     else:
@@ -450,7 +459,7 @@ while 1:
                             #     stop_price = calc_with_precision(realtime_price - 5 * 10 ** -price_precision,
                             #                                      price_precision)
 
-                            # request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol,
+                            # request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol[0],
                             #                           side=close_side,
                             #                           ordertype=order.sl_type, stopPrice=str(stop_price),
                             #                           quantity=str(quantity), price=str(realtime_price),
@@ -462,15 +471,15 @@ while 1:
                                 exit_price = sl_level
 
                             #           Limit Order             #
-                            request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol,
+                            request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol[0],
                                                       side=close_side,
                                                       ordertype=order.sl_type,
-                                                      quantity=str(quantity), price=str(realtime_price),
+                                                      quantity=str(quantity), price=str(exit_price),
                                                       reduceOnly=True)
 
                         else:
                             #           Market Order            #
-                            result = request_client.post_order(symbol=fundamental.symbol, side=close_side,
+                            result = request_client.post_order(symbol=fundamental.symbol[0], side=close_side,
                                                                ordertype=OrderType.MARKET,
                                                                quantity=str(quantity), reduceOnly=True)
 
@@ -479,7 +488,7 @@ while 1:
                         re_close = True
                         continue
                     else:
-                        print('Close order succeed.')
+                        print('Close order listed.')
 
                     #       Enough time for quantity to consumed      #
                     if not re_close:
@@ -489,7 +498,7 @@ while 1:
 
                     #               Check Remaining Quantity             #
                     try:
-                        quantity = get_remaining_quantity(fundamental.symbol)
+                        quantity = get_remaining_quantity(fundamental.symbol[0])
                     except Exception as e:
                         print('Error in get_remaining_quantity :', e)
                         continue
@@ -498,7 +507,7 @@ while 1:
                         print('Close order executed.')
 
                         try:
-                            price = get_trade_history_info(fundamental.symbol)
+                            price = get_trade_history_info(fundamental.symbol[0])
                             print('expected_exit_price, real_exit_price :', realtime_price, price)
                         except Exception as e:
                             print('Error in get_trade_history_info :', e)
@@ -516,7 +525,7 @@ while 1:
         end_timestamp = int(time.time() * 1000)
         #           Get Total Income from this Trade       #
         try:
-            income = total_income(fundamental.symbol, start_timestamp, end_timestamp)
+            income = total_income(fundamental.symbol[0], start_timestamp, end_timestamp)
             accumulated_income += income
         except Exception as e:
             print('Error in total_income :', e)
