@@ -27,8 +27,8 @@ pred_ohlcv/
 Tensorboard_graph/
 trading_bot/
 trading_bot
-model
-model/
+ai_model
+ai_model/
 models
 models/
 Made_X
