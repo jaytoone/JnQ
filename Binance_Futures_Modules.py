@@ -42,7 +42,7 @@ def total_income(symbol, startTime=None, endTime=None):
     total_income_ = 0.0
     for i in range(len(result)):
         total_income_ += result[i].income
-        # print(total_income_)
+        # print(result[i].income)
 
     return total_income_
 
@@ -231,19 +231,19 @@ if __name__ == '__main__':
     qty_precision = 3
 
     trigger_price = price - 1 * 10 ** -price_precision
-    trigger_price = calc_with_precision(trigger_price, price_precision)
+    # trigger_price = calc_with_precision(trigger_price, price_precision)
     # print(price, trigger_price)
 
     #
     # tp_list = [price, price, price]
     #
     # # price = str(calc_with_precision(price, 2))
-    quantity = str(calc_with_precision(quantity, qty_precision))
+    # quantity = str(calc_with_precision(quantity, qty_precision))
     #
     # tp_list = list(map(calc_with_precision(x, price_precision), tp_list))
     # print(tp_list)
 
-    print(calc_with_precision(0.0009999, 3))
+    # print(calc_with_precision(0.0009999, 3))
     # result = request_client.cancel_all_orders(symbol='DOTUSDT')
 
     # print('price :', price)
@@ -310,8 +310,8 @@ if __name__ == '__main__':
     # print("==============")
 
     #               Account trades per coin History             #
-    result = request_client.get_account_trades(symbol="ALGOUSDT")
-    PrintMix.print_data(result)
+    # result = request_client.get_account_trades(symbol="ALGOUSDT")
+    # PrintMix.print_data(result)
     # price, pnl =
     # print(get_trade_history_info("ALGOUSDT"))
 
@@ -342,7 +342,7 @@ if __name__ == '__main__':
     # print()
     # import time
     # print(get_precision('DOTUSDT'))
-    # print(total_income('ALGOUSDT', startTime=None, endTime=None))
+    print(total_income('ALGOUSDT', startTime=None, endTime=None))
     # result = request_client.get_income_history(symbol='ALGOUSDT', startTime=None, endTime=None)
     # print(result[0])
     # PrintMix.print_data(result)

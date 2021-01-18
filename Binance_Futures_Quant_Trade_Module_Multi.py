@@ -166,17 +166,20 @@ while 1:
     #          Define Start Asset          #
     if accumulated_income == 0.0:
 
-        #          Get availableBalance          #
-        # try:
-        #     available_balance = get_availableBalance() * 0.9
-        # except Exception as e:
-        #     print('Error in get_availableBalance :', e)
-
         available_balance = 23  # USDT
-        start_asset = available_balance
 
     else:
-        available_balance = start_asset + accumulated_income
+        available_balance += income
+
+        #          Get availableBalance          #
+        try:
+            max_available_balance = get_availableBalance()
+
+            if available_balance > max_available_balance:
+                available_balance = max_available_balance * 0.95
+
+        except Exception as e:
+            print('Error in get_availableBalance :', e)
 
     #          Get available quantity         #
     quantity = available_balance / ep * leverage
@@ -299,9 +302,10 @@ while 1:
 
                 current_datetime = datetime.now()
 
-                #           Wait for bar closing time         #
-                if current_datetime.second >= fundamental.bar_close_second - 1:  # approximate close
+                #           Wait for bar closing approximate time         #
+                if current_datetime.second >= fundamental.bar_close_second - 1:
 
+                    #           Bar Closing time        #
                     if current_datetime.second >= fundamental.bar_close_second:
 
                         temp_time = time.time()
@@ -353,6 +357,7 @@ while 1:
                         if TP_switch or SL_switch:
                             print('df.index[-1] :', df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
 
+                    #           Approximate close           #
                     else:
 
                         #          Just Take Realtime price and watch SL condition      #
