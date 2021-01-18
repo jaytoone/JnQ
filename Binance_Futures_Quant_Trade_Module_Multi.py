@@ -166,7 +166,8 @@ while 1:
     #          Define Start Asset          #
     if accumulated_income == 0.0:
 
-        available_balance = 23  # USDT
+        # Todo
+        available_balance = 27  # USDT
 
     else:
         available_balance += income
@@ -205,7 +206,8 @@ while 1:
         #       If Limit Order used, Set Order Execute Time & Check Remaining Order         #
         try:
             #           Limit Order            #
-            result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol[0], side=open_side,
+            result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=fundamental.symbol[0],
+                                               side=open_side,
                                                ordertype=order.entry_type,
                                                quantity=str(quantity), price=str(ep),
                                                reduceOnly=False)
@@ -248,7 +250,7 @@ while 1:
     remained_orderId = None
 
     try:
-        remained_orderId = remaining_order_check()
+        remained_orderId = remaining_order_check(fundamental.symbol[0])
     except Exception as e:
         print('Error in remaining_order_check :', e)
 
@@ -417,7 +419,7 @@ while 1:
                     if not cancel_TP:
                         #               Remaining TP close Order check            #
                         try:
-                            remained_orderId = remaining_order_check()
+                            remained_orderId = remaining_order_check(fundamental.symbol[0])
                         except Exception as e:
                             print('Error in remaining_order_check :', e)
                             continue

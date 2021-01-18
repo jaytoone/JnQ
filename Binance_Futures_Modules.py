@@ -48,9 +48,9 @@ def total_income(symbol, startTime=None, endTime=None):
 
 
 #           Remaining Order Check           #
-def remaining_order_check():
+def remaining_order_check(symbol_):
     #           Get Open Orders         #
-    result = request_client.get_open_orders()
+    result = request_client.get_open_orders(symbol_)
     if len(result) == 0:
         return None
     else:
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     # result = request_client.get_position()
     # PrintMix.print_data(result)
 
-    #               Post Order              #
+    #               Get Market Order              #
     # try:
     #     realtime_price = get_market_price("DASHUSDT")
     # except Exception as e:
@@ -338,14 +338,16 @@ if __name__ == '__main__':
     # PrintMix.print_data(result)
 
     #   --------------------- ETC ---------------------  #
-    # result = remaining_order_check()
     # print()
     # import time
     # print(get_precision('DOTUSDT'))
-    print(total_income('ALGOUSDT', startTime=None, endTime=None))
+    # print(total_income('ALGOUSDT', startTime=None, endTime=None))
     # result = request_client.get_income_history(symbol='ALGOUSDT', startTime=None, endTime=None)
     # print(result[0])
-    # PrintMix.print_data(result)
+
+    result = remaining_order_check('ALGOUSDT')
+    # result = request_client.get_open_orders()
+    PrintMix.print_data(result)
 
     # # print(int(time.time()))
     # # print(calc_with_precision(6.28 / 108.07 * 7, 3))

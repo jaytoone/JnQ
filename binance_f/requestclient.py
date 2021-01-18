@@ -310,7 +310,6 @@ class RequestClient(object):
         self.refresh_limits(response[1])
         return response[0]
 
-
     def cancel_list_orders(self, symbol: 'str', orderIdList: 'list' = None, origClientOrderIdList: 'list' = None) -> any:
         """
         Cancel Multiple Orders (TRADE)
