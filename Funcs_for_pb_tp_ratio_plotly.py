@@ -139,6 +139,9 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     df['tp_level'] = np.nan
     df['leverage'] = np.nan
 
+    #           Order Type          #
+    order_type = OrderType.MARKET
+
     #           Trading Fee          #
     fee = 0.0002 * 3
 
@@ -157,7 +160,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     fixed_leverage = 20
     max_leverage = 75
 
-    for i in range(ichimoku_lookback, len(df)):
+    for i in range(ichimoku_lookback, len(df) - 1):
 
         #           BBW Set         #
         # if df['bbw'].iloc[i] > 0.015:
@@ -204,9 +207,15 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 #          AD Set          #
                 # if df['ad'].iloc[i] > df['ad_ema'].iloc[i]:
 
-                    df['trade_state'].iloc[i] = 1
-                    df['ep'].iloc[i] = df['close'].iloc[i]
+                    #       if you use market order     #
+                    if order_type == OrderType.MARKET:
+                        i += 1
+                        df['ep'].iloc[i] = df['open'].iloc[i]
 
+                    else:
+                        df['ep'].iloc[i] = df['close'].iloc[i]
+
+                    df['trade_state'].iloc[i] = 1
                     df['sl_level'].iloc[i] = df['low'].iloc[back_i:i + 1].min()
                     # df['sl_level'].iloc[i] = df['low'].iloc[i + 1 - fisher_lookback:i + 1].min()
 
@@ -291,9 +300,15 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 #           AD Set          #
                 # if df['ad'].iloc[i] < df['ad_ema'].iloc[i]:
 
-                    df['trade_state'].iloc[i] = 0
-                    df['ep'].iloc[i] = df['close'].iloc[i]
+                    #       if you use market order     #
+                    if order_type == OrderType.MARKET:
+                        i += 1
+                        df['ep'].iloc[i] = df['open'].iloc[i]
 
+                    else:
+                        df['ep'].iloc[i] = df['close'].iloc[i]
+
+                    df['trade_state'].iloc[i] = 0
                     df['sl_level'].iloc[i] = df['high'].iloc[back_i:i + 1].max()
                     # df['sl_level'].iloc[i] = df['high'].iloc[i + 1 - fisher_lookback:i + 1].max()
 
@@ -618,12 +633,14 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 
             else:
                 condition.iloc[m] = "Order Closed"
-                exit_price = df['close'].iloc[m]
 
-                # if m == start_m:
-                #     close_m = m
-                # else:
-                #     close_m = m - 1
+                if order_type == OrderType.MARKET:
+                    m += 1
+                    if m > length:
+                        break
+                    exit_price = df['open'].iloc[m]
+                else:
+                    exit_price = df['close'].iloc[m]
 
                 if order_type == 'Short':
                     trade_fee = -fee

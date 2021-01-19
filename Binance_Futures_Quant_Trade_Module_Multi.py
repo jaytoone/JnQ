@@ -167,7 +167,7 @@ while 1:
     if accumulated_income == 0.0:
 
         # Todo
-        available_balance = 27  # USDT
+        available_balance = 43  # USDT
 
     else:
         available_balance += income
@@ -273,6 +273,11 @@ while 1:
     if exec_quantity != 0.0:
 
         print('Open order executed.')
+        try:
+            price = get_trade_history_info(fundamental.symbol[0])
+            print('expected_open_price, real_open_price :', df['open'].iloc[m], price)
+        except Exception as e:
+            print('Error in get_trade_history_info :', e)
         print()
 
         #           side Change         #
@@ -305,69 +310,69 @@ while 1:
                 current_datetime = datetime.now()
 
                 #           Wait for bar closing approximate time         #
-                if current_datetime.second >= fundamental.bar_close_second - 1:
+                # if current_datetime.second >= fundamental.bar_close_second - 1:
 
-                    #           Bar Closing time        #
-                    if current_datetime.second >= fundamental.bar_close_second:
+                #           Bar Closing time        #
+                if current_datetime.second >= fundamental.bar_close_second:
 
-                        temp_time = time.time()
+                    temp_time = time.time()
 
-                        #               Load Data             #
-                        try:
-                            first_df, _ = concat_candlestick(fundamental.symbol[0], '1m', days=1)
-                            second_df, _ = concat_candlestick(fundamental.symbol[0], '3m', days=1)
-                            third_df, _ = concat_candlestick(fundamental.symbol[0], '15m', days=1)
+                    #               Load Data             #
+                    try:
+                        first_df, _ = concat_candlestick(fundamental.symbol[0], '1m', days=1)
+                        second_df, _ = concat_candlestick(fundamental.symbol[0], '3m', days=1)
+                        third_df, _ = concat_candlestick(fundamental.symbol[0], '15m', days=1)
 
-                            df = profitage(first_df, second_df, third_df, label_type=LabelType.CLOSE)
+                        df = profitage(first_df, second_df, third_df, label_type=LabelType.CLOSE)
 
-                        except Exception as e:
-                            print('Error in making Test set :', e)
-                            continue
+                    except Exception as e:
+                        print('Error in making Test set :', e)
+                        continue
 
-                        #           Signal Close            #
-                        try:
-                            #               Long                #
-                            if open_side == OrderSide.BUY:
+                    #           Signal Close            #
+                    try:
+                        #               Long                #
+                        if open_side == OrderSide.BUY:
 
-                                #           TP by Fisher        #
-                                if df['fisher_state'].iloc[m] == 0:
-                                    TP_switch = True
+                            #           TP by Fisher        #
+                            if df['fisher_state'].iloc[m] == 0:
+                                TP_switch = True
 
-                                #           SL by Trix          #
-                                # if df['trix'].iloc[m - 1] > 0 >= df['trix'].iloc[m]:
-                                #     SL_switch = True
-                                #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
+                            #           SL by Trix          #
+                            # if df['trix'].iloc[m - 1] > 0 >= df['trix'].iloc[m]:
+                            #     SL_switch = True
+                            #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
 
-                            #               Short               #
-                            else:
-                                #           TP by Fisher        #
-                                if df['fisher_state'].iloc[m] == 1:
-                                    TP_switch = True
+                        #               Short               #
+                        else:
+                            #           TP by Fisher        #
+                            if df['fisher_state'].iloc[m] == 1:
+                                TP_switch = True
 
-                                #           SL By Trix         #
-                                # if df['trix'].iloc[m - 1] < 0 <= df['trix'].iloc[m]:
-                                #     SL_switch = True
-                                #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
+                            #           SL By Trix         #
+                            # if df['trix'].iloc[m - 1] < 0 <= df['trix'].iloc[m]:
+                            #     SL_switch = True
+                            #     print('trix info :', df['trix'].iloc[m - 1], df['trix'].iloc[m])
 
-                            #           Exit by close        #
-                            realtime_price = df['close'].iloc[m]
+                        #           Exit by close        #
+                        realtime_price = df['close'].iloc[m]
 
-                        except Exception as e:
-                            print('Error in Close Condition :', e)
-                            continue
+                    except Exception as e:
+                        print('Error in Close Condition :', e)
+                        continue
 
-                        if TP_switch or SL_switch:
-                            print('df.index[-1] :', df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
+                    if TP_switch or SL_switch:
+                        print('df.index[-1] :', df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
 
                     #           Approximate close           #
-                    else:
-
-                        #          Just Take Realtime price and watch SL condition      #
-                        try:
-                            realtime_price = get_market_price(fundamental.symbol[0])
-                        except Exception as e:
-                            print('Error in get_market_price :', e)
-                            continue
+                    # else:
+                    #
+                    #     #          Just Take Realtime price and watch SL condition      #
+                    #     try:
+                    #         realtime_price = get_market_price(fundamental.symbol[0])
+                    #     except Exception as e:
+                    #         print('Error in get_market_price :', e)
+                    #         continue
 
                     #               Price Close               #
                     try:
@@ -384,8 +389,8 @@ while 1:
                             if realtime_price >= sl_level:
                                 SL_switch = True
 
-                        if SL_switch:
-                            print('df.index[-1] :', current_datetime)
+                        # if SL_switch:
+                        #     print('df.index[-1] :', current_datetime)
 
                     except Exception as e:
                         print('Error in SL by Price :', e)
@@ -412,7 +417,6 @@ while 1:
                 break
             else:
                 cancel_TP = False
-                re_close = False
                 while 1:  # <--- This Loop for SL Close & Re-Close
 
                     #               Canceling Limit Order Once               #
@@ -456,7 +460,7 @@ while 1:
                     #           1. Order side should be Opposite side to the Open          #
                     #           2. ReduceOnly = 'true'       #
                     try:
-                        if not re_close:
+                        if not order.sl_type == OrderType.MARKET:
 
                             #           Stop Limit Order            #
                             # if close_side == OrderSide.SELL:
@@ -492,13 +496,13 @@ while 1:
 
                     except Exception as e:
                         print('Error in Close Order :', e)
-                        re_close = True
+                        order.sl_type = OrderType.MARKET
                         continue
                     else:
                         print('Close order listed.')
 
                     #       Enough time for quantity to consumed      #
-                    if not re_close:
+                    if not order.sl_type == OrderType.MARKET:
                         time.sleep(order.exit_execution_wait - datetime.now().second)
                     else:
                         time.sleep(1)
@@ -515,7 +519,7 @@ while 1:
 
                         try:
                             price = get_trade_history_info(fundamental.symbol[0])
-                            print('expected_exit_price, real_exit_price :', realtime_price, price)
+                            print('expected_exit_price, real_exit_price :', df['open'].iloc[m], price)
                         except Exception as e:
                             print('Error in get_trade_history_info :', e)
 
@@ -524,7 +528,7 @@ while 1:
                     else:
                         #           Re-Close            #
                         print('Re-Close')
-                        re_close = True
+                        order.sl_type = OrderType.MARKET
                         continue
 
                 break  # <--- Break for All Close Loop, Break Partial Limit Loop
