@@ -8,15 +8,18 @@ import numpy as np
 #
 # print('something new', end=' ')
 # print('something')
-tlist = [1, 2, 3, 4]
-tlist = [tlist, tlist]
-print(list(map(lambda x: sum(x), tlist)))
+# tlist = [1, 2, 3, 4]
+# tlist = [tlist, tlist]
+# print(list(map(lambda x: sum(x), tlist)))
+#
+# import sys
+# import inspect
+#
+# clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
+# print(clsmembers)
 
-import sys
-import inspect
-
-clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
-print(clsmembers)
+error_msg = ('ExecuteError', '[Executing] -4003: Quantity less than zero.')
+print('Quantity less than zero' in str(error_msg))
 # try:
 #     precision = len(str(price).split('.')[1])
 # except:

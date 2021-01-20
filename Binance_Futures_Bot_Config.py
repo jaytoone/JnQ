@@ -3,6 +3,7 @@ from binance_f.constant.test import *
 from binance_f.base.printobject import *
 from binance_f.model.constant import *
 import json
+import pprint
 
 request_client = RequestClient(api_key=g_api_key, secret_key=g_secret_key)
 
@@ -56,7 +57,7 @@ config_json["AI"]['test_data_amount'] = config_json["AI"]['scale_window_size']
 
 if __name__=='__main__':
 
-    print(config_json)
+    print(json.dumps(config_json, indent=1))
 
     with open('Binance_Futures_Bot_Config.json', 'w') as cfg:
-        json.dump(config_json, cfg)
+        json.dump(config_json, cfg, indent=1)

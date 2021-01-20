@@ -167,7 +167,7 @@ while 1:
     if accumulated_income == 0.0:
 
         # Todo
-        available_balance = 43  # USDT
+        available_balance = 10  # USDT
 
     else:
         available_balance += income
@@ -273,11 +273,6 @@ while 1:
     if exec_quantity != 0.0:
 
         print('Open order executed.')
-        try:
-            price = get_trade_history_info(fundamental.symbol[0])
-            print('expected_open_price, real_open_price :', df['open'].iloc[m], price)
-        except Exception as e:
-            print('Error in get_trade_history_info :', e)
         print()
 
         #           side Change         #
@@ -309,7 +304,7 @@ while 1:
 
                 current_datetime = datetime.now()
 
-                #           Wait for bar closing approximate time         #
+                # #           Wait for bar closing approximate time         #
                 # if current_datetime.second >= fundamental.bar_close_second - 1:
 
                 #           Bar Closing time        #
@@ -364,37 +359,37 @@ while 1:
                     if TP_switch or SL_switch:
                         print('df.index[-1] :', df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
 
-                    #           Approximate close           #
-                    # else:
-                    #
-                    #     #          Just Take Realtime price and watch SL condition      #
-                    #     try:
-                    #         realtime_price = get_market_price(fundamental.symbol[0])
-                    #     except Exception as e:
-                    #         print('Error in get_market_price :', e)
-                    #         continue
+                #           Realtime Price Cross           #
+                else:
 
-                    #               Price Close               #
+                    #          Just Take Realtime price and watch SL condition      #
                     try:
-                        #               Long                #
-                        if open_side == OrderSide.BUY:
-
-                            #            SL by Price           #
-                            if realtime_price <= sl_level:
-                                SL_switch = True
-
-                        #               Short                #
-                        else:
-                            #           SL by Price           #
-                            if realtime_price >= sl_level:
-                                SL_switch = True
-
-                        # if SL_switch:
-                        #     print('df.index[-1] :', current_datetime)
-
+                        realtime_price = get_market_price(fundamental.symbol[0])
                     except Exception as e:
-                        print('Error in SL by Price :', e)
+                        print('Error in get_market_price :', e)
                         continue
+
+                #               Price Close               #
+                try:
+                    #               Long                #
+                    if open_side == OrderSide.BUY:
+
+                        #            SL by Price           #
+                        if realtime_price < sl_level:
+                            SL_switch = True
+
+                    #               Short                #
+                    else:
+                        #           SL by Price           #
+                        if realtime_price > sl_level:
+                            SL_switch = True
+
+                    if SL_switch:
+                        print('df.index[-1] :', current_datetime)
+
+                except Exception as e:
+                    print('Error in SL by Price :', e)
+                    continue
 
                 if not pd.isna(tp_level):
 
@@ -496,12 +491,17 @@ while 1:
 
                     except Exception as e:
                         print('Error in Close Order :', e)
+
+                        #       Check Error Message     #
+                        if 'Quantity less than zero' in str(e):
+                            break
+
                         order.sl_type = OrderType.MARKET
                         continue
                     else:
                         print('Close order listed.')
 
-                    #       Enough time for quantity to consumed      #
+                    #       Enough time for quantity to be consumed      #
                     if not order.sl_type == OrderType.MARKET:
                         time.sleep(order.exit_execution_wait - datetime.now().second)
                     else:
@@ -516,13 +516,6 @@ while 1:
 
                     if quantity == 0.0:
                         print('Close order executed.')
-
-                        try:
-                            price = get_trade_history_info(fundamental.symbol[0])
-                            print('expected_exit_price, real_exit_price :', df['open'].iloc[m], price)
-                        except Exception as e:
-                            print('Error in get_trade_history_info :', e)
-
                         break
 
                     else:

@@ -192,7 +192,7 @@ if __name__ == '__main__':
     end_date = '2020-12-09'
     # end_date = '2020-08-24'
     # end_date = '2020-08-27'
-    # end_date = '2021-01-13'
+    # end_date = '2021-01-19'
     end_date = None
     symbol = 'ALGOUSDT'
     label_type = LabelType.PROFIT

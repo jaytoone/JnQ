@@ -140,7 +140,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
     df['leverage'] = np.nan
 
     #           Order Type          #
-    order_type = OrderType.MARKET
+    order_type = OrderType.LIMIT
 
     #           Trading Fee          #
     fee = 0.0002 * 3
@@ -564,8 +564,8 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 #     SL_switch = True
 
                 #            By Price           #
-                # if df['low'].iloc[m] < sl_level:
-                if df['close'].iloc[m] < sl_level:
+                if df['low'].iloc[m] < sl_level:
+                # if df['close'].iloc[m] < sl_level:
                     close_state.iloc[m] = 'Price SL'
                     SL_switch = True
 
@@ -617,8 +617,8 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                 #     SL_switch = True
 
                 #            By Price           #
-                # if df['high'].iloc[m] > sl_level:
-                if df['close'].iloc[m] > sl_level:
+                if df['high'].iloc[m] > sl_level:
+                # if df['close'].iloc[m] > sl_level:
                     close_state.iloc[m] = 'Price SL'
                     SL_switch = True
 
@@ -669,6 +669,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
                     tp_count = 0
                     sl_marker_x.append(df.index[m])
 
+                    #           SL 을 Limit 으로 한다는 설정이 무리가 있음을 확인        #
                     if not pd.isna(sl_level):
                         profit_gap = ((sl_level / ep - trade_fee) - 1) * sum(qty_list) * leverage
                         sl_marker_y.append(sl_level)

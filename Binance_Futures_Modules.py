@@ -211,7 +211,7 @@ if __name__ == '__main__':
     # PrintBasic.print_obj(result)
 
     #           Get Order per Pair & OrderId          #
-    # result = request_client.get_order(symbol="BTCUSDT", orderId=534333508)
+    # result = request_client.get_order(symbol="ALGOUSDT", orderId=1268453192)
     # PrintBasic.print_obj(result)
 
     #               Get Position in all Pairs            #
@@ -310,8 +310,8 @@ if __name__ == '__main__':
     # print("==============")
 
     #               Account trades per coin History             #
-    # result = request_client.get_account_trades(symbol="ALGOUSDT")
-    # PrintMix.print_data(result)
+    result = request_client.get_account_trades(symbol="ALGOUSDT")
+    PrintMix.print_data(result)
     # price, pnl =
     # print(get_trade_history_info("ALGOUSDT"))
 
@@ -345,9 +345,9 @@ if __name__ == '__main__':
     # result = request_client.get_income_history(symbol='ALGOUSDT', startTime=None, endTime=None)
     # print(result[0])
 
-    result = remaining_order_check('ALGOUSDT')
+    # result = remaining_order_check('ALGOUSDT')
     # result = request_client.get_open_orders()
-    PrintMix.print_data(result)
+    # PrintMix.print_data(result)
 
     # # print(int(time.time()))
     # # print(calc_with_precision(6.28 / 108.07 * 7, 3))
