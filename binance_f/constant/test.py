@@ -1,7 +1,10 @@
 import os
 import pickle
 
-with open('binance_key.p', 'rb') as f:
+
+key_abspath = 'C:/Users/Lenovo/PycharmProjects/Project_System_Trading/Rapid_Ascend/private_info/binance_key.p'
+
+with open(key_abspath, 'rb') as f:
     api_list = pickle.load(f)
 
 if(os.path.exists("binance_f/privateconfig.py")):
