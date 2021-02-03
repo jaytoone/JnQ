@@ -20,9 +20,10 @@ __pycache__/
 # ppt
 *.pptx
 
-README.md
 
 # Exclude Folder
+funcs/
+private_info/
 pred_ohlcv/
 Tensorboard_graph/
 trading_bot/
