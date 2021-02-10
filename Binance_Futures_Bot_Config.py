@@ -27,12 +27,12 @@ config_json["FUNDMTL"] = {
 }
 
 config_json["ORDER"] = {
-    'entry_type': OrderType.MARKET,
+    'entry_type': OrderType.LIMIT,
     'entry_execution_wait': 2 * 60,   # if you use limit entry
-    'breakout_qty_ratio': 2 / 3,  # if you use limit entry
+    'breakout_qty_ratio': 0.97,  # if you use limit entry
     'exit_execution_wait': 1 * 60,
     'tp_type': OrderType.LIMIT,
-    'sl_type': OrderType.MARKET,
+    'sl_type': OrderType.LIMIT,
 }
 
 config_json["AI"] = {

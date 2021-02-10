@@ -23,6 +23,7 @@ __pycache__/
 
 # Exclude Folder
 funcs/
+arima_data/
 private_info/
 pred_ohlcv/
 Tensorboard_graph/

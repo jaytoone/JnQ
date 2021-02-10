@@ -6,12 +6,13 @@
   ],
   "bar_close_second": 59,
   "accumulated_income": 0.0,
-  "accumulated_profit": 1.0
+  "accumulated_profit": 1.0,
+  "accumulated_back_profit": 1.0
  },
  "ORDER": {
   "entry_type": "LIMIT",
-  "entry_execution_wait": 120,
-  "breakout_qty_ratio": 0.6666666666666666,
+  "entry_execution_wait": 60,
+  "breakout_qty_ratio": 0.97,
   "exit_execution_wait": 60,
   "tp_type": "LIMIT",
   "sl_type": "LIMIT"

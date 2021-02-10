@@ -19,7 +19,7 @@ pd.set_option('display.max_columns', 2500)
 a_day = 3600 * 24 * 1000
 
 
-def concat_candlestick(symbol, interval, days, end_date=None, show_process=False):
+def concat_candlestick(symbol, interval, days, end_date=None, show_process=False, timesleep=None):
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
@@ -58,6 +58,9 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
                 # sum_df = pd.concat([sum_df, df])
                 sum_df = df.append(sum_df)
 
+            if timesleep is not None:
+                time.sleep(timesleep)
+
         except Exception as e:
             print('Error in get_candlestick_data :', e)
 
@@ -72,10 +75,11 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 
 if __name__ == '__main__':
 
-    days = 34
-    # end_date = '2020-12-14'
+    days = 1
+    # end_date = '2019-12-14'
+    end_date = None
 
-    intervals = ['1m', '3m', '30m']
+    intervals = ['4h']
 
     for interval in intervals:
 
@@ -87,18 +91,25 @@ if __name__ == '__main__':
     with open('future_coin.p', 'rb') as f:
         coin_list = pickle.load(f)
 
-    coin_list = ['DOT']
+    coin_list = ['BTC', 'ETH']
 
     for interval in intervals:
 
         for coin in coin_list:
 
-            concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, show_process=True)
+            # print(coin)
 
-            try:
-                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin))
-            except Exception as e:
-                print('Error in to_excel :', e)
+            # try:
+            concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
 
-            # print(concated_excel.tail())
-            # quit()
+            # try:
+            #     concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin))
+            # except Exception as e:
+            #     print('Error in to_excel :', e)
+
+            print(concated_excel.tail())
+
+            print('df[-1] timestamp :', datetime.timestamp(concated_excel.index[-1]))
+            print('current timestamp :', datetime.now().timestamp())
+            print(datetime.timestamp(concated_excel.index[-1]) < datetime.now().timestamp())
+            quit()

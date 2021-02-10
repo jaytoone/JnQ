@@ -1,7 +1,7 @@
 from Binance_Futures_Modules import *
-from Funcs_For_Trade import *
+from funcs.funcs_for_trade import *
 # from Funcs_Indicator import *
-from Funcs_for_pb_tp_ratio_plotly_trade import profitage
+from funcs.Funcs_for_pb_tp_ratio_plotly_trade import profitage
 from Binance_Futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 
