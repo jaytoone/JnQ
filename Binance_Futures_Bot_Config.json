@@ -2,7 +2,7 @@
  "FUNDMTL": {
   "run": true,
   "symbol": [
-   "ALGOUSDT"
+   "ETHUSDT", "ADAUSDT"
   ],
   "bar_close_second": 59,
   "accumulated_income": 0.0,
@@ -10,6 +10,7 @@
   "accumulated_back_profit": 1.0
  },
  "ORDER": {
+  "use_rows": 3000,
   "entry_type": "LIMIT",
   "entry_execution_wait": 60,
   "breakout_qty_ratio": 0.97,

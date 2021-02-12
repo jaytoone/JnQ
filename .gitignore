@@ -17,6 +17,9 @@ __pycache__/
 # executable files
 *.exe
 
+# exclude files
+binance_futures_arima*.py
+
 # ppt
 *.pptx
 

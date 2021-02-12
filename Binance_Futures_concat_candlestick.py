@@ -56,7 +56,9 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
             else:
                 # print(df.head())
                 # sum_df = pd.concat([sum_df, df])
-                sum_df = df.append(sum_df)
+                sum_df = df.append(sum_df)  # <-- -a_day 이기 때문에 sum_df 와 df 의 위치가 좌측과 같다.
+                # print(sum_df)
+                # quit()
 
             if timesleep is not None:
                 time.sleep(timesleep)
@@ -75,11 +77,11 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 
 if __name__ == '__main__':
 
-    days = 1
-    # end_date = '2019-12-14'
+    days = 50
+    # end_date = '2020-01-14'
     end_date = None
 
-    intervals = ['4h']
+    intervals = ['30m']
 
     for interval in intervals:
 
@@ -91,7 +93,9 @@ if __name__ == '__main__':
     with open('future_coin.p', 'rb') as f:
         coin_list = pickle.load(f)
 
-    coin_list = ['BTC', 'ETH']
+    coin_list = ['ADA']
+    # coin_list.remove('BTC')
+    # coin_list.remove('ETH')
 
     for interval in intervals:
 
@@ -102,14 +106,15 @@ if __name__ == '__main__':
             # try:
             concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
 
-            # try:
-            #     concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin))
-            # except Exception as e:
-            #     print('Error in to_excel :', e)
+            try:
+                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+            except Exception as e:
+                print('Error in to_excel :', e)
 
-            print(concated_excel.tail())
+            # print(concated_excel.tail())
+            #
+            # print('df[-1] timestamp :', datetime.timestamp(concated_excel.index[-1]))
+            # print('current timestamp :', datetime.now().timestamp())
+            # print(datetime.timestamp(concated_excel.index[-1]) < datetime.now().timestamp())
+            # quit()
 
-            print('df[-1] timestamp :', datetime.timestamp(concated_excel.index[-1]))
-            print('current timestamp :', datetime.now().timestamp())
-            print(datetime.timestamp(concated_excel.index[-1]) < datetime.now().timestamp())
-            quit()

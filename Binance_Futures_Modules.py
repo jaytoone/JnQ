@@ -1,5 +1,6 @@
 from Binance_Futures_Bot_Config import *
 import math
+import pandas as pd
 # import time
 
 
@@ -89,13 +90,15 @@ def get_precision(symbol_):
 
 
 def calc_with_precision(data, data_precision, def_type='floor'):
-    if data_precision > 0:
-        if def_type == 'floor':
-            data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
+
+    if not pd.isna(data):
+        if data_precision > 0:
+            if def_type == 'floor':
+                data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
+            else:
+                data = math.ceil(data * (10 ** data_precision)) / (10 ** data_precision)
         else:
-            data = math.ceil(data * (10 ** data_precision)) / (10 ** data_precision)
-    else:
-        data = int(data)
+            data = int(data)
 
     return data
 
