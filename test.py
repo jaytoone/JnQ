@@ -8,9 +8,9 @@ import numpy as np
 #
 # print('something new', end=' ')
 # print('something')
-tlist = [1, 2, 3, 4]
-a, b = tlist[:2]
-print(a, b)
+# tlist = [1, 2, 3, 4]
+# a, b = tlist[:2]
+# print(a, b)
 # tlist = [tlist, tlist]
 # print(list(map(lambda x: sum(x), tlist)))
 #
@@ -33,7 +33,7 @@ print(a, b)
 #     pass
 # print(back_i)
 
-# print(datetime.fromtimestamp(1610197130835/ 1000))
+print(datetime.fromtimestamp(1613387908809/ 1000))
 # print(int('08'))
 # import os
 

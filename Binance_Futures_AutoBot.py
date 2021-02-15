@@ -2,7 +2,7 @@ from binance_f import RequestClient
 from binance_f.constant.test import *
 from binance_f.base.printobject import *
 from binance_f.model.constant import *
-from Binance_Futures_Modules import *
+from binance_futures_modules import *
 import time
 from datetime import datetime
 from Funcs_For_Trade import *

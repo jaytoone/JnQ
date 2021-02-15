@@ -4,11 +4,11 @@
 # import scipy.misc
 # import itertools
 import random
-from Binance_Futures_Modules import *
+from binance_futures_modules import *
 # from Funcs_For_Trade import *
 from Funcs_Indicator import *
 from Funcs_for_TP_Ratio_TVT_Bias_Binarize_modified import profitage
-from Binance_Futures_concat_candlestick import concat_candlestick
+from binance_futures_concat_candlestick import concat_candlestick
 from Make_X_TP_Ratio_Realtime_for_Bot import made_x
 from easydict import EasyDict
 import time
@@ -27,7 +27,7 @@ while 1:
     time.sleep(.5)
 
     #            Configuration             #
-    with open('Binance_Futures_Bot_Config.json', 'r') as cfg:
+    with open('binance_futures_bot_config.json', 'r') as cfg:
         config = EasyDict(json.load(cfg))
 
     fundamental = config.FUNDMTL

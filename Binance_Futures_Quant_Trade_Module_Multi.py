@@ -1,13 +1,13 @@
-from Binance_Futures_Modules import *
+from binance_futures_modules import *
 from funcs.funcs_for_trade import *
 # from Funcs_Indicator import *
 from funcs.Funcs_for_pb_tp_ratio_plotly_trade import profitage
-from Binance_Futures_concat_candlestick import concat_candlestick
+from binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 
 #            Initialize Part by Symbol           #
 #            First Configuration       #
-with open('Binance_Futures_Bot_Config.json', 'r') as cfg:
+with open('binance_futures_bot_config.json', 'r') as cfg:
     config = EasyDict(json.load(cfg))
 fundamental = config.FUNDMTL
 accumulated_income = fundamental.accumulated_income
@@ -37,7 +37,7 @@ m = -1
 while 1:
 
     #       Configuration       #
-    with open('Binance_Futures_Bot_Config.json', 'r') as cfg:
+    with open('binance_futures_bot_config.json', 'r') as cfg:
         config = EasyDict(json.load(cfg))
 
     fundamental = config.FUNDMTL

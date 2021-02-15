@@ -6,7 +6,7 @@
 import random
 # from keras.utils import plot_model
 from easydict import EasyDict
-from Binance_Futures_Modules import *
+from binance_futures_modules import *
 from Funcs_Indicator import *
 import time
 import pathlib
@@ -69,7 +69,7 @@ model_renew = False
 while 1:
 
     #            Configuration             #
-    with open('Binance_Futures_Bot_Config.json', 'r') as cfg:
+    with open('binance_futures_bot_config.json', 'r') as cfg:
         config = EasyDict(json.load(cfg))
 
     fundamental = config.FUNDMTL
@@ -199,7 +199,7 @@ while 1:
                         config.AI.short_thr_precision = thr_precision
                         print('short_thr_precision :', thr_precision)
 
-                with open('Binance_Futures_Bot_Config.json', 'w') as cfg:
+                with open('binance_futures_bot_config.json', 'w') as cfg:
                     json.dump(config, cfg)
 
                 print('time :', datetime.now())

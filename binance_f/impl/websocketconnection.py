@@ -82,6 +82,7 @@ class WebsocketConnection:
         global connection_id
         connection_id += 1
         self.id = connection_id
+        self.price = None
 
     def in_delay_connection(self):
         return self.delay_in_second != -1
@@ -142,6 +143,7 @@ class WebsocketConnection:
     def on_message(self, message):
         self.last_receive_time = get_current_timestamp()
         json_wrapper = parse_json_from_string(message)
+        # print('json_wrapper :', json_wrapper)
 
         if json_wrapper.contain_key("status") and json_wrapper.get_string("status") != "ok":
             error_code = json_wrapper.get_string_or_default("err-code", "Unknown error")
@@ -175,6 +177,8 @@ class WebsocketConnection:
         try:
             if self.request.json_parser is not None:
                 res = self.request.json_parser(json_wrapper)
+                # print('res :', res.price)
+                # print('res :', res)
         except Exception as e:
             self.on_error("Failed to parse server's response: " + str(e))
 
@@ -187,6 +191,9 @@ class WebsocketConnection:
 
         if self.request.auto_close:
             self.close()
+
+        # return res.price
+        self.price = res.price
 
     def __process_ping_on_trading_line(self, ping_ts):
         self.send("{\"op\":\"pong\",\"ts\":" + str(ping_ts) + "}")

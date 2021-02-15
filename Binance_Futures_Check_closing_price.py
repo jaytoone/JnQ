@@ -1,5 +1,5 @@
-from Binance_Futures_Modules import *
-from Binance_Futures_concat_candlestick import concat_candlestick
+from binance_futures_modules import *
+from binance_futures_concat_candlestick import concat_candlestick
 from datetime import datetime
 import numpy as np
 

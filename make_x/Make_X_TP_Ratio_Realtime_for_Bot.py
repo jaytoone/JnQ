@@ -8,8 +8,8 @@ import warnings
 import time
 from Funcs_Indicator import *
 from Funcs_for_TP_Ratio_Bot import profitage
-from Binance_Futures_concat_candlestick import concat_candlestick
-from Binance_Futures_Bot_Config import LabelType
+from binance_futures_concat_candlestick import concat_candlestick
+from binance_futures_bot_config import LabelType
 
 warnings.filterwarnings("ignore")
 

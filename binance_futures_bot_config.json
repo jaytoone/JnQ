@@ -1,13 +1,9 @@
 {
  "FUNDMTL": {
   "run": true,
-  "symbol": [
-   "ETHUSDT", "ADAUSDT"
-  ],
   "bar_close_second": 59,
-  "accumulated_income": 0.0,
-  "accumulated_profit": 1.0,
-  "accumulated_back_profit": 1.0
+  "close_complete_term": 5,
+  "realtime_term": 0.01
  },
  "ORDER": {
   "use_rows": 3000,

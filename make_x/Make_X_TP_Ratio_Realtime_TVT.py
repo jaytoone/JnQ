@@ -7,8 +7,8 @@ import warnings
 from datetime import datetime
 import time
 from Funcs_Indicator import *
-from Binance_Futures_concat_candlestick import concat_candlestick
-from Binance_Futures_Bot_Config import LabelType
+from binance_futures_concat_candlestick import concat_candlestick
+from binance_futures_bot_config import LabelType
 
 warnings.filterwarnings("ignore")
 

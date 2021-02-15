@@ -1,6 +1,8 @@
-from Binance_Futures_Bot_Config import *
+from binance_futures_bot_config import *
 import math
 import pandas as pd
+
+
 # import time
 
 
@@ -34,6 +36,15 @@ def get_market_price(symbol):
     # PrintMix.print_data(result)
 
     return result[0].price
+
+
+#           Get Market Price with websocket           #
+def get_market_price_v2(sub_client):
+
+    while 1:
+        res = sub_client.connections[0].price
+        if res is not None:
+            return res
 
 
 #           Income History per Pair         #
@@ -90,7 +101,6 @@ def get_precision(symbol_):
 
 
 def calc_with_precision(data, data_precision, def_type='floor'):
-
     if not pd.isna(data):
         if data_precision > 0:
             if def_type == 'floor':
@@ -103,24 +113,19 @@ def calc_with_precision(data, data_precision, def_type='floor'):
     return data
 
 
-import logging
-from binance_f import SubscriptionClient
-from binance_f.constant.test import *
-from binance_f.model import *
-from binance_f.exception.binanceapiexception import BinanceApiException
-
-from binance_f.base.printobject import *
-
-
-def callback(data_type: 'SubscribeMessageType', event: 'any'):
+def callback(data_type: 'SubscribeMessageType', event: 'any', show_detail=False):
     if data_type == SubscribeMessageType.RESPONSE:
-        print("Event ID: ", event)
+        if show_detail:
+            print("Event ID: ", event)
     elif data_type == SubscribeMessageType.PAYLOAD:
-        # PrintBasic.print_obj(event)
-        sub_client.unsubscribe_all()
+        if show_detail:
+            PrintBasic.print_obj(event)
+        # sub_client.unsubscribe_all()
     else:
         print("Unknown Data:")
-    print()
+
+    if show_detail:
+        print()
 
 
 def error(e: 'BinanceApiException'):
@@ -165,14 +170,13 @@ def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_d
         else:
             tp_count += 1
             remain_qty -= quantity
-            if remain_qty < 1 / (10 ** quantity_precision): # --> means remain_qty = 0.0
+            if remain_qty < 1 / (10 ** quantity_precision):  # --> means remain_qty = 0.0
                 break
 
     return
 
 
 def get_trade_history_info(symbol_):
-
     result = request_client.get_account_trades(symbol=symbol_)
     # for i in range(len(result)):
     #     print(result[i].price, result[i].realizedPnl)
@@ -184,7 +188,7 @@ if __name__ == '__main__':
     tp_list = [91.8, 91.7, 91.65]
     partial_qty_divider = 1.5
     quantity_precision = 3
-    symbol = 'DASHUSDT'
+    symbol = 'BTCUSDT'
     close_side = OrderSide.SELL
 
     #           Custom Partial Limit        #
@@ -227,6 +231,30 @@ if __name__ == '__main__':
     # except Exception as e:
     #     print('Error in get_market_price :', e)
 
+    import time
+    sub_client.subscribe_aggregate_trade_event(symbol.lower(), callback, error)
+    start = time.time()
+    while 1:
+        # print(len(sub_client_2.connections))
+        # print((sub_client.connections[0].price))
+        print(get_market_price_v2(sub_client))
+        time.sleep(.5)
+        if time.time() - start > 3:
+            break
+    print('trading done')
+    start = time.time()
+    while 1:
+        # print(len(sub_client_2.connections))
+        # print((sub_client.connections[0].price))
+        print(get_market_price_v2(sub_client))
+        time.sleep(.5)
+        if time.time() - start > 3:
+            break
+    print('trading done')
+    quit()
+    # print(obj)
+    # members = [attr for attr in dir(obj) if not callable(attr) and not attr.startswith("__")]
+    # print(members)
     # price = realtime_price
     price = 87.29
     quantity = 0.002
@@ -313,8 +341,8 @@ if __name__ == '__main__':
     # print("==============")
 
     #               Account trades per coin History             #
-    result = request_client.get_account_trades(symbol="ALGOUSDT")
-    PrintMix.print_data(result)
+    # result = request_client.get_account_trades(symbol="ALGOUSDT")
+    # PrintMix.print_data(result)
     # price, pnl =
     # print(get_trade_history_info("ALGOUSDT"))
 

@@ -23,7 +23,9 @@ class WebsocketRequestImpl(object):
             time.sleep(0.01)
 
         def json_parse(json_wrapper):
+            # print(json_wrapper)
             result = AggregateTradeEvent.json_parse(json_wrapper)
+            # print(result.price)
             return result
 
         request = WebsocketRequest()

@@ -58,6 +58,8 @@ class SubscriptionClient(object):
         connection = WebsocketConnection(self.__api_key, self.__secret_key, self.uri, self.__watch_dog, request)
         self.connections.append(connection)
         connection.connect()
+        # print(connection.res)
+        # print((connection.__on_receive_payload))
 
     def unsubscribe_all(self):
         for conn in self.connections:
@@ -74,6 +76,8 @@ class SubscriptionClient(object):
         """
         request = self.websocket_request_impl.subscribe_aggregate_trade_event(symbol, callback, error_handler)
         self.__create_connection(request)
+        # print((request.json_parser.price))
+        # return request
 
     def subscribe_mark_price_event(self, symbol: 'str', callback, error_handler=None):
         """
@@ -97,7 +101,7 @@ class SubscriptionClient(object):
         """
         request = self.websocket_request_impl.subscribe_candlestick_event(symbol, interval, callback, error_handler)
         self.__create_connection(request)
-           
+
     def subscribe_symbol_miniticker_event(self, symbol: 'str', callback, error_handler=None):
         """
         Individual Symbol Mini Ticker Stream
