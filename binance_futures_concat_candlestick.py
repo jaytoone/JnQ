@@ -67,7 +67,8 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
             print('Error in get_candlestick_data :', e)
 
             if len(df) == 0:
-                quit()
+                break
+            #     quit()
 
     # end_date = str(datetime.fromtimestamp(endTime / 1000)).split(' ')[0]
     # print(len(sum_df[~sum_df.index.duplicated(keep='first')]))
@@ -93,6 +94,8 @@ if __name__ == '__main__':
     with open('future_coin.p', 'rb') as f:
         coin_list = pickle.load(f)
 
+    coin_list = coin_list[11:]
+    # print(coin_list)
     # coin_list = ['ADA']
     # coin_list.remove('BTC')
     # coin_list.remove('ETH')
@@ -103,13 +106,14 @@ if __name__ == '__main__':
 
             # print(coin)
 
-            # try:
-            concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
-
             try:
+                concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
+
+            # try:
                 concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in to_excel :', e)
+                continue
 
             # print(concated_excel.tail())
             #

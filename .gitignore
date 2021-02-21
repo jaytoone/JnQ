@@ -27,6 +27,7 @@ arima*.py
 
 # Exclude Folder
 funcs/
+arima_*/
 arima_data/
 private_info/
 pred_ohlcv/
