@@ -2,6 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/../AI_Coinbot/.idea/A.I_Coinbot.iml" filepath="$PROJECT_DIR$/../AI_Coinbot/.idea/A.I_Coinbot.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/Rapid_Ascend.iml" filepath="$PROJECT_DIR$/.idea/Rapid_Ascend.iml" />
       <module fileurl="file://$PROJECT_DIR$/../A.I_Coinbot/venv/Lib/site-packages/pybithumb/.idea/pybithumb.iml" filepath="$PROJECT_DIR$/../A.I_Coinbot/venv/Lib/site-packages/pybithumb/.idea/pybithumb.iml" />
     </modules>

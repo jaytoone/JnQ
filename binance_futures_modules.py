@@ -231,27 +231,27 @@ if __name__ == '__main__':
     # except Exception as e:
     #     print('Error in get_market_price :', e)
 
-    import time
-    sub_client.subscribe_aggregate_trade_event(symbol.lower(), callback, error)
-    start = time.time()
-    while 1:
-        # print(len(sub_client_2.connections))
-        # print((sub_client.connections[0].price))
-        print(get_market_price_v2(sub_client))
-        time.sleep(.5)
-        if time.time() - start > 3:
-            break
-    print('trading done')
-    start = time.time()
-    while 1:
-        # print(len(sub_client_2.connections))
-        # print((sub_client.connections[0].price))
-        print(get_market_price_v2(sub_client))
-        time.sleep(.5)
-        if time.time() - start > 3:
-            break
-    print('trading done')
-    quit()
+    # import time
+    # sub_client.subscribe_aggregate_trade_event(symbol.lower(), callback, error)
+    # start = time.time()
+    # while 1:
+    #     # print(len(sub_client_2.connections))
+    #     # print((sub_client.connections[0].price))
+    #     print(get_market_price_v2(sub_client))
+    #     time.sleep(.5)
+    #     if time.time() - start > 3:
+    #         break
+    # print('trading done')
+    # start = time.time()
+    # while 1:
+    #     # print(len(sub_client_2.connections))
+    #     # print((sub_client.connections[0].price))
+    #     print(get_market_price_v2(sub_client))
+    #     time.sleep(.5)
+    #     if time.time() - start > 3:
+    #         break
+    # print('trading done')
+    # quit()
     # print(obj)
     # members = [attr for attr in dir(obj) if not callable(attr) and not attr.startswith("__")]
     # print(members)
@@ -385,7 +385,10 @@ if __name__ == '__main__':
     # # print(calc_with_precision(6.2895214 / 108.07 * 7, 3))
     # # remaining_order_check()
     # # print('%.2f %%' % (-0.013 / 6.28 * 100))
-    # print((get_remaining_quantity('DOTUSDT')))
+    print((get_remaining_quantity('DOTUSDT')))
+    # result = request_client.get_position()
+    # print(result[0])
+
     # print(get_limit_leverage('DOTUSDT'))
     # print(get_availableBalance())
     # print(get_precision('BTCUSDT'))
