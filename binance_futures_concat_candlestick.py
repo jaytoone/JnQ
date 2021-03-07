@@ -79,11 +79,11 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 if __name__ == '__main__':
 
     days = 300
-    days = 14
-    # end_date = '2021-02-11'
-    end_date = None
+    # days = 21
+    end_date = '2021-02-11'
+    # end_date = None
 
-    intervals = ['1h']
+    intervals = ['15m']
 
     for interval in intervals:
 
@@ -96,7 +96,7 @@ if __name__ == '__main__':
         coin_list = pickle.load(f)
 
     # coin_list = coin_list[11:]
-    coin_list = ['ALGO']
+    # coin_list = ['DOT']
     # print(coin_list)
     # coin_list = ['ADA']
     # coin_list.remove('BTC')
