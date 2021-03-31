@@ -80,10 +80,10 @@ if __name__ == '__main__':
 
     days = 300
     # days = 21
-    end_date = '2021-02-11'
+    end_date = '2020-02-11'
     # end_date = None
 
-    intervals = ['15m']
+    intervals = ['30m']
 
     for interval in intervals:
 
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     # coin_list = coin_list[11:]
     # coin_list = ['DOT']
     # print(coin_list)
-    # coin_list = ['ADA']
+    # coin_list = ['THETA']
     # coin_list.remove('BTC')
     # coin_list.remove('ETH')
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                 concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
 
             # try:
-                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+            #     concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in to_excel :', e)
                 continue

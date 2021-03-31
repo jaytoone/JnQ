@@ -275,7 +275,7 @@ if __name__ == '__main__':
     # print(tp_list)
 
     # print(calc_with_precision(0.0009999, 3))
-    # result = request_client.cancel_all_orders(symbol='DOTUSDT')
+    result = request_client.cancel_all_orders(symbol='DOTUSDT')
 
     # print('price :', price)
     # print('amt_str :', amt_str)
@@ -385,7 +385,7 @@ if __name__ == '__main__':
     # # print(calc_with_precision(6.2895214 / 108.07 * 7, 3))
     # # remaining_order_check()
     # # print('%.2f %%' % (-0.013 / 6.28 * 100))
-    print((get_remaining_quantity('DOTUSDT')))
+    # print((get_remaining_quantity('DOTUSDT')))
     # result = request_client.get_position()
     # print(result[0])
 
