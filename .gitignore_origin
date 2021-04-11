@@ -18,15 +18,14 @@ __pycache__/
 *.exe
 
 # exclude files
-#binance_futures_arima*.py
-#arima*.py
+binance_futures_arima*.py
+arima*.py
 
 # ppt
 *.pptx
 
 
 # Exclude Folder
-test_set/
 funcs/
 arima_*/
 arima_data/
@@ -43,6 +42,7 @@ Made_X
 Made_X/
 labeled_data
 labeled_data/
+Invest_Stability.
 invest_stability/
 Figure_trade
 Figure_trade/

@@ -67,8 +67,8 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
             print('Error in get_candlestick_data :', e)
 
             if len(df) == 0:
+                # quit()
                 break
-            #     quit()
 
     # end_date = str(datetime.fromtimestamp(endTime / 1000)).split(' ')[0]
     # print(len(sum_df[~sum_df.index.duplicated(keep='first')]))
@@ -78,9 +78,10 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 
 if __name__ == '__main__':
 
-    days = 300
+    days = 100
     # days = 21
-    end_date = '2020-02-11'
+    end_date = '2021-04-08'
+    # end_date = '2019-12-08'
     # end_date = None
 
     intervals = ['30m']
@@ -112,7 +113,7 @@ if __name__ == '__main__':
                 concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
 
             # try:
-            #     concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in to_excel :', e)
                 continue

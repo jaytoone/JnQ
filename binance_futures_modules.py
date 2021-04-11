@@ -21,9 +21,12 @@ def get_limit_leverage(symbol_):
 #               Get Balance V2              #
 def get_availableBalance():
     result = request_client.get_balance_v2()
-    # print(result[0].availableBalance)
 
-    return calc_with_precision(result[0].availableBalance, 2)
+    # print(dir(result[0]))
+    # for i in range(len(result)):
+    #     print(result[i].availableBalance)
+
+    return calc_with_precision(result[1].availableBalance, 2)
 
 
 # result = request_client.get_balance_v2()
@@ -275,7 +278,7 @@ if __name__ == '__main__':
     # print(tp_list)
 
     # print(calc_with_precision(0.0009999, 3))
-    result = request_client.cancel_all_orders(symbol='DOTUSDT')
+    # result = request_client.cancel_all_orders(symbol='DOTUSDT')
 
     # print('price :', price)
     # print('amt_str :', amt_str)
@@ -390,5 +393,5 @@ if __name__ == '__main__':
     # print(result[0])
 
     # print(get_limit_leverage('DOTUSDT'))
-    # print(get_availableBalance())
+    print(get_availableBalance())
     # print(get_precision('BTCUSDT'))
