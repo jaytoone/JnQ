@@ -27,7 +27,7 @@ __pycache__/
 
 # Exclude Folder
 test_set/
-funcs/
+#funcs/
 arima_*/
 arima_data/
 private_info/

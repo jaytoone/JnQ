@@ -5,6 +5,7 @@ from easydict import EasyDict
 from binance_futures_arima_modules import arima_profit, calc_train_days
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning, ValueWarning
+from sklearn.preprocessing import MinMaxScaler
 import keras
 
 warnings.simplefilter('ignore', ConvergenceWarning)
@@ -80,11 +81,13 @@ class ARIMA_Bot:
 
             #       Get startTime for Total Income calc    #
             start_timestamp = int(time.time() * 1000)
-            init_arima = True
+            ai_survey = True
+            arima_on = False
             get_first_df = False
             while 1:
 
-                if init_arima:
+                #       arima phase 도 ai survey pass 시 진행해야한다           #
+                if ai_survey:  # 해당 interval 내에 arima survey 수행을 한번만 하기 위한 조건 phase
                     try:
                         temp_time = time.time()
 
@@ -127,44 +130,94 @@ class ARIMA_Bot:
 
                         # quit()
 
-                        #         ARIMA process          #
-                        df, pred_close, err_range = arima_profit(stacked_df.iloc[:-1, :], tp=self.tp, leverage=self.leverage_)  # <-- we should use complete data
-                        init_arima = False
-                        print('stacked_df.index[-1] :', stacked_df.index[-1], 'checking time : %.2f' % (time.time() - temp_time))
-                        print('pred_close, err_range :', pred_close, err_range)
-
                         #         AI survey phase       #
+                        period = 45
+                        data_x = []
+
                         prev_complete_df = stacked_df.iloc[:-1, :]
-                        input_x = prev_complete_df.iloc[:, :4]
+                        temp_ohlc = prev_complete_df.iloc[-period:, :4].values
+                        temp_ep = period 만큼의 ep 가 준비되어 있어야한다[-period:]
+                        temp_vol = prev_complete_df.iloc[-period:, [4]].values
+
+                        temp_data = np.hstack((temp_ohlc, temp_ep, temp_vol))
+
+                        min_max = MinMaxScaler()
+                        temp_data[:, :5] = min_max.fit_transform(temp_data[:, :5])
+
+                        min_max = MinMaxScaler()
+                        temp_data[:, [5]] = min_max.fit_transform(temp_data[:, [5]])
+
+                        if np.isnan(np.sum(temp_data)):
+                            print('Error in ai survey : nan data included in input')
+                            continue
+
+                        data_x.append(temp_data)
+                        _, row, col = np.array(data_x).shape
+                        input_x = np.array(data_x).reshape(-1, row, col, 1).astype(np.float32)
+
+                        #     1c to 3c    #
+                        input_x = input_x * np.ones(3, dtype=np.float32)[None, None, None, :]
+                        print('input_x.shape :', input_x.shape)
+
+                        #         reshape data     #
+                        temp_x = list()
+                        for d_i, data in enumerate(input_x):
+                            resized_data = data.repeat(2, axis=0).repeat(2, axis=1)
+                            temp_x.append(resized_data)
+
+                        re_input_x = np.array(temp_x)
+
+                        #       inference phase     #
+                        test_result = model.predict(re_input_x)
+                        ai_survey = False
+
+                        thresh = 0.2614
+                        y_score = test_result[:, [1]]
+                        y_pred = np.where(y_score[:, -1] > thresh, 1, 0)
+
+                        if y_pred[-1]:
+                            거래 진행, 아니면 거래 대기
+
+                            #         ai phase 의 종속 조건 수행절      #
+                            #         ARIMA survey phase          #
+                            df, pred_close, err_range = arima_profit(stacked_df.iloc[:-1, :], tp=self.tp,
+                                                                     leverage=self.leverage_)  # <-- we should use complete data
+                            print('stacked_df.index[-1] :', stacked_df.index[-1],
+                                  'checking time : %.2f' % (time.time() - temp_time))
+                            print('pred_close, err_range :', pred_close, err_range)
+                            arima_on = True
+
 
                     except Exception as e:
                         print('Error in arima_profit :', e)
                         continue
 
-                #           Continuously check open condition          #
-                #      Get realtime market price & compare with trigger price      #
-                try:
-                    realtime_price = get_market_price_v2(self.sub_client)
+                if arima_on:
+                    #           Continuously check open condition          #
+                    #      Get realtime market price & compare with trigger price      #
+                    try:
+                        realtime_price = get_market_price_v2(self.sub_client)
 
-                except Exception as e:
-                    print('Error in get_market_price :', e)
-                    continue
+                    except Exception as e:
+                        print('Error in get_market_price :', e)
+                        continue
 
-                if realtime_price < pred_close - err_range / 2:
-                    open_side = OrderSide.BUY
+                    if realtime_price < pred_close - err_range / 2:
+                        open_side = OrderSide.BUY
 
-                # elif realtime_price > pred_close + err_range:
-                #     open_side = OrderSide.SELL
+                    # elif realtime_price > pred_close + err_range:
+                    #     open_side = OrderSide.SELL
 
-                if open_side is not None:
-                    break
+                    if open_side is not None:
+                        break
 
                 time.sleep(fundamental.realtime_term)  # <-- term for realtime market function
 
                 #       check tick change      #
                 #       stacked_df의 마지막 timestamp index 보다 current timestamp 이 커지면 init arima       #
                 if datetime.timestamp(stacked_df.index[-1]) < datetime.now().timestamp():
-                    init_arima = True
+                    ai_survey = True
+                    arima_on = False
                     print('stacked_df[-1] timestamp :', datetime.timestamp(stacked_df.index[-1]))  # <-- code proof
                     print('current timestamp :', datetime.now().timestamp())
 
