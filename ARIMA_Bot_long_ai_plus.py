@@ -2,11 +2,20 @@ from binance_futures_modules import *
 from funcs.funcs_for_trade import *
 from binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
-from binance_futures_arima_modules import arima_profit, calc_train_days
+from binance_futures_arima_modules import arima_profit, calc_train_days, ep_stacking
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning, ValueWarning
 from sklearn.preprocessing import MinMaxScaler
 import keras
+import tensorflow as tf
+
+tf_config = tf.ConfigProto()
+tf_config.gpu_options.allow_growth = True
+# tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5
+tf.keras.backend.set_session(tf.Session(config=tf_config))
+
+#           GPU Set         #
+tf.device('/device:XLA_GPU:0')
 
 warnings.simplefilter('ignore', ConvergenceWarning)
 warnings.simplefilter('ignore', ValueWarning)
@@ -37,10 +46,9 @@ class ARIMA_Bot:
     def run(self):
 
         #         0. Load model         #
-
-        ckpt_path = "./test_set/model/"
-        model_name = "classifier_5_min_re.h5"  # <-- specifying model name
-        model = keras.models.load_model(ckpt_path + model_name)
+        model_path = r'C:\Users\Lenovo\PycharmProjects\Project_System_Trading\Rapid_Ascend\test_set\model\classifier_45_min_pr_re.h5'
+        model = keras.models.load_model(model_path)
+        period = 45
 
         #         1. Leverage type => Isolated          #
         try:
@@ -88,10 +96,10 @@ class ARIMA_Bot:
 
                 #       arima phase 도 ai survey pass 시 진행해야한다           #
                 if ai_survey:  # 해당 interval 내에 arima survey 수행을 한번만 하기 위한 조건 phase
-                    try:
+                    # try:
                         temp_time = time.time()
 
-                        df_path = './candlestick_concated/%s/%s.xlsx' % (self.interval, self.symbol)
+                        df_path = './candlestick_concated/%s/%s_ai_plus.xlsx' % (self.interval, self.symbol)
                         if self.stacked_df_on:
 
                             try:
@@ -113,14 +121,38 @@ class ARIMA_Bot:
                             stacked_df = pd.read_excel(df_path, index_col=0)
 
                             #    use rows   #
+                            #       add ep columns for append      #
+                            first_df['ep'] = np.nan
                             stacked_df = stacked_df.append(first_df)
-                            stacked_df = stacked_df[~stacked_df.index.duplicated(keep='first')].iloc[-order.use_rows:, :]
+                            stacked_df = stacked_df[~stacked_df.index.duplicated(keep='first')].iloc[-(order.use_rows + 1 + 1):, :]
 
-                        else:
-                            days = calc_train_days(interval=self.interval, use_rows=order.use_rows)
+                            #         ep stacking + 1       #
+                            ep_list = ep_stacking(stacked_df.iloc[:-1, :], tp=self.tp, test_size=1, use_rows=order.use_rows)
+                            #       add upper ep_list to stacked_df     #
+                            #       time index 와 ep 값을 매칭시켜, 누락에 대응한다       #
+                            #       누락 발생시 period size 로 ep stacking 진행         #
+                            stacked_df['ep'].iloc[-len(ep_list) - 1: -1] = ep_list
+
+                            #   temp_ep 에 nan value 를 포함시키지 않기 위한 검수    #)
+                            if np.isnan(np.sum(stacked_df['ep'].iloc[-period - 1:-1].values)):
+                                self.stacked_df_on = False
+
+                            # print('stacked_df.tail(50) :\n', stacked_df.tail(50))
+                            # quit()
+
+                        if not self.stacked_df_on:
+
+                            days = calc_train_days(interval=self.interval, use_rows=(order.use_rows + period + 1))
                             stacked_df, _ = concat_candlestick(self.symbol, self.interval, days=days, timesleep=0.2)
-                            stacked_df = stacked_df.iloc[-order.use_rows:, :]
+                            stacked_df = stacked_df.iloc[-(order.use_rows + period + 1):, :]
                             self.stacked_df_on = True
+
+                            #         ep stacking + period      #
+                            stacked_df['ep'] = np.nan
+                            ep_list = ep_stacking(stacked_df.iloc[:-1, :], tp=self.tp, test_size=period, use_rows=order.use_rows)
+                            stacked_df['ep'].iloc[-len(ep_list) - 1:-1] = ep_list
+
+                            # print('stacked_df.tail(50) :\n', stacked_df.tail(50))
 
                         #          save complete data       #
                         stacked_df.to_excel(df_path)  # <-- you are saving uncompleted data..
@@ -128,15 +160,12 @@ class ARIMA_Bot:
                         #       최종적으로 stacking 하는 과정에서 중복값을 제거하는 방법이 최신 데이터를 유지하기 때문에 문제가 없다    #
                         #       stacked_df 의 last_index 는 realtime 을 반영한 data 가 위치하는게 맞다        #
 
-                        # quit()
-
                         #         AI survey phase       #
-                        period = 45
                         data_x = []
 
                         prev_complete_df = stacked_df.iloc[:-1, :]
                         temp_ohlc = prev_complete_df.iloc[-period:, :4].values
-                        temp_ep = period 만큼의 ep 가 준비되어 있어야한다[-period:]
+                        temp_ep = prev_complete_df.iloc[-period:, [5]].values
                         temp_vol = prev_complete_df.iloc[-period:, [4]].values
 
                         temp_data = np.hstack((temp_ohlc, temp_ep, temp_vol))
@@ -149,6 +178,7 @@ class ARIMA_Bot:
 
                         if np.isnan(np.sum(temp_data)):
                             print('Error in ai survey : nan data included in input')
+                            print('temp_data :\n', temp_data)
                             continue
 
                         data_x.append(temp_data)
@@ -157,7 +187,7 @@ class ARIMA_Bot:
 
                         #     1c to 3c    #
                         input_x = input_x * np.ones(3, dtype=np.float32)[None, None, None, :]
-                        print('input_x.shape :', input_x.shape)
+                        # print('input_x.shape :', input_x.shape)
 
                         #         reshape data     #
                         temp_x = list()
@@ -166,17 +196,21 @@ class ARIMA_Bot:
                             temp_x.append(resized_data)
 
                         re_input_x = np.array(temp_x)
+                        print('re_input_x.shape :', re_input_x.shape)
 
                         #       inference phase     #
                         test_result = model.predict(re_input_x)
+                        # print('test_result :', test_result)
+                        # quit()
                         ai_survey = False
 
                         thresh = 0.2614
                         y_score = test_result[:, [1]]
                         y_pred = np.where(y_score[:, -1] > thresh, 1, 0)
+                        print('test_result :', test_result)
 
                         if y_pred[-1]:
-                            거래 진행, 아니면 거래 대기
+                            # 거래 진행, 아니면 거래 대기
 
                             #         ai phase 의 종속 조건 수행절      #
                             #         ARIMA survey phase          #
@@ -187,10 +221,9 @@ class ARIMA_Bot:
                             print('pred_close, err_range :', pred_close, err_range)
                             arima_on = True
 
-
-                    except Exception as e:
-                        print('Error in arima_profit :', e)
-                        continue
+                    # except Exception as e:
+                    #     print('Error in arima_profit :', e)
+                    #     continue
 
                 if arima_on:
                     #           Continuously check open condition          #

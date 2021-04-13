@@ -13,6 +13,67 @@ pd.set_option('display.max_rows', 2500)
 pd.set_option('display.max_columns', 2500)
 
 
+def ep_stacking(df, order=(0, 2, 1), tp=0.04, test_size=None, use_rows=None):
+    # print(high)
+
+    X = df['close']
+
+    if test_size is None:
+        test_size = int(len(X) * 0.66)
+
+    train, test = X[:-test_size].values, X[-test_size:]
+    test_shift = test.shift(1).values
+    test = test.values
+
+    # time_index = df.index[-len(test):]
+
+    # print('test_size :', len(test))
+    # break
+    high, low = np.split(df.values[-len(test):, [1, 2]], 2, axis=1)
+    # print(np.hstack((high[:20], low[:20])))
+    # quit()
+
+    history = list(train)
+    # print(train)
+    # print(history)
+    # break
+    # pred = model_fit.predict()
+    # print(pred)
+    # print(model_fit.forecast())
+    # print(len(close), len(pred))
+    # test_pred = pred[-len(test):]
+    predictions = []
+    err_ranges = []
+    ep_list = []
+    for t in range(len(test)):
+
+        if use_rows is not None:
+            assert len(history) >= use_rows, "len(history) < use_rows !"
+            history = history[-use_rows:]
+
+        # print(len(history))
+        model = ARIMA(history, order=order)
+        model_fit = model.fit(trend='c', disp=0)
+        output = model_fit.forecast()
+        # print(output)
+        # break
+
+        predictions.append(output[0])
+        err_ranges.append(output[1])
+        obs = test[t]
+        # print('obs :', obs)
+        history.append(obs)
+
+        long_ep = (output[0] - output[1]) * (1 / (tp + 1))
+        ep_list.append(long_ep)
+
+        # break
+        print('\rep stacking %.2f%%' % (t / len(test) * 100), end='')
+
+    print('\nlen(ep_list) :', len(ep_list))
+    return ep_list
+
+
 def arima_profit(df, order=(0, 2, 1), tp=0.04, leverage=1, tp2=None):
     close = df['close']
     model = ARIMA(close, order=order)
@@ -110,7 +171,7 @@ def arima_test(df, order=(0, 2, 1), tp=0.04, fee=0.0006, leverage=1, test_size=N
     # print('predictions :', predictions)
     # quit()
     # print('err_ranges :', err_ranges)
-    predictions = test_shift
+    # predictions = test_shift
 
     profits = list()
     win_cnt = 0
