@@ -64,8 +64,8 @@ def ep_stacking(df, order=(0, 2, 1), tp=0.04, test_size=None, use_rows=None):
         # print('obs :', obs)
         history.append(obs)
 
-        long_ep = (output[0] - output[1]) * (1 / (tp + 1))
-        # long_ep = output[0]
+        # long_ep = (output[0] - output[1]) * (1 / (tp + 1))
+        long_ep = output[0]
         ep_list.append(long_ep)
 
         # break
@@ -92,7 +92,8 @@ def arima_profit(df, order=(0, 2, 1), tp=0.04, leverage=1, tp2=None):
     output_df['tp_level'] = np.nan
     output_df['leverage'] = np.nan
 
-    long_ep = (pred_close - err_range) * (1 / (tp + 1))
+    # long_ep = (pred_close - err_range) * (1 / (tp + 1))
+    long_ep = pred_close
     short_ep = (pred_close + err_range) * (1 / (1 - tp))
 
     if tp2 is not None:
