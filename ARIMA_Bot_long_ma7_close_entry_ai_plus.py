@@ -46,7 +46,8 @@ class ARIMA_Bot:
     def run(self):
 
         #         0. Load model         #
-        model_path = r'C:\Users\Lenovo\PycharmProjects\Project_System_Trading\Rapid_Ascend\test_set\model\classifier_45_ma7_pr3_03766.h5'
+        model_abs_path = os.path.abspath("test_set/model/classifier_45_ma7_pr3_03766.h5")
+        model_path = r'%s' % model_abs_path
         model = keras.models.load_model(model_path)
         period = 45
 

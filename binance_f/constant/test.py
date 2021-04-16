@@ -1,8 +1,7 @@
 import os
 import pickle
 
-
-key_abspath = 'C:/Users/Lenovo/PycharmProjects/Project_System_Trading/Rapid_Ascend/private_info/binance_key.p'
+key_abspath = os.path.abspath("private_info/binance_key.p")
 
 with open(key_abspath, 'rb') as f:
     api_list = pickle.load(f)
