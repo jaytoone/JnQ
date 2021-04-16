@@ -46,7 +46,7 @@ class ARIMA_Bot:
     def run(self):
 
         #         0. Load model         #
-        model_path = r'C:\Users\Lenovo\PycharmProjects\Project_System_Trading\Rapid_Ascend\test_set\model\classifier_45_ma7_pr2_allpair_best.h5'
+        model_path = r'C:\Users\Lenovo\PycharmProjects\Project_System_Trading\Rapid_Ascend\test_set\model\classifier_45_ma7_pr3_03766.h5'
         model = keras.models.load_model(model_path)
         period = 45
 
@@ -123,7 +123,10 @@ class ARIMA_Bot:
                             #    use rows   #
                             #       add ep columns for append      #
                             first_df['ep'] = np.nan
-                            stacked_df = stacked_df.append(first_df)
+                            prev_complete_df = stacked_df.iloc[:-1, :]
+                            stacked_df = prev_complete_df.append(first_df)
+
+                            #       Todo 이부분이 잘못되었다, stacked_df 의 last_raw 는 imcomplete data, 하지만 keep='first' 로 유지되고 있음
                             stacked_df = stacked_df[~stacked_df.index.duplicated(keep='first')].iloc[-(order.use_rows + 1 + 1):, :]
 
                             #         ep stacking + 1       #
@@ -155,7 +158,9 @@ class ARIMA_Bot:
                             # print('stacked_df.tail(50) :\n', stacked_df.tail(50))
 
                         #          save complete data       #
-                        stacked_df.to_excel(df_path)  # <-- you are saving uncompleted data..
+                        stacked_df.to_excel(df_path)  # <--  save imcomplet data (prev code is using stacked_df's
+                        # last raw as time compare variable
+
                         # stacked_df.iloc[:-1, :].to_excel(df_path)  # <-- you are saving uncompleted data..
                         #       최종적으로 stacking 하는 과정에서 중복값을 제거하는 방법이 최신 데이터를 유지하기 때문에 문제가 없다    #
                         #       stacked_df 의 last_index 는 realtime 을 반영한 data 가 위치하는게 맞다        #
