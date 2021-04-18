@@ -80,7 +80,7 @@ if __name__ == '__main__':
 
     days = 100
     # days = 21
-    end_date = '2021-04-08'
+    end_date = '2021-04-15'
     # end_date = '2019-12-08'
     # end_date = None
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         coin_list = pickle.load(f)
 
     # coin_list = coin_list[11:]
-    # coin_list = ['DOT']
+    coin_list = ['ETH']
     # print(coin_list)
     # coin_list = ['THETA']
     # coin_list.remove('BTC')

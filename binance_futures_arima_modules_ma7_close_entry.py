@@ -94,7 +94,7 @@ def arima_profit(df, order=(0, 2, 1), tp=0.04, leverage=1, tp2=None):
 
     # long_ep = (pred_close - err_range) * (1 / (tp + 1))
     long_ep = pred_close
-    short_ep = (pred_close + err_range) * (1 / (1 - tp))
+    short_ep = long_ep
 
     if tp2 is not None:
         long_tp_level = pred_close * (1 / (1 - tp2))

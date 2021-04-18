@@ -23,11 +23,12 @@ warnings.simplefilter('ignore', ValueWarning)
 
 class ARIMA_Bot:
 
-    def __init__(self, symbol, interval, tp, leverage_, initial_asset, stacked_df_on=False):
+    def __init__(self, symbol, interval, threshold, tp, leverage_, initial_asset, stacked_df_on=False):
 
         self.last_index = -1
         self.symbol = symbol
         self.interval = interval
+        self.threshold = threshold
         self.tp, self.leverage_ = tp, leverage_
         self.initial_asset = initial_asset
         self.stacked_df_on = stacked_df_on
@@ -127,7 +128,7 @@ class ARIMA_Bot:
                             prev_complete_df = stacked_df.iloc[:-1, :]
                             stacked_df = prev_complete_df.append(first_df)
 
-                            #       Todo 이부분이 잘못되었다, stacked_df 의 last_raw 는 imcomplete data, 하지만 keep='first' 로 유지되고 있음
+                            #       Todo 이부분이 잘못되었었다, stacked_df 의 last_raw 는 imcomplete data, 하지만 keep='first' 로 유지되고 있음
                             stacked_df = stacked_df[~stacked_df.index.duplicated(keep='first')].iloc[-(order.use_rows + 1 + 1):, :]
 
                             #         ep stacking + 1       #
@@ -206,16 +207,11 @@ class ARIMA_Bot:
 
                         #       inference phase     #
                         test_result = model.predict(re_input_x)
-                        # print('test_result :', test_result)
+                        print('test_result :', test_result)
                         # quit()
                         ai_survey = False
 
-                        thresh = 0.65
-                        y_score = test_result[:, [1]]
-                        y_pred = np.where(y_score[:, -1] > thresh, 1, 0)
-                        print('test_result :', test_result)
-
-                        if y_pred[-1]:
+                        if np.max(test_result) > self.threshold:
                             # 거래 진행, 아니면 거래 대기
 
                             #         ai phase 의 종속 조건 수행절      #
@@ -245,10 +241,10 @@ class ARIMA_Bot:
                     #     open_side = OrderSide.BUY
 
                     #       if arima_on is True, just enlist open_order     #
-                    open_side = OrderSide.BUY
-
-                    # elif realtime_price > pred_close + err_range:
-                    #     open_side = OrderSide.SELL
+                    if np.argmax(test_result, axis=1)[-1] == 1:
+                        open_side = OrderSide.BUY
+                    else:
+                        open_side = OrderSide.SELL
 
                     if open_side is not None:
                         break
@@ -533,7 +529,6 @@ class ARIMA_Bot:
                 # if remained_orderId is not None:
                 #           regardless to position exist, cancel all open orders       #
                 try:
-                    # result = request_client.cancel_order(symbol=self.symbol, orderId=remained_orderId)
                     result = request_client.cancel_all_orders(symbol=self.symbol)
                 except Exception as e:
                     print('Error in cancel remaining open order :', e)
@@ -581,11 +576,12 @@ class ARIMA_Bot:
                         #       init temporary back profit      #
                         back_tmp_profit = 1.0
 
-                        if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
-                            back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
-
-                        # elif back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
-                        #     back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
+                        if open_side == OrderSide.BUY:
+                            if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
+                                back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
+                        else:
+                            if back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
+                                back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
 
                         self.accumulated_back_profit *= 1 + (back_tmp_profit - 1) * leverage
                         print('temporary_back_Profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
@@ -787,11 +783,12 @@ class ARIMA_Bot:
 
                 back_tmp_profit = 1.0
 
-                if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
-                    back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
-
-                # elif back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
-                #     back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
+                if open_side == OrderSide.BUY:
+                    if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
+                        back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
+                else:
+                    if back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
+                        back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
 
                 self.accumulated_back_profit *= 1 + (back_tmp_profit - 1) * leverage
                 print('temporary_back_Profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
