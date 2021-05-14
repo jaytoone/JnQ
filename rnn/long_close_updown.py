@@ -192,19 +192,20 @@ class ARIMA_Bot:
 
                         data_x.append(temp_data)
                         _, row, col = np.array(data_x).shape
-                        input_x = np.array(data_x).reshape(-1, row, col, 1).astype(np.float32)
 
-                        #     1c to 3c    #
-                        input_x = input_x * np.ones(3, dtype=np.float32)[None, None, None, :]
-                        # print('input_x.shape :', input_x.shape)
+                        # input_x = np.array(data_x).reshape(-1, row, col, 1).astype(np.float32)
+                        #
+                        # #     1c to 3c    #
+                        # input_x = input_x * np.ones(3, dtype=np.float32)[None, None, None, :]
+                        # # print('input_x.shape :', input_x.shape)
+                        #
+                        # #         reshape data     #
+                        # temp_x = list()
+                        # for d_i, data in enumerate(input_x):
+                        #     resized_data = data.repeat(2, axis=0).repeat(2, axis=1)
+                        #     temp_x.append(resized_data)
 
-                        #         reshape data     #
-                        temp_x = list()
-                        for d_i, data in enumerate(input_x):
-                            resized_data = data.repeat(2, axis=0).repeat(2, axis=1)
-                            temp_x.append(resized_data)
-
-                        re_input_x = np.array(temp_x)
+                        re_input_x = np.array(data_x)
                         print('re_input_x.shape :', re_input_x.shape)
 
                         #       inference phase     #
@@ -213,7 +214,7 @@ class ARIMA_Bot:
                         # quit()
                         ai_survey = False
 
-                        if np.max(test_result) > self.threshold:
+                        if test_result[:, [1]] > self.threshold:
                             # 거래 진행, 아니면 거래 대기
 
                             #         ai phase 의 종속 조건 수행절      #
@@ -222,7 +223,7 @@ class ARIMA_Bot:
                                                                      leverage=self.leverage_)  # <-- we should use complete data
                             print('stacked_df.index[-1] :', stacked_df.index[-1],
                                   'checking time : %.2f' % (time.time() - temp_time))
-                            print('pred_close, err_range :', pred_close, err_range)
+                            print('pred_close :', pred_close)
                             arima_on = True
 
                     # except Exception as e:
@@ -230,6 +231,7 @@ class ARIMA_Bot:
                     #     continue
 
                 if arima_on:
+
                     #           Continuously check open condition          #
                     #      Get realtime market price & compare with trigger price      #
                     # try:
@@ -242,11 +244,13 @@ class ARIMA_Bot:
                     # if realtime_price < pred_close - err_range / 2:
                     #     open_side = OrderSide.BUY
 
+                    open_side = OrderSide.BUY
+
                     #       if arima_on is True, just enlist open_order     #
-                    if np.argmax(test_result, axis=1)[-1] == 1:
-                        open_side = OrderSide.BUY
-                    else:
-                        open_side = OrderSide.SELL
+                    # if np.argmax(test_result, axis=1)[-1] == 1:
+                    #     open_side = OrderSide.BUY
+                    # else:
+                    #     open_side = OrderSide.SELL
 
                     if open_side is not None:
                         break

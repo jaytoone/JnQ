@@ -233,12 +233,16 @@ def ep_stacking(df, order=(0, 2, 1), tp=0.04, test_size=None, use_rows=None):
     return ep_list
 
 
-def arima_profit(df, order=(0, 2, 1), tp=0.04, leverage=1, tp2=None):
-    close = df['close']
-    model = ARIMA(close, order=order)
-    model_fit = model.fit(trend='c', disp=0)
-    output = model_fit.forecast()
-    pred_close, err_range = output[:2]
+def arima_profit(df, order=(0, 2, 1), tp=0.04, leverage=1):
+
+    # close = df['close']
+    prev_close = df['close'].shift(1)
+
+    # model = ARIMA(close, order=order)
+    # model_fit = model.fit(trend='c', disp=0)
+    # output = model_fit.forecast()
+
+    pred_close, err_range = prev_close.values[-1], 0
 
     output_df = df.copy()
     output_df['trade_state'] = np.nan
@@ -254,11 +258,11 @@ def arima_profit(df, order=(0, 2, 1), tp=0.04, leverage=1, tp2=None):
     long_ep = pred_close
     short_ep = long_ep
 
-    if tp2 is not None:
-        long_tp_level = pred_close * (1 / (1 - tp2))
-        short_tp_level = pred_close * (1 / (tp2 + 1))
-        output_df['long_tp_level'].iloc[-1] = long_tp_level
-        output_df['short_tp_level'].iloc[-1] = short_tp_level
+    # if tp2 is not None:
+    #     long_tp_level = pred_close * (1 / (1 - tp2))
+    #     short_tp_level = pred_close * (1 / (tp2 + 1))
+    #     output_df['long_tp_level'].iloc[-1] = long_tp_level
+    #     output_df['short_tp_level'].iloc[-1] = short_tp_level
 
     output_df['long_ep'].iloc[-1] = long_ep
     output_df['short_ep'].iloc[-1] = short_ep
