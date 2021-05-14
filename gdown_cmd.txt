@@ -1,0 +1,8 @@
+gdown https://drive.google.com/uc?id=1cxmUrydJuJtkar4si5SZIkaW0t5gsBQe
+
+https://drive.google.com/file/d/1-TRrp5hQp9hjNg44L93OqyGiU7nNyMCE/view?usp=sharing
+https://drive.google.com/file/d/1-XtvtqNLsyw5yiYNGXuZXfLZlRJQu4jM/view?usp=sharing
+https://drive.google.com/file/d/1AAByb5FXCIqtN_qmTwj2mgfe84gH1Z8Y/view?usp=sharing
+https://drive.google.com/file/d/1cxmUrydJuJtkar4si5SZIkaW0t5gsBQe/view?usp=sharing
+
+python train.py --x_name=45_close_updown_theta_x.npy --y_name=45_close_updown_theta_y.npy --output_model_name=classifier_45_close_updown_pr_theta.h5 --shuffle=True

@@ -1,4 +1,4 @@
-from ARIMA_Bot_long import *
+from arima_bot_long import *
 
 if __name__=='__main__':
 

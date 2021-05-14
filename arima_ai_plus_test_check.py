@@ -9,14 +9,38 @@ import tensorflow as tf
 # import tensorflow.compat.v1 as tf
 # tf.disable_v2_behavior()
 # print(tf.__version__)
+import gc
+from numba import cuda
+import nvidia_smi
+
+
+nvidia_smi.nvmlInit()
+
+handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+# card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+
+info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+
+print("Total memory:", info.total)
+print("Free memory:", info.free)
+print("Used memory:", info.used)
+#
+# nvidia_smi.nvmlShutdown()
+# quit()
+
+# from keras import backend as K
 
 tf_config = tf.ConfigProto()
 tf_config.gpu_options.allow_growth = True
 # tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5
+
+# K = tf.keras.backend
+# K.set_session(tf.Session(config=tf_config))
 tf.keras.backend.set_session(tf.Session(config=tf_config))
 
 #           GPU Set         #
 tf.device('/device:XLA_GPU:0')
+
 
 import pandas as pd
 import numpy as np
@@ -32,12 +56,38 @@ ckpt_path = "./test_set/model/"
 model_name = "classifier_5_min_re.h5"  # <-- specifying model name
 model_path = r'C:\Users\Lenovo\PycharmProjects\Project_System_Trading\Rapid_Ascend\test_set\model\classifier_45_min_pr_re.h5'
 
+
 # model = keras.models.load_model(ckpt_path + model_name)
 model = keras.models.load_model(model_path)
 
 start_t = time.time()
 test_result = model.predict(x_test)
 # test_result = model.predict(test_set)
+
+keras.backend.clear_session()
+# K.clear_session()
+del model
+gc.collect()
+
+
+nvidia_smi.nvmlInit()
+
+handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)
+# card id 0 hardcoded here, there is also a call to get all available card ids, so we could iterate
+
+info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+print("Total memory:", info.total)
+print("Free memory:", info.free)
+print("Used memory:", info.used)
+
+nvidia_smi.nvmlShutdown()
+
+cuda.select_device(0)
+cuda.close()
+quit()
+
+while 1:
+    print('while loop')
 
 print('elapsed time : ', time.time() - start_t)
 

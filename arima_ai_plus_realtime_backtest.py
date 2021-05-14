@@ -10,13 +10,13 @@ import tensorflow as tf
 # tf.disable_v2_behavior()
 # print(tf.__version__)
 
-tf_config = tf.ConfigProto()
-tf_config.gpu_options.allow_growth = True
-# tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5
-tf.keras.backend.set_session(tf.Session(config=tf_config))
-
-#           GPU Set         #
-tf.device('/device:XLA_GPU:0')
+# tf_config = tf.ConfigProto()
+# tf_config.gpu_options.allow_growth = True
+# # tf_config.gpu_options.per_process_gpu_memory_fraction = 0.5
+# tf.keras.backend.set_session(tf.Session(config=tf_config))
+#
+# #           GPU Set         #
+# tf.device('/device:XLA_GPU:0')
 
 import pandas as pd
 import numpy as np
@@ -193,25 +193,28 @@ def get_back_result(ohlcv, predictions, err_ranges, tp=0.04, sl=None, leverage=1
 with open('C:/Users/Lenovo/PycharmProjects/Project_System_Trading/Rapid_Ascend/arima_result/pr_list/arima_arima_close_updown_profit_ls_only_long_result_30m.pickle', 'rb') as f:
     load_dict = pickle.load(f)
 
-model_abs_path = os.path.abspath("test_set/model/classifier_45_ma7_pr3_03766.h5")
+model_abs_path = os.path.abspath("test_set/model/classifier_45_close_updown_pr_all_pair_shuffle_final_300k.h5")
 model_path = r'%s' % model_abs_path
 model = keras.models.load_model(model_path)
 
 long_index = 0
 leverage = 5
-thresh = 0.5451
+thresh = 0.8
 
 candis = list(load_dict.keys())
 prev_x = None
 
 from binance_futures_arima_modules_ma7_close_entry import ep_stacking
 
-df = pd.read_excel('./candlestick_concated/30m/ETHUSDT_ai_plus_ma7.xlsx', index_col=0)
+df = pd.read_excel('./candlestick_concated/30m/2021-04-27 NEOUSDT.xlsx', index_col=0)
 complete_df = df.iloc[:-1]
 
-# complete_df['ep'] = np.nan
+# complete_df['ep'] = np.nanQ
 # ep_list = ep_stacking(complete_df, tp=0, test_size=1000, use_rows=3000)
 # complete_df['ep'].iloc[-len(ep_list):] = ep_list
+
+#           close mode          #
+complete_df['ep'] = complete_df['close'].shift(1)
 
 # complete_df.to_excel('./candlestick_concated/30m/ETHUSDT_ai_plus_ma7.xlsx')
 # print(complete_df.tail())

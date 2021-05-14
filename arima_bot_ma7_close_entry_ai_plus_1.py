@@ -1,4 +1,4 @@
-from ARIMA_Bot_long_ma7_close_entry_ai_plus import *
+from arima_bot_long_ma7_close_entry_ai_plus import *
 
 if __name__=='__main__':
 

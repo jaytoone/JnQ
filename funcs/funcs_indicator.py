@@ -281,6 +281,18 @@ def rsi(ohlcv_df, period=14):
     return rsi_
 
 
+def stoch(ohlcv_df, period_sto=13, k=3, d=3):
+
+    hh = ohlcv_df['high'].rolling(period_sto).max()
+    ll = ohlcv_df['low'].rolling(period_sto).min()
+    stoch = (ohlcv_df['close'] - ll) / (hh - ll) * 100
+
+    stoch_k = stoch.rolling(k).mean()
+    stock_d = stoch_k.rolling(d).mean()
+
+    return stock_d
+
+
 def stochrsi(ohlcv_df, period_rsi=14, period_sto=14, k=3, d=3):
     rsi(ohlcv_df, period_rsi)
     ohlcv_df['H_RSI'] = ohlcv_df.RSI.rolling(period_sto).max()
@@ -319,11 +331,12 @@ def macd(df, short=9, long=19, signal=9):
 
 
 def ema_ribbon(df, ema_1=5, ema_2=8, ema_3=13):
-    df['EMA_1'] = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
-    df['EMA_2'] = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
-    df['EMA_3'] = df['close'].ewm(span=ema_3, min_periods=ema_3 - 1, adjust=False).mean()
 
-    return
+    ema1 = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
+    ema2 = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
+    ema3 = df['close'].ewm(span=ema_3, min_periods=ema_3 - 1, adjust=False).mean()
+
+    return ema1, ema2, ema3
 
 
 def ema_cross(df, ema_1=30, ema_2=60):
