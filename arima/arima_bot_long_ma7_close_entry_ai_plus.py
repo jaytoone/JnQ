@@ -2,7 +2,7 @@ from binance_futures_modules import *
 from funcs.funcs_for_trade import *
 from binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
-from binance_futures_arima_modules_ma7_close_entry import arima_profit, calc_train_days, ep_stacking
+from arima.binance_futures_arima_modules_ma7_close_entry import arima_profit, calc_train_days, ep_stacking
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning, ValueWarning
 from sklearn.preprocessing import MinMaxScaler

@@ -9,8 +9,9 @@ from easydict import EasyDict
 from rnn.utils import arima_profit, calc_train_days, ep_stacking
 import warnings
 from statsmodels.tools.sm_exceptions import ConvergenceWarning, ValueWarning
-from sklearn.preprocessing import MinMaxScaler
-import keras
+# from sklearn.preprocessing import MinMaxScaler
+from rnn.retrainer import *
+
 import tensorflow as tf
 
 tf_config = tf.ConfigProto()
@@ -20,7 +21,6 @@ tf.keras.backend.set_session(tf.Session(config=tf_config))
 
 #           GPU Set         #
 tf.device('/device:XLA_GPU:0')
-
 warnings.simplefilter('ignore', ConvergenceWarning)
 warnings.simplefilter('ignore', ValueWarning)
 
@@ -50,11 +50,12 @@ class ARIMA_Bot:
 
     def run(self):
 
-        #         0. Load model         #
+        #         0. model params         #
         model_abs_path = os.path.abspath("test_set/model/classifier_45_ma7_pr3_03766.h5")
-        model_path = r'%s' % model_abs_path
-        model = keras.models.load_model(model_path)
         period = 45
+        t_result_path = 'npy/' + '%s_rnn_close_updown_t_result_%s.npy' % (period, self.symbol)
+        pr_list_path = 'npy/' + '%s_rnn_close_updown_pr_list_%s.npy' % (period, self.symbol)
+        model_path = r'%s' % model_abs_path
 
         #         1. Leverage type => Isolated          #
         try:
@@ -160,61 +161,19 @@ class ARIMA_Bot:
                             # ep_list = ep_stacking(stacked_df.iloc[:-1, :], tp=self.tp, test_size=period, use_rows=order.use_rows)
                             # stacked_df['ep'].iloc[-len(ep_list) - 1:-1] = ep_list
 
-                            # print('stacked_df.tail(50) :\n', stacked_df.tail(50))
-
-                        #          save complete data       #
-                        stacked_df.to_excel(df_path)  # <--  save imcomplet data (prev code is using stacked_df's
-                        # last raw as time compare variable
-
-                        # stacked_df.iloc[:-1, :].to_excel(df_path)  # <-- you are saving uncompleted data..
-                        #       최종적으로 stacking 하는 과정에서 중복값을 제거하는 방법이 최신 데이터를 유지하기 때문에 문제가 없다    #
-                        #       stacked_df 의 last_index 는 realtime 을 반영한 data 가 위치하는게 맞다        #
+                            # print('stacked_df.tail(50) :\n', stacked_df.tail(50)
 
                         #         AI survey phase       #
-                        data_x = []
-
-                        prev_complete_df = stacked_df.iloc[:-1, :]
-                        temp_ohlc = prev_complete_df.iloc[-period:, :-1].values
-                        temp_vol = prev_complete_df.iloc[-period:, [-1]].values
-
-                        #   Todo : scale type confirmation  #
-                        temp_data = np.hstack((temp_ohlc, temp_vol))
-
-                        min_max = MinMaxScaler()
-                        temp_data[:, :-1] = min_max.fit_transform(temp_data[:, :-1])
-
-                        temp_data[:, [-1]] = min_max.fit_transform(temp_data[:, [-1]])
-
-                        if np.isnan(np.sum(temp_data)):
-                            print('Error in ai survey : nan data included in input')
-                            print('temp_data :\n', temp_data)
-                            continue
-
-                        data_x.append(temp_data)
-                        _, row, col = np.array(data_x).shape
-
-                        # input_x = np.array(data_x).reshape(-1, row, col, 1).astype(np.float32)
-                        #
-                        # #     1c to 3c    #
-                        # input_x = input_x * np.ones(3, dtype=np.float32)[None, None, None, :]
-                        # # print('input_x.shape :', input_x.shape)
-                        #
-                        # #         reshape data     #
-                        # temp_x = list()
-                        # for d_i, data in enumerate(input_x):
-                        #     resized_data = data.repeat(2, axis=0).repeat(2, axis=1)
-                        #     temp_x.append(resized_data)
-
-                        re_input_x = np.array(data_x)
-                        print('re_input_x.shape :', re_input_x.shape)
-
-                        #       inference phase     #
-                        test_result = model.predict(re_input_x)
-                        print('test_result :', test_result)
-                        # quit()
+                        test_result = retrain_and_pred(stacked_df, symbol=self.symbol)
                         ai_survey = False
 
-                        if test_result[:, [1]] > self.threshold:
+                        #       rewrite last timestamp      #
+                        with open('rnn/survey_logger/%s.txt' % self.symbol, 'w') as log_file:
+                            log_file.write(str(datetime.now().timestamp()))
+
+                        best_thr = get_best_thr(t_result_path, pr_list_path)
+
+                        if test_result[:, [1]] > best_thr:
                             # 거래 진행, 아니면 거래 대기
 
                             #         ai phase 의 종속 조건 수행절      #
@@ -596,7 +555,7 @@ class ARIMA_Bot:
                         break
 
                 income = 0
-                continue
+                # continue
 
             #       position / 체결량 이 존재하면 close order 진행      #
             else:
@@ -800,6 +759,27 @@ class ARIMA_Bot:
                 print('temporary_back_Profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
                 print('accumulated_back_Profit : %.3f %%' % ((self.accumulated_back_profit - 1) * 100))
 
+                # #           save realtime trade log         #
+                # try:
+                #     total_result = np.load(t_result_path)
+                #     total_result = list(total_result)
+                #     pr_list = np.load(pr_list_path)
+                #     pr_list = list(pr_list)
+                #     print("----------------------- total_result & pr_list loaded ! -----------------------")
+                #     print("len(total_result) :", len(total_result))
+                #     print("len(pr_list) :", len(pr_list))
+                #
+                #     total_result.append(test_result)
+                #     float_pr = (back_tmp_profit - 1) * leverage + 1
+                #     pr_list.append(float_pr)
+                #
+                #     np.save(t_result_path, np.array(total_result[-order.use_rows:]))
+                #     np.save(pr_list_path, np.array(pr_list[-order.use_rows:]))
+                #     print("----------------------- total_result & pr_list saved ! -----------------------")
+                #
+                # except Exception as e:
+                #     print('Error in load total_result & pr_list :', e)
+
                 end_timestamp = int(time.time() * 1000)
                 #           Get Total Income from this Trade       #
                 try:
@@ -815,4 +795,25 @@ class ARIMA_Bot:
                 print('accumulated_Profit : %.3f (%.3f) %%' % ((self.accumulated_profit - 1) * 100, (self.calc_accumulated_profit - 1) * 100))
                 print('accumulated_Income :', self.accumulated_income, 'USDT')
                 print()
+
+            #           save realtime trade log         #
+            try:
+                total_result = np.load(t_result_path)
+                total_result = list(total_result)
+                pr_list = np.load(pr_list_path)
+                pr_list = list(pr_list)
+                print("----------------------- total_result & pr_list loaded ! -----------------------")
+                print("len(total_result) :", len(total_result))
+                print("len(pr_list) :", len(pr_list))
+
+                total_result.append(test_result)
+                float_pr = (back_tmp_profit - 1) * leverage + 1
+                pr_list.append(float_pr)
+
+                np.save(t_result_path, np.array(total_result[-order.use_rows:]))
+                np.save(pr_list_path, np.array(pr_list[-order.use_rows:]))
+                print("----------------------- total_result & pr_list saved ! -----------------------")
+
+            except Exception as e:
+                print('Error in load total_result & pr_list :', e)
 

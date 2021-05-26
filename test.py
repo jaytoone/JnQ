@@ -2,6 +2,22 @@ import pandas as pd
 from datetime import datetime
 import numpy as np
 
+symbol = 'SXPUSDT'
+# with open('rnn/survey_logger/%s.txt' % symbol, 'w') as log_file:
+#     log_file.write(str(datetime.now().timestamp()))
+
+with open('rnn/survey_logger/%s.txt' % symbol, 'r') as log_file:
+    # print(type(log_file.readline()))
+    print(float(log_file.readline()))
+
+# import time
+# st = datetime.now().timestamp()
+# print(st)
+# time.sleep(5)
+# print(datetime.now().timestamp() - st)
+
+
+
 # if 1 and not pd.isna(1):
 #     print('break')
 # price = 1.0074
@@ -33,7 +49,7 @@ import numpy as np
 #     pass
 # print(back_i)
 
-print(datetime.fromtimestamp(1613759400.004374))
+# print(datetime.fromtimestamp(1613759400.004374))
 # print(int('08'))
 # import os
 

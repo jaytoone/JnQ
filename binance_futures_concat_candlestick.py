@@ -78,9 +78,9 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 
 if __name__ == '__main__':
 
-    days = 20
+    days = 11
     # days = 21
-    end_date = '2021-05-07'
+    end_date = '2021-05-17'
     # end_date = '2019-12-08'
     # end_date = None
 
