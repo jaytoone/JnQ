@@ -3,10 +3,10 @@ from datetime import datetime
 import numpy as np
 
 symbol = 'SXPUSDT'
-# with open('rnn/survey_logger/%s.txt' % symbol, 'w') as log_file:
+# with open('updown_rnn/survey_logger/%s.txt' % symbol, 'w') as log_file:
 #     log_file.write(str(datetime.now().timestamp()))
 
-with open('rnn/survey_logger/%s.txt' % symbol, 'r') as log_file:
+with open('updown_rnn/survey_logger/%s.txt' % symbol, 'r') as log_file:
     # print(type(log_file.readline()))
     print(float(log_file.readline()))
 

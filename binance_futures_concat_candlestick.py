@@ -85,6 +85,7 @@ if __name__ == '__main__':
     # end_date = None
 
     intervals = ['30m']
+    intervals = ['1m']
 
     for interval in intervals:
 
