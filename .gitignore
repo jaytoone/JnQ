@@ -24,6 +24,9 @@ __pycache__/
 # ppt
 *.pptx
 
+# exclude h5
+*.h5
+
 
 # Exclude Folder
 test_set/
