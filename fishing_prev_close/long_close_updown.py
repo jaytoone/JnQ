@@ -738,7 +738,7 @@ class ARIMA_Bot:
 
                 #       update tp       #
                 try:
-                    #       Todo : stack historical ohlcv       #
+                    #       stack historical ohlcv       #
                     #       0. history 불러오기
                     h_ohlcv = pd.read_excel(h_ohlcv_path, index_col=0)
 
@@ -746,18 +746,27 @@ class ARIMA_Bot:
                     complete_h_ohlcv = h_ohlcv.iloc[:-1, :]
 
                     #       1. 효율성을 따졌을 땐, back_df 를 사용하는게 맞고
-                    #       Todo : last_index 와 현재 시간의 gap 추정
-                    h_ohlcv = complete_h_ohlcv.append(back_df)
 
-                    #           1-1. back_df 를 사용하지 못하는 경우는 ? 채워주어야겠지
+                    #       2-1. last_index 와 현재 시간의 gap 추정
+                    index_gap = datetime.timestamp(back_df.index[-1]) - datetime.timestamp(h_ohlcv.index[-1])
+                    # print("index_gap :", index_gap)
+                    h_use_rows = int(index_gap / (60 * interval_to_min(self.interval)))
+                    days = calc_train_days(interval=self.interval, use_rows=h_use_rows + 1)
+                    # print("days :", days)
+                    # quit()
+
+                    #           2-2. back_df 를 사용하지 못하는 경우는 ? 채워주어야겠지
                     #           => h_ohlcv 의 마지막 time_index 부터 현재 시간까지의 days 를 계산해,
                     #           ohlcv 를 새로 불러온다
+                    if days > 1:
+                        back_df, _ = concat_candlestick(self.symbol, self.interval, days=days, timesleep=0.2)
 
-                    #       2. 중복절은 제거
+                    #       3. 중복절은 제거
+                    h_ohlcv = complete_h_ohlcv.append(back_df)
                     h_ohlcv = h_ohlcv[~h_ohlcv.index.duplicated(keep='first')]
 
-                    self.tp = tp_update(h_ohlcv, save_path=h_ohlcv_path.replace("xlsx", "png"))
-                    print("tp updated to %.3f" % self.tp)
+                    tp = tp_update(h_ohlcv, save_path=h_ohlcv_path.replace("xlsx", "png"))
+                    print("tp updated to %.3f" % tp)
 
                     #       4. save new history
                     h_ohlcv.to_excel(h_ohlcv_path)

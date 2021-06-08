@@ -310,6 +310,20 @@ def arima_test(df, order=(0, 2, 1), tp=0.04, fee=0.0006, leverage=1, test_size=N
     # print(model_fit.plot_predict(start=900, end=950))
 
 
+def interval_to_min(interval):
+
+    if interval == '15m':
+        int_minute = 15
+    elif interval == '30m':
+        int_minute = 30
+    elif interval == '1h':
+        int_minute = 60
+    elif interval == '4h':
+        int_minute = 240
+
+    return int_minute
+
+
 def calc_train_days(interval, use_rows):
     if interval == '15m':
         data_amt = 96
