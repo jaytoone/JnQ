@@ -81,9 +81,12 @@ if __name__ == '__main__':
     days = 30
     # days = 21
     end_date = '2021-05-17'
-    end_date = '2021-06-15'
+    end_date = '2021-04-18'
+    # end_date = '2021-06-15'
     # end_date = '2019-12-08'
     # end_date = None
+
+    days_iter = 7
 
     intervals = ['30m']
     intervals = ['1m']
@@ -100,7 +103,7 @@ if __name__ == '__main__':
         coin_list = pickle.load(f)
 
     # coin_list = coin_list[11:]
-    coin_list = ['ETH']
+    coin_list = ['NEO']
     # print(coin_list)
     # coin_list = ['THETA']
     # coin_list.remove('BTC')
@@ -110,16 +113,24 @@ if __name__ == '__main__':
 
         for coin in coin_list:
 
-            # print(coin)
+            # Todo : chuck by end_date  #
+            for iter_i in range(days_iter):
 
-            try:
-                concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
+                if iter_i != 0:
+                    # end_date = (initial) end_date - days * index --> timestamp 에서 datetime 으로 변경해주어야함 #
+                    next_endTime = datetime.timestamp(pd.to_datetime('{} 23:59:59'.format(end_date))) * 1000 - a_day * days
+                    end_date = str(datetime.fromtimestamp(next_endTime / 1000)).split(" ")[0]
+                    print("end_date :", end_date)
+                    print()
 
-            # try:
-                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
-            except Exception as e:
-                print('Error in to_excel :', e)
-                continue
+                try:
+                    concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
+
+                # try:
+                    concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+                except Exception as e:
+                    print('Error in to_excel :', e)
+                    continue
 
             # print(concated_excel.tail())
             #

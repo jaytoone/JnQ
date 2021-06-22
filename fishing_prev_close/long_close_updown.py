@@ -6,7 +6,7 @@ from binance_futures_modules import *
 from funcs.funcs_for_trade import *
 from binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
-from fishing_prev_close.utils import arima_profit, calc_train_days, tp_update
+from fishing_prev_close.utils import arima_profit, calc_train_days, tp_update, interval_to_min
 
 
 class ARIMA_Bot:
@@ -765,8 +765,8 @@ class ARIMA_Bot:
                     h_ohlcv = complete_h_ohlcv.append(back_df)
                     h_ohlcv = h_ohlcv[~h_ohlcv.index.duplicated(keep='first')]
 
-                    tp = tp_update(h_ohlcv, save_path=h_ohlcv_path.replace("xlsx", "png"))
-                    print("tp updated to %.3f" % tp)
+                    self.tp = tp_update(h_ohlcv, save_path=h_ohlcv_path.replace("xlsx", "png"))
+                    print("tp updated to %.3f" % self.tp)
 
                     #       4. save new history
                     h_ohlcv.to_excel(h_ohlcv_path)
