@@ -50,8 +50,10 @@ def sync_check(df, second_df, plot_size=45, plotting=False):
                                   , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
 
     # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
-    min_upper = np.minimum(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].values)
-    max_lower = np.minimum(df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]].values)
+    # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
+    # max_lower = np.maximum(df["minor_ST1_Down"], df["minor_ST2_Down"], df["minor_ST3_Down"])
+    min_upper = np.min(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]], axis=1)
+    max_lower = np.max(df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]], axis=1)
 
     df['middle_line'] = (min_upper + max_lower) / 2
 
@@ -61,7 +63,8 @@ def sync_check(df, second_df, plot_size=45, plotting=False):
 
         plot_df = df.iloc[-plot_size:, [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14]]
 
-        fig = plt.figure(figsize=(10, 5))
+        plt.ion()
+        fig = plt.figure(figsize=(8, 6))
         ax = fig.add_subplot(111)
 
         temp_ohlc = plot_df.values[:, :4]
@@ -73,7 +76,8 @@ def sync_check(df, second_df, plot_size=45, plotting=False):
         plt.plot(plot_df.values[:, 4:])
 
         plt.show()
-        plt.close()
+        # plt.close()
+        plt.pause(1e-3)
 
     return df
 
@@ -84,10 +88,11 @@ if __name__=="__main__":
     interval2 = "3m"
     symbol = "ETHUSDT"
 
-    df, _ = concat_candlestick(symbol, interval, days=1)
-    second_df, _ = concat_candlestick(symbol, interval2, days=1)
+    while 1:
+        df, _ = concat_candlestick(symbol, interval, days=1)
+        second_df, _ = concat_candlestick(symbol, interval2, days=1)
 
-    res_df = sync_check(df, second_df, plotting=True)
+        res_df = sync_check(df, second_df, plotting=True)
 
     # print(res_df[["minor_ST1_Up", "minor_ST1_Down"]].tail(50))
     # print(res_df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail(20))
