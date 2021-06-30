@@ -81,16 +81,17 @@ if __name__ == '__main__':
     days = 30
     # days = 21
     end_date = '2021-05-17'
-    end_date = '2021-04-18'
+    # end_date = '2021-04-18'
+    # end_date = '2020-10-20'
     # end_date = '2021-06-15'
     # end_date = '2019-12-08'
     # end_date = None
 
-    days_iter = 7
+    days_iter = 14
 
     intervals = ['30m']
     intervals = ['1m']
-    # intervals = ['5m']
+    # intervals = ['3m']
 
     for interval in intervals:
 
@@ -104,6 +105,7 @@ if __name__ == '__main__':
 
     # coin_list = coin_list[11:]
     coin_list = ['NEO']
+    coin_list = ['ETH']
     # print(coin_list)
     # coin_list = ['THETA']
     # coin_list.remove('BTC')

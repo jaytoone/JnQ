@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 # import mpl_finance as mf
 # import time
 # import math
+from funcs.funcs_for_trade import to_lower_tf
 
 from Funcs_For_Trade import *
 from Funcs_Indicator import *
@@ -54,7 +55,7 @@ def profitage(df, second_df, third_df, symbol=None, date=None, excel=0, get_fig=
 
     startTime = time.time()
 
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)], 3),
+    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)]),
                               columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
                                   , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
                                   , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
