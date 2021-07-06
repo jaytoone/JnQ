@@ -399,7 +399,7 @@ def supertrend(df, period, multiplier, cal_st=False):
         return st
 
 
-def ichimoku(ohlc, tenkan_period=9, kijun_period=26, senkou_period=52, chikou_period=26):
+def ichimoku(ohlc, tenkan_period=9, kijun_period=26, senkou_period=52, chikou_period=1):
 
     #       Conversion Line     #
     tenkan_sen = pd.Series(

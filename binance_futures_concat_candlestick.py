@@ -78,16 +78,19 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 
 if __name__ == '__main__':
 
-    days = 30
+    days = 300
+    # days = 30
     # days = 21
     end_date = '2021-05-17'
-    end_date = '2021-06-15'
+    # end_date = '2021-07-03'
+    end_date = '2021-07-01'
+    # end_date = '2021-05-30'
+    # end_date = '2021-04-30'
     # end_date = '2019-12-08'
     # end_date = None
 
-    intervals = ['30m']
-    intervals = ['1m']
-    # intervals = ['5m']
+    intervals = ['1m', '3m', '5m', '15m', '30m']
+    # intervals = ['15m', '30m']
 
     for interval in intervals:
 

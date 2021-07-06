@@ -374,7 +374,7 @@ def convert_df(df, second_df, second_interval_min=3):
     return df2
 
 
-def to_lower_tf(ltf_df, htf_df, column):
+def to_lower_tf(ltf_df, htf_df, column, show_info=False):
 
     last_datetime_index = ltf_df.index[-1]
 
@@ -382,30 +382,50 @@ def to_lower_tf(ltf_df, htf_df, column):
     last_hour = int(str(last_datetime_index).split(':')[0].split(' ')[1])
 
     interval = int((to_timestamp(htf_df.index[-1]) - to_timestamp(htf_df.index[-2])) / 60)
-    # print('interval :', interval)
-    # print('type(interval) :', type(interval))
+
+    if show_info:
+        print('last_min :', last_min)
+        print('last_hour :', last_hour)
+        print('interval :', interval)
+        # print('type(interval) :', type(interval))
 
     if interval < 60:
-        sliced_index_len = last_min % interval + 1
+        sliced_index_len = last_min % interval + 1  # +1 하는 이유는, binance_timestamp 이 hh:mm:59.999 의 형태를 가지고 있기 때문임
     else:
         sliced_index_len = (last_hour * 60 + last_min) % interval + 1
 
     # value_list = list()
     #           -2 => 완성된 이전 데이터를 사용하기 위함           #
-    backing_i = -2
+    # backing_i = -2
+
+    #           -1 => 완성되지 않은, realtime data 를 구축하기 위함      #
+    backing_i = -1
+
     # value_list = [htf_df[column].iloc[backing_i]] * sliced_index_len
+
+    #           1. backing_i 만큼 이전 데이터를 htf 로부터 추출함            #
     value_list = htf_df.iloc[[backing_i], column].values
+    # print("value_list[-1] :", value_list[-1])
+
+    #           2. 해당 htf data 를 ltf 로 변환함 (sliced_len 만큼 변환함)         #
     value_list = np.tile(value_list, (sliced_index_len, 1))
+
     # print(value_list)
     # print(type(value_list))
     # quit()
     while True:
+
+        #       org backing_i 의 htf data 는 이미 value_list 에 채웠으니,
+        #       다음 index 부터 htf data slicing 시작
         backing_i -= 1
         # print('backing_i :', backing_i)
+
         # temp_list = [htf_df[column].iloc[backing_i]] * interval
+
         temp_list = htf_df.iloc[[backing_i], column].values
         temp_list = np.tile(temp_list, (interval, 1))
         value_list = np.vstack((temp_list, value_list))
+
         # print(value_list)
         # print(value_list.shape)
         # quit()
@@ -414,7 +434,8 @@ def to_lower_tf(ltf_df, htf_df, column):
             break
 
     # value_list = value_list[: -(len(value_list) - len(ltf_df))]
-    value_list = value_list[(len(value_list) - len(ltf_df)):]
+    # value_list = value_list[(len(value_list) - len(ltf_df)):]
+    value_list = value_list[-len(ltf_df):]
     # print(value_list.shape)
     # quit()
     # print(len(ltf_df), len(value_list))

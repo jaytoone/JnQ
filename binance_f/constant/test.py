@@ -1,7 +1,8 @@
 import os
 import pickle
 
-key_abspath = os.path.abspath("private_info/binance_key.p")
+# key_abspath = os.path.abspath("private_info/binance_key.p")
+key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
 
 with open(key_abspath, 'rb') as f:
     api_list = pickle.load(f)
@@ -17,8 +18,11 @@ else:
     g_api_key = api_list[0]
     g_secret_key = api_list[1]
 
+    # print(g_api_key)
+
 
 # g_account_id = 12345678
-g_account_id = 'toomuch2281@gmail.com'
+# g_account_id = 'toomuch2281@gmail.com'
+# g_account_id = 'nave94@naver.com'
 
 
