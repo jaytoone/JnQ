@@ -33,7 +33,7 @@ test_set/
 #funcs/
 arima_*/
 arima_data/
-private_info/
+#private_info/
 pred_ohlcv/
 Tensorboard_graph/
 trading_bot/
