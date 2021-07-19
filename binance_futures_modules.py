@@ -168,7 +168,7 @@ def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_d
                                       quantity=str(quantity), price=str(tp_level),
                                       reduceOnly=True)
         except Exception as e:
-            print('Error in Close Order :', e)
+            print('Error in partial tp :', e)
             continue
         else:
             tp_count += 1
