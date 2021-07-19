@@ -19,6 +19,8 @@ from funcs.funcs_for_trade import *
 from funcs.funcs_indicator import *
 import mpl_finance as mf
 
+# from tqdm.notebook import tqdm
+
 # import numpy as np
 # import pandas as pd
 
@@ -36,12 +38,13 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # quit()
 
     second_df['minor_ST1_Up'], second_df['minor_ST1_Down'], second_df['minor_ST1_Trend'] = supertrend(second_df, 10, 2)
-    second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7,
-                                                                                                      2)
+    # second_df['minor_ST1_Up'], second_df['minor_ST1_Down'], second_df['minor_ST1_Trend'] = supertrend(ha_second_df, 10, 2)
+    second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7, 2)
+    # second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(second_df, 7, 2)
     second_df['minor_ST3_Up'], second_df['minor_ST3_Down'], second_df['minor_ST3_Trend'] = supertrend(ha_second_df, 7,
                                                                                                       2.5)
     # print(df.head(20))
-    # quit()
+    # quit()o
 
     # startTime = time.time()
 
@@ -49,6 +52,12 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
                               columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
                                   , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
                                   , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
+
+    df.iloc[:, -9:] = df.iloc[:, -9:].shift(-3)
+
+    # print(df.iloc[-200:, -9:])
+    # quit()
+
 
     # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
     # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
@@ -98,11 +107,6 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
 
     # print(df['macd_hist'].tail(20))
     # quit()
-
-    #          trix         #
-    df['trix'] = trix_hist(df, 14, 1, 5)
-    print(df['trix'].tail(15))
-    quit()
 
     if plotting:
 
@@ -162,15 +166,33 @@ if __name__=="__main__":
     # initial = True
     # while 1:
 
-    df, _ = concat_candlestick(symbol, interval, days=1)
-    second_df, _ = concat_candlestick(symbol, interval2, days=1)
+    df_, _ = concat_candlestick(symbol, interval, days=1)
+
+    sliding_window = 200
+
+    realtime_second_df = pd.DataFrame(columns=['open', 'high', 'low', 'close', 'volume'])
+    for s_i in (range(sliding_window, len(df_))):
+
+        df = df_.iloc[s_i + 1 - sliding_window:s_i + 1]
+        second_df = to_higher_candlestick_v2(df, 3)
+        # print(second_df.tail())
+
+        realtime_second_df = realtime_second_df.append(second_df.iloc[-1])
+        # print(realtime_second_df.tail())
+        # quit()
+
+    print(realtime_second_df.tail())
     # print(second_df.tail())
-    # quit()
+    quit()
 
-    third_df, _ = concat_candlestick(symbol, interval3, days=1)
-    fourth_df, _ = concat_candlestick(symbol, interval4, days=1)
+    #   second df 를 이용해 마지막 행의 htf indicator value 만 추출한다   #
 
-    res_df = sync_check(df, second_df, third_df, fourth_df, plotting=True, plot_size=300)
+    third_df = to_higher_candlestick(df, 5)
+    fourth_df = to_higher_candlestick(df, 15)
+    # fifth_df = to_higher_candlestick(df, 30)
+
+    res_df = sync_check(df, second_df, third_df, fourth_df, plotting=True, plot_size=100)
+    # res_df = sync_check(df.iloc[-200:], second_df, third_df, fourth_df, plotting=True, plot_size=300)
 
 
     # print(res_df[["minor_ST1_Up", "minor_ST1_Down"]].tail(50))

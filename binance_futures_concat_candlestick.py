@@ -102,8 +102,8 @@ if __name__ == '__main__':
     with open('future_coin.p', 'rb') as f:
         coin_list = pickle.load(f)
 
-    # coin_list = coin_list[11:]
-    coin_list = ['ETH']
+    coin_list = coin_list[:10]
+    # coin_list = ['ETH']
     # print(coin_list)
     # coin_list = ['THETA']
     # coin_list.remove('BTC')

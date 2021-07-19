@@ -364,18 +364,20 @@ def atr(df, period):
 
 
 def supertrend(df, period, multiplier, cal_st=False):
+
     hl2 = (df['high'] + df['low']) / 2
     # print(hl2)
     # print(atr(df, period))
     # quit()
     atr_down = hl2 - (multiplier * atr(df, period))
     # atr_down = np.where(df['close'].shift(1) > atr_down.shift(1), max(atr_down, atr_down.shift(1)), atr_down)
-    for i in range(len(df)):
+    for i in range(1, len(df)):
         if df['close'].iloc[i - 1] > atr_down[i - 1]:
             atr_down[i] = max(atr_down[i], atr_down[i - 1])
+
     atr_up = hl2 + (multiplier * atr(df, period))
     # atr_up = np.where(df['close'].shift(1) < atr_up.shift(1), min(atr_up, atr_up.shift(1)), atr_up)
-    for i in range(len(df)):
+    for i in range(1, len(df)):
         if df['close'].iloc[i - 1] < atr_up[i - 1]:
             atr_up[i] = min(atr_up[i], atr_up[i - 1])
 

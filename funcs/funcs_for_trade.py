@@ -374,7 +374,7 @@ def convert_df(df, second_df, second_interval_min=3):
     return df2
 
 
-def to_lower_tf(ltf_df, htf_df, column, show_info=False):
+def to_lower_tf(ltf_df, htf_df, column, show_info=False, backing_i=-2):
 
     last_datetime_index = ltf_df.index[-1]
 
@@ -390,16 +390,18 @@ def to_lower_tf(ltf_df, htf_df, column, show_info=False):
         # print('type(interval) :', type(interval))
 
     if interval < 60:
-        sliced_index_len = last_min % interval + 1  # +1 하는 이유는, binance_timestamp 이 hh:mm:59.999 의 형태를 가지고 있기 때문임
+        sliced_index_len = last_min % interval + 1  # +1 하는 이유는, 나머지가 0 인 경우에 대해서도 value 를 채워주어야하기 때문임
+                                                    # 채우지않으면, ltf 에 np.nan 이 생김
     else:
         sliced_index_len = (last_hour * 60 + last_min) % interval + 1
 
     # value_list = list()
-    #           -2 => 완성된 이전 데이터를 사용하기 위함           #
+    #           -2 => 오차없는 이전 데이터를 사용하기 위함           #
     # backing_i = -2
 
-    #           -1 => 완성되지 않은, realtime data 를 구축하기 위함      #
-    backing_i = -1
+    #           -1 => 완성된 future data, => realtime 은 아님      #
+    # backing_i = -1
+    print("backing_i :", backing_i)
 
     # value_list = [htf_df[column].iloc[backing_i]] * sliced_index_len
 
@@ -458,6 +460,45 @@ def to_higher_candlestick(first_df, interval):
     # print(pd.concat([first_df, first_df_copy], axis=1))
 
     return first_df_copy
+
+
+def to_higher_candlestick_v2(first_df, interval):
+
+    assert interval < 60, 'Current fuction is only for below 1h interval'
+    first_df_copy = first_df.copy()
+
+    for i in range(len(first_df)):
+        roll_i = intmin(first_df.index[i]) % interval + 1
+        first_df_copy['open'].iloc[i] = first_df['open'].iloc[i - (roll_i - 1)]
+        first_df_copy['high'].iloc[i] = first_df['high'].rolling(roll_i).max().iloc[i]
+        first_df_copy['low'].iloc[i] = first_df['low'].rolling(roll_i).min().iloc[i]
+
+    # print(pd.concat([first_df, first_df_copy], axis=1))
+
+    #       Todo        #
+    #       1. interval 기준으로 align 해아함      #
+    minute_index = np.array(list(map(lambda x: intmin(x), first_df_copy.index)))
+    # print("minute_index :", minute_index)
+    # quit()
+    interval_index = np.argwhere(minute_index % interval == interval - 1).reshape(-1, )
+    # print("interval_index :", interval_index)
+
+    htf_df = first_df_copy.iloc[interval_index]
+    htf_df_copy = htf_df.copy()
+
+    #       2. htf_df 의 마지막 index 는, first_df_copy 의 마지막 데이터로 덮어씌운다   #
+    #       2-1. last index 가 interval 시작인경우, append
+    if minute_index[-1] % interval != interval - 1:
+        htf_df_copy = htf_df_copy.append(first_df_copy.iloc[-1])
+
+    #       2-2. interval 시작이 아닌 경우, 덮어씌우기
+    # else:
+    #     htf_df_copy.iloc[-1] = first_df_copy.iloc[-1]
+
+    # print("first_df_copy.tail(10) :", first_df_copy.tail(10))
+    # quit()
+
+    return htf_df_copy
 
 
 def get_precision_by_price(price):
