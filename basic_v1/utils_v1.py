@@ -12,93 +12,93 @@ pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', 2500)
 pd.set_option('display.max_columns', 2500)
 
-
-def tp_update(ohlcv, wr_threshold=0.65, lvrg=9, tp_list=np.arange(0.005, 0.05, 0.001), fee=1e-4, plotting=False, save_path=None):
-
-    # print('len(ohlcv) :', len(ohlcv))
-
-    #     find best lvrg with lq    #
-    # for lvrg in lvrg_list:
-
-    #       tp opt      #
-    best_tp = None
-    best_ap = 0
-    best_pr = None
-
-    #        find best tp       #
-    for tp in tp_list:
-
-        long_ep = ohlcv['close'].shift(1) * (1 / (tp + 1))
-
-        #       long      #
-        pr = (ohlcv['close'] / long_ep - fee - 1) * lvrg + 1
-        #     set condition   #
-        pr = np.where(ohlcv['low'] < long_ep, pr, 1)
-
-        #     Todo set constraints     #
-        #           ema           #
-        ema = ohlcv['close'].ewm(span=190, min_periods=190 - 1, adjust=False).mean()
-        # pr = np.where(ohlcv['close'].shift(1) > ema.shift(1), pr, 1)
-        pr = np.where(ema.shift(1) > ema.shift(2), pr, 1)
-
-        #         ma        #
-        # ma = ohlcv['close'].rolling(120).mean()
-        # pr = np.where(ma.shift(1) > ma.shift(2), pr, 1)
-
-        #     Todo set liqudation     #
-        lq = (ohlcv['low'] / long_ep - fee - 1) * lvrg + 1
-
-        # plt.plot(np.cumprod(pr))
-        # plt.show()
-        # break
-
-        #       fill na with 1.0      #
-        pr = np.where(np.isnan(pr), 1, pr)
-        # avoid_pr = np.where(np.isnan(avoid_pr), 1, avoid_pr)
-        lq = np.where(np.isnan(lq), 1, lq)
-        # s_pr = np.where(np.isnan(s_pr), 1, pr)
-
-        #       set lq      #
-        pr = np.where((pr != 1) & (lq <= 0), 0, pr)
-        # avoid_pr = np.where((avoid_pr != 1) & (lq <= 0), 0, avoid_pr)
-
-        # plt.plot(np.cumprod(pr))
-        # plt.title("%.3f" % tp)
-        # plt.show()
-        # plt.close()
-
-        wr = len(pr[pr > 1]) / len(pr[pr != 1])
-
-        ap = np.cumprod(pr)[-1]
-        # if ap >= best_ap:
-        if ap >= best_ap and wr > wr_threshold:
-            # best_ep = long_ep
-            best_ap = ap
-            best_tp = tp
-            best_pr = pr
-
-    best_pr = np.array(best_pr)
-    best_wr = len(best_pr[best_pr > 1]) / len(best_pr[best_pr != 1])
-
-    if plotting:
-        plt.figure(figsize=(6, 4))
-        # plt.subplot(121)
-        plt.plot(np.cumprod(best_pr))
-        plt.title("best_wr : %.3f\nacc_pr : %.3f\ntp : %.3f\nlvrg : %s" %
-                  (best_wr, np.cumprod(best_pr)[-1], best_tp, lvrg))
-
-        plt.show()
-
-    if save_path is not None:
-        plt.figure(figsize=(5, 7))
-        # plt.subplot(121)
-        plt.plot(np.cumprod(best_pr))
-        plt.title("best_wr : %.3f\nacc_pr : %.3f\ntp : %.3f\nlvrg : %s" %
-                  (best_wr, np.cumprod(best_pr)[-1], best_tp, lvrg))
-
-        plt.savefig(save_path)
-
-    return best_tp
+#
+# def tp_update(ohlcv, wr_threshold=0.65, lvrg=9, tp_list=np.arange(0.005, 0.05, 0.001), fee=1e-4, plotting=False, save_path=None):
+#
+#     # print('len(ohlcv) :', len(ohlcv))
+#
+#     #     find best lvrg with lq    #
+#     # for lvrg in lvrg_list:
+#
+#     #       tp opt      #
+#     best_tp = None
+#     best_ap = 0
+#     best_pr = None
+#
+#     #        find best tp       #
+#     for tp in tp_list:
+#
+#         long_ep = ohlcv['close'].shift(1) * (1 / (tp + 1))
+#
+#         #       long      #
+#         pr = (ohlcv['close'] / long_ep - fee - 1) * lvrg + 1
+#         #     set condition   #
+#         pr = np.where(ohlcv['low'] < long_ep, pr, 1)
+#
+#         #     Todo set constraints     #
+#         #           ema           #
+#         ema = ohlcv['close'].ewm(span=190, min_periods=190 - 1, adjust=False).mean()
+#         # pr = np.where(ohlcv['close'].shift(1) > ema.shift(1), pr, 1)
+#         pr = np.where(ema.shift(1) > ema.shift(2), pr, 1)
+#
+#         #         ma        #
+#         # ma = ohlcv['close'].rolling(120).mean()
+#         # pr = np.where(ma.shift(1) > ma.shift(2), pr, 1)
+#
+#         #     Todo set liqudation     #
+#         lq = (ohlcv['low'] / long_ep - fee - 1) * lvrg + 1
+#
+#         # plt.plot(np.cumprod(pr))
+#         # plt.show()
+#         # break
+#
+#         #       fill na with 1.0      #
+#         pr = np.where(np.isnan(pr), 1, pr)
+#         # avoid_pr = np.where(np.isnan(avoid_pr), 1, avoid_pr)
+#         lq = np.where(np.isnan(lq), 1, lq)
+#         # s_pr = np.where(np.isnan(s_pr), 1, pr)
+#
+#         #       set lq      #
+#         pr = np.where((pr != 1) & (lq <= 0), 0, pr)
+#         # avoid_pr = np.where((avoid_pr != 1) & (lq <= 0), 0, avoid_pr)
+#
+#         # plt.plot(np.cumprod(pr))
+#         # plt.title("%.3f" % tp)
+#         # plt.show()
+#         # plt.close()
+#
+#         wr = len(pr[pr > 1]) / len(pr[pr != 1])
+#
+#         ap = np.cumprod(pr)[-1]
+#         # if ap >= best_ap:
+#         if ap >= best_ap and wr > wr_threshold:
+#             # best_ep = long_ep
+#             best_ap = ap
+#             best_tp = tp
+#             best_pr = pr
+#
+#     best_pr = np.array(best_pr)
+#     best_wr = len(best_pr[best_pr > 1]) / len(best_pr[best_pr != 1])
+#
+#     if plotting:
+#         plt.figure(figsize=(6, 4))
+#         # plt.subplot(121)
+#         plt.plot(np.cumprod(best_pr))
+#         plt.title("best_wr : %.3f\nacc_pr : %.3f\ntp : %.3f\nlvrg : %s" %
+#                   (best_wr, np.cumprod(best_pr)[-1], best_tp, lvrg))
+#
+#         plt.show()
+#
+#     if save_path is not None:
+#         plt.figure(figsize=(5, 7))
+#         # plt.subplot(121)
+#         plt.plot(np.cumprod(best_pr))
+#         plt.title("best_wr : %.3f\nacc_pr : %.3f\ntp : %.3f\nlvrg : %s" %
+#                   (best_wr, np.cumprod(best_pr)[-1], best_tp, lvrg))
+#
+#         plt.savefig(save_path)
+#
+#     return best_tp
 
 
 def ep_stacking(df, order=(0, 2, 1), tp=0.04, test_size=None, use_rows=None):
