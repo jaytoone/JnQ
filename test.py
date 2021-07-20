@@ -6,22 +6,24 @@ from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
 import os
 import pickle
 
+
+print(datetime.now())
 # key_abspath = os.path.abspath("private_info/binance_key.p")
 # key_abspath = os.path.abspath("private_info/api_for_bot.txt")
-key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
-
-#           txt file to pickle      #
-
+# key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
+#
+# #           txt file to pickle      #
+#
+# # with open(key_abspath, 'rb') as f:
+# #     # api_list = f.readlines()
+# #     api_list = f.read().splitlines()
+# with open(key_abspath, 'wb') as f:
+#     pickle.dump(api_list, f)
+#
 # with open(key_abspath, 'rb') as f:
-#     # api_list = f.readlines()
-#     api_list = f.read().splitlines()
-with open(key_abspath, 'wb') as f:
-    pickle.dump(api_list, f)
-
-with open(key_abspath, 'rb') as f:
-    api_list = pickle.load(f)
-
-print(api_list[0])
+#     api_list = pickle.load(f)
+#
+# print(api_list[0])
 # symbol = 'DOTUSDT'
 # interval = "30m"
 #

@@ -135,17 +135,51 @@ def error(e: 'BinanceApiException'):
     print(e.error_code + e.error_message)
 
 
+def get_partial_tplist(ep, tp, open_side, partial_num, price_precision):
+
+    #       Todo : ultimate tp 설정       #
+    #              calc_precision 씌워야함       #
+    tp_list = []
+    if open_side == OrderSide.BUY:
+
+        for part_i in range(partial_num, 0, -1):
+            partial_tp = ep + abs(tp - ep) * (part_i / partial_num)
+            tp_list.append(partial_tp)
+
+        #   Todo : 이부분 왜 있지 ?       #
+        # if order.entry_type == OrderType.MARKET:
+        #     if ep <= sl_level:
+        #         print('ep <= level : %s <= %s' % (ep, sl_level))
+        #         continue  # while loop 가 위에 형성되면서 차후 사용을 위해선 break 으로 바뀌어야할 것
+
+    else:
+
+        for part_i in range(partial_num, 0, -1):
+            partial_tp = ep - abs(tp - ep) * (part_i / partial_num)
+            tp_list.append(partial_tp)
+
+        # if order.entry_type == OrderType.MARKET:
+        #     if ep >= sl_level:
+        #         print('ep >= level : %s >= %s' % (ep, sl_level))
+        #         continue
+
+    tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
+
+    return tp_list
+
+
 def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_divider):
+
     tp_count = 0
     tp_type = OrderType.LIMIT
-    while tp_count < len(tp_list):  # Loop for Partial TP
+    while tp_count < len(tp_list):  # loop for partial tp
 
-        #          Get Remaining quantity         #
+        #          get remaining quantity         #
         if tp_count == 0:
             try:
                 remain_qty = get_remaining_quantity(symbol)
             except Exception as e:
-                print('Error in get_remaining_quantity :', e)
+                print('error in get_remaining_quantity :', e)
                 continue
 
         #           partial tp_level        #
@@ -160,15 +194,15 @@ def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_d
             quantity = calc_with_precision(remain_qty, quantity_precision)
         # print('remain_qty, quantity :', remain_qty, quantity)
 
-        #           Partial TP             #
+        #           partial tp             #
         try:
-            #           Limit Order             #
+            #           limit order             #
             request_client.post_order(timeInForce=TimeInForce.GTC, symbol=symbol, side=close_side,
                                       ordertype=tp_type,
                                       quantity=str(quantity), price=str(tp_level),
                                       reduceOnly=True)
         except Exception as e:
-            print('Error in partial tp :', e)
+            print('error in partial tp :', e)
             continue
         else:
             tp_count += 1

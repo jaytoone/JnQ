@@ -74,40 +74,46 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
     # print(df[['minor_ST1_Up', 'minor_ST1_Trend']].tail(20))
     # quit()
 
-    if show_msg:
-        print("sar phase done")
+        if show_msg:
+            print("sar phase done")
 
     #           ichimoku            #
     if cloud_on:
+
+        displacement_cols = 2
         df['senkou_a1'], df['senkou_b1'] = ichimoku(df)
 
         if second_df is not None:
             second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
             df = df.join(
                 pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a2', 'senkou_b2']))
+            displacement_cols += 2
 
         if third_df is not None:
             third_df['senkou_a'], third_df['senkou_b'] = ichimoku(third_df)
             df = df.join(
                 pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-2, -1]), columns=['senkou_a3', 'senkou_b3']))
+            displacement_cols += 2
 
         if fourth_df is not None:
             fourth_df['senkou_a'], fourth_df['senkou_b'] = ichimoku(fourth_df)
             df = df.join(
                 pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-2, -1]), columns=['senkou_a4', 'senkou_b4']))
+            displacement_cols += 2
 
         if fifth_df is not None:
             fifth_df['senkou_a'], fifth_df['senkou_b'] = ichimoku(fifth_df)
             df = df.join(
                 pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-2, -1]), columns=['senkou_a5', 'senkou_b5']))
+            displacement_cols += 2
 
-    #           1-2. displacement           #
-    # df['senkou_a1'] = df['senkou_a1'].shift(26 - 1)
-    # df['senkou_b1'] = df['senkou_b1'].shift(26 - 1)
-    df.iloc[:, -10:] = df.iloc[:, -10:].shift(26 - 1)
+        #           1-2. displacement           #
+        # df['senkou_a1'] = df['senkou_a1'].shift(26 - 1)
+        # df['senkou_b1'] = df['senkou_b1'].shift(26 - 1)
+        df.iloc[:, -displacement_cols:] = df.iloc[:, -displacement_cols:].shift(26 - 1)
 
-    if show_msg:
-        print("cloud phase done")
+        if show_msg:
+            print("cloud phase done")
 
     #           macd            #
     if macd_on:
@@ -129,8 +135,8 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
             fifth_df['macd_hist'] = macd(fifth_df)
             df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-1]), columns=['macd_hist5']))
 
-    if show_msg:
-        print("macd phase done")
+        if show_msg:
+            print("macd phase done")
 
     #         trix        #
     if trix_on:
@@ -151,6 +157,9 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
         if fifth_df is not None:
             fifth_df['trix'] = trix_hist(fifth_df, 14, 1, 5)
             df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-1]), columns=['trix5']))
+
+        if show_msg:
+            print("trix phase done")
 
     #          add for ep           #
     df['min_upper'] = min_upper
