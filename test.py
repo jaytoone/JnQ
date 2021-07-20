@@ -7,7 +7,7 @@ import os
 import pickle
 
 
-print(datetime.now())
+print(str(datetime.now().timestamp()).split(".")[0])
 # key_abspath = os.path.abspath("private_info/binance_key.p")
 # key_abspath = os.path.abspath("private_info/api_for_bot.txt")
 # key_abspath = os.path.abspath("private_info/api_for_bot.pickle")

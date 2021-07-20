@@ -79,6 +79,7 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 if __name__ == '__main__':
 
     days = 300
+    days = 1
     # days = 30
     # days = 21
     end_date = '2021-05-17'
@@ -117,6 +118,9 @@ if __name__ == '__main__':
 
             try:
                 concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
+
+                # print("str(concated_excel.index[-1]) :", str(concated_excel.index[-1]))
+                # quit()
 
             # try:
                 concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))

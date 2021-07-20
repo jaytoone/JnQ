@@ -168,10 +168,10 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
     return df
 
 
-def enlist_eplvrg(df, upper_ep, lower_ep, leverage=1):
+# def enlist_eplvrg(df, upper_ep, lower_ep, leverage=1):
+def enlist_eplvrg(df, upper_ep, lower_ep):
 
     # close = df['close']
-    prev_close = df['close']
 
     output_df = df.copy()
     # output_df['trade_state'] = np.nan
@@ -179,13 +179,13 @@ def enlist_eplvrg(df, upper_ep, lower_ep, leverage=1):
     output_df['short_ep'] = np.nan
     # output_df['long_tp_level'] = np.nan
     # output_df['short_tp_level'] = np.nan
-    output_df['sl_level'] = np.nan
-    output_df['tp_level'] = np.nan
-    output_df['leverage'] = np.nan
+    output_df['sl'] = np.nan
+    # output_df['tp'] = np.nan
+    # output_df['leverage'] = np.nan
 
     output_df['short_ep'].iloc[-1] = upper_ep.iloc[-1]
     output_df['long_ep'].iloc[-1] = lower_ep.iloc[-1]
-    output_df['leverage'].iloc[-1] = leverage
+    # output_df['leverage'].iloc[-1] = leverage
 
     return output_df
 

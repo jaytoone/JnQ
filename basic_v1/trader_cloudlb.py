@@ -2,18 +2,21 @@ import os
 
 # switch_path = "C:/Users/Lenovo/PycharmProjects/Project_System_Trading/Rapid_Ascend"
 # os.chdir(switch_path)
-os.chdir("..")
+os.chdir("../..")
+# print("os.getcwd() :", os.getcwd())
+# quit()
 
 from binance_futures_modules import *
 from funcs.funcs_for_trade import *
 from binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 from basic_v1.utils_v2 import *
+import pickle
 
 
 class Trader:
 
-    def __init__(self, symbol, interval, interval2, tp_gap, leverage_, initial_asset, stack_df=False, stacked_df_on=True):
+    def __init__(self, symbol, interval, interval2, leverage_, initial_asset, stack_df=False, stacked_df_on=True):
 
         #       basic param     #
         self.last_index = -1
@@ -21,7 +24,8 @@ class Trader:
         self.interval = interval
         self.interval2 = interval2
         # self.threshold = threshold
-        self.tp_gap, self.leverage_ = tp_gap, leverage_
+        # self.tp_gap = tp_gap
+        self.leverage = leverage_
         self.initial_asset = initial_asset
         self.stack_df = stack_df
         self.stacked_df_on = stacked_df_on
@@ -30,7 +34,8 @@ class Trader:
 
         #       const param     #
         self.cloud_shift_size = 1
-        self.cloud_lookback = 50
+        # self.cloud_lookback = 50
+        self.cloud_lookback = 3
         self.gap = 0.00005
 
         #       pr param        #
@@ -67,6 +72,11 @@ class Trader:
         print()
         print('# ----------- Trader v1 ----------- #')
 
+        #        1. save open / close data to dict     #
+        #        2. dict name = str(datetime.now().timestamp()).split(".")[0]      #
+        #        3. key = str(timeindex), value = [ep, ordertype] | [tp (=exit_price)]
+        logger_name = str(datetime.now().timestamp()).split(".")[0]
+        trade_log = {}
         while 1:
 
             #       load config       #
@@ -150,26 +160,31 @@ class Trader:
 
                         # prev_complete_df = indi_add_df.iloc[:-1, :]
 
-                        #       1. 일단은 이곳에서 ep 와 leverage 만 명시     #
+                        #       1. 일단은 이곳에서 ep 만 명시     #
                         #       2. tp 는 dynamic 이기 때문에, 이곳에서 명시하는게 의미 없을 것      #
                         cloud_top = np.max(res_df[["senkou_a1", "senkou_b1"]], axis=1)
                         cloud_bottom = np.min(res_df[["senkou_a1", "senkou_b1"]], axis=1)
 
                         #        1. check cloud_top data type     #
-                        print("cloud_top :", cloud_top)
-                        quit()
+                        # print("cloud_top :", cloud_top)
+                        # quit()
 
                         upper_ep = res_df['min_upper'] * (1 - self.gap)
                         lower_ep = res_df['max_lower'] * (1 + self.gap)
 
+                        # print('1')
+
                         under_top = upper_ep <= cloud_top.shift(self.cloud_shift_size)
                         over_bottom = lower_ep >= cloud_bottom.shift(self.cloud_shift_size)
+
+                        # print('2')
+                        # quit()
 
                         #       3. res_df 의 모든 length 에 대해 할 필요는 없을 것       #
                         #       3.1 양방향에 limit 을 걸어두고 체결되면 미체결 주문은 all cancel       #
                         #       3.2 cloud lb const 적용하면, 양방향 될일 거의 없지 않을까, 그래도 양방향 코드 진행       #
                         #       a. st const        #
-                        if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index], axis=1) != 3:
+                        if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index]) != 3:
 
                             #     b. check cloud constraints   #
                             if np.sum(under_top.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
@@ -179,7 +194,7 @@ class Trader:
                                 print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
                                 print("under_top :", under_top.iloc[-self.cloud_lookback:])
 
-                        if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index], axis=1) != -3:
+                        if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index]) != -3:
 
                             #     b. check cloud constraints   #
                             if np.sum(over_bottom.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
@@ -194,8 +209,8 @@ class Trader:
                         else:
                             continue
 
-                        #         enlist ep & leverage         #
-                        df = enlist_eplvrg(res_df, upper_ep, lower_ep, leverage=self.leverage_)
+                        #         enlist ep         #
+                        df = enlist_eplvrg(res_df, upper_ep, lower_ep)
                         print('res_df.index[-1] :', res_df.index[-1],
                               'load df & eplvrg enlist time : %.2f' % (time.time() - temp_time))
                         open_order = True
@@ -254,14 +269,17 @@ class Trader:
                     #             ep with Limit             #
                     if open_side == OrderSide.BUY:
                         ep = df['long_ep'].iloc[self.last_index]
+                        str_open_side = "long"
 
                     else:
                         ep = df['short_ep'].iloc[self.last_index]
+                        str_open_side = "short"
 
                 #           tp & sl             #
                 sl = df['sl'].iloc[self.last_index]
                 # tp = df['tp'].iloc[self.last_index]
-                leverage = df['leverage'].iloc[self.last_index]
+                # leverage = df['leverage'].iloc[self.last_index]  # <-- 왜 leverage 를 df 로부터 다시 가져와야하는지 모르겠음
+                leverage = self.leverage
 
                 #         get price, volume precision --> reatlime 가격 변동으로 인한 precision 변동 가능성       #
                 try:
@@ -279,6 +297,15 @@ class Trader:
                 print('ep :', ep)
                 print('sl :', sl)
                 print('leverage :', leverage)
+
+                #        1. save trade_log      #
+                #        2. check str(res_df.index[-1])     #
+                entry_timeindex = str(res_df.index[-1])
+                trade_log[entry_timeindex] = [ep, str_open_side]
+
+                with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
+                    pickle.dump(trade_log, dict_f)
+                    print("entry trade_log dumped !")
 
                 try:
                     request_client.change_initial_leverage(symbol=self.symbol, leverage=leverage)
@@ -532,7 +559,7 @@ class Trader:
                                 continue
 
                             new_df2, _ = concat_candlestick(self.symbol, self.interval2, days=1)
-                            res_df = sync_check(new_df, new_df2, cloud_on=True)
+                            res_df = sync_check(new_df, new_df2)
 
                             prev_tp = tp
 
@@ -776,19 +803,34 @@ class Trader:
 
                 #        calc logical profit      #
                 #        check, limit -> market condition        #
+
+                #            tp, division           #
+                exit_timeindex = str(res_df.index[-1])
+
                 if close_side == OrderSide.BUY:
 
                     if tp > back_df['open'].iloc[-1]:
                         calc_tmp_profit = back_df['open'].iloc[-1] / ep - self.trading_fee
+                        real_tp = back_df['open'].iloc[-1]
                     else:
                         calc_tmp_profit = tp / ep - self.trading_fee
+                        real_tp = tp
 
                 else:
 
                     if tp < back_df['open'].iloc[-1]:
                         calc_tmp_profit = ep / back_df['open'].iloc[-1] - self.trading_fee
+                        real_tp = back_df['open'].iloc[-1]
                     else:
                         calc_tmp_profit = ep / tp - self.trading_fee
+                        real_tp = tp
+
+                #            save exit data         #
+                trade_log[exit_timeindex] = [real_tp]
+
+                with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
+                    pickle.dump(trade_log, dict_f)
+                    print("exit trade_log dumped !")
 
                 # #       check profit with back_test logic       #
                 # back_tmp_profit = 1.0

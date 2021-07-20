@@ -395,13 +395,13 @@ def to_lower_tf(ltf_df, htf_df, column, show_info=False, backing_i=-2):
     else:
         sliced_index_len = (last_hour * 60 + last_min) % interval + 1
 
-    # value_list = list()
     #           -2 => 오차없는 이전 데이터를 사용하기 위함           #
     # backing_i = -2
-
     #           -1 => 완성된 future data, => realtime 은 아님      #
     # backing_i = -1
-    print("backing_i :", backing_i)
+
+    if show_info:
+        print("backing_i :", backing_i)
 
     # value_list = [htf_df[column].iloc[backing_i]] * sliced_index_len
 
