@@ -26,6 +26,7 @@ def ema(data, period, adjust=True):
 
 
 def heikinashi(df):
+
     ha_df = df.copy()
     ha_df['close'] = (df['open'] + df['close'] + df['high'] + df['low']) / 4
     ha_df['open'] = np.nan
@@ -370,10 +371,17 @@ def supertrend(df, period, multiplier, cal_st=False):
     # print(atr(df, period))
     # quit()
     atr_down = hl2 - (multiplier * atr(df, period))
-    # atr_down = np.where(df['close'].shift(1) > atr_down.shift(1), max(atr_down, atr_down.shift(1)), atr_down)
+    # max_atr_down = np.maximum(atr_down, atr_down.shift(1))
+    # atr_down_v2 = np.where(df['close'].shift(1) > atr_down.shift(1), max_atr_down, atr_down)
+    # print(atr_down_v2[-20:])
+
+    #       오차를 없애기 위해서, for loop 사용함       #
     for i in range(1, len(df)):
         if df['close'].iloc[i - 1] > atr_down[i - 1]:
             atr_down[i] = max(atr_down[i], atr_down[i - 1])
+    # print(atr_down[-20:])
+    # print(atr_down[-20:].values == atr_down_v2[-20:])
+    # quit()
 
     atr_up = hl2 + (multiplier * atr(df, period))
     # atr_up = np.where(df['close'].shift(1) < atr_up.shift(1), min(atr_up, atr_up.shift(1)), atr_up)
@@ -438,10 +446,10 @@ def ichimoku(ohlc, tenkan_period=9, kijun_period=26, senkou_period=52, chikou_pe
         name="SENKOU",
     )
 
-    chikou_span = pd.Series(
-        ohlc["close"].shift(chikou_period).rolling(window=chikou_period).mean(),
-        name="CHIKOU",
-    )
+    # chikou_span = pd.Series(
+    #     ohlc["close"].shift(chikou_period).rolling(window=chikou_period).mean(),
+    #     name="CHIKOU",
+    # )
 
     return senkou_span_a.shift(chikou_period - 1), senkou_span_b.shift(chikou_period - 1)
 

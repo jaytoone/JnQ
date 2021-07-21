@@ -33,18 +33,10 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
 
     # startTime = time.time()
 
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)]),
-                              columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
-                                  , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
-                                  , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
+    min_upper = np.min(second_df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]], axis=1)
+    max_lower = np.max(second_df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]], axis=1)
 
-    # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
-    # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
-    # max_lower = np.maximum(df["minor_ST1_Down"], df["minor_ST2_Down"], df["minor_ST3_Down"])
-    min_upper = np.min(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]], axis=1)
-    max_lower = np.max(df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]], axis=1)
-
-    df['middle_line'] = (min_upper + max_lower) / 2
+    second_df['middle_line'] = (min_upper + max_lower) / 2
 
     if show_msg:
         print("supertrend phase done")
@@ -56,19 +48,15 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
 
         if second_df is not None:
             second_df['sar'] = lucid_sar(second_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['sar2']))
 
         if third_df is not None:
             third_df['sar'] = lucid_sar(third_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['sar3']))
 
         if fourth_df is not None:
             fourth_df['sar'] = lucid_sar(fourth_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['sar4']))
 
         if fifth_df is not None:
             fifth_df['sar'] = lucid_sar(fifth_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-1]), columns=['sar5']))
 
     # print(df[['sar1', 'sar2']].tail(20))
     # print(df[['minor_ST1_Up', 'minor_ST1_Trend']].tail(20))
@@ -83,28 +71,34 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
         displacement_cols = 2
         df['senkou_a1'], df['senkou_b1'] = ichimoku(df)
 
+        #       cloud 는 displacement 때문에, join 을 사용하는게 맞음       #
+
         # if second_df is not None:
         #     second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
         #     df = df.join(
-        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a2', 'senkou_b2']))
+        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]),
+        #                      columns=['senkou_a2', 'senkou_b2']))
         #     displacement_cols += 2
         #
         # if third_df is not None:
         #     third_df['senkou_a'], third_df['senkou_b'] = ichimoku(third_df)
         #     df = df.join(
-        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-2, -1]), columns=['senkou_a3', 'senkou_b3']))
+        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-2, -1]),
+        #                      columns=['senkou_a3', 'senkou_b3']))
         #     displacement_cols += 2
         #
         # if fourth_df is not None:
         #     fourth_df['senkou_a'], fourth_df['senkou_b'] = ichimoku(fourth_df)
         #     df = df.join(
-        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-2, -1]), columns=['senkou_a4', 'senkou_b4']))
+        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-2, -1]),
+        #                      columns=['senkou_a4', 'senkou_b4']))
         #     displacement_cols += 2
         #
         # if fifth_df is not None:
         #     fifth_df['senkou_a'], fifth_df['senkou_b'] = ichimoku(fifth_df)
         #     df = df.join(
-        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-2, -1]), columns=['senkou_a5', 'senkou_b5']))
+        #         pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-2, -1]),
+        #                      columns=['senkou_a5', 'senkou_b5']))
         #     displacement_cols += 2
 
         #           1-2. displacement           #
@@ -121,19 +115,15 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
 
         if second_df is not None:
             second_df['macd_hist'] = macd(second_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['macd_hist2']))
 
         if third_df is not None:
             third_df['macd_hist'] = macd(third_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['macd_hist3']))
 
         if fourth_df is not None:
             fourth_df['macd_hist'] = macd(fourth_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['macd_hist4']))
 
         if fifth_df is not None:
             fifth_df['macd_hist'] = macd(fifth_df)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-1]), columns=['macd_hist5']))
 
         if show_msg:
             print("macd phase done")
@@ -144,28 +134,24 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
 
         if second_df is not None:
             second_df['trix'] = trix_hist(second_df, 14, 1, 5)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['trix2']))
 
         if third_df is not None:
             third_df['trix'] = trix_hist(third_df, 14, 1, 5)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['trix3']))
 
         if fourth_df is not None:
             fourth_df['trix'] = trix_hist(fourth_df, 14, 1, 5)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['trix4']))
 
         if fifth_df is not None:
             fifth_df['trix'] = trix_hist(fifth_df, 14, 1, 5)
-            df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fifth_df, [-1]), columns=['trix5']))
 
         if show_msg:
             print("trix phase done")
 
     #          add for ep           #
-    df['min_upper'] = min_upper
-    df['max_lower'] = max_lower
+    second_df['min_upper'] = min_upper
+    second_df['max_lower'] = max_lower
 
-    return df
+    return df, second_df
 
 
 # def enlist_eplvrg(df, upper_ep, lower_ep, leverage=1):

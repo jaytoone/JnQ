@@ -6,8 +6,11 @@ from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
 import os
 import pickle
 
-
-print(str(datetime.now().timestamp()).split(".")[0])
+with open("./basic_v1/trade_log/" + "1626786265.pkl", "wb") as dict_f:
+    trade_log = pickle.load(dict_f)
+    print(trade_log)
+    # print("entry trade_log dumped !")
+# print(str(datetime.now().timestamp()).split(".")[0])
 # key_abspath = os.path.abspath("private_info/binance_key.p")
 # key_abspath = os.path.abspath("private_info/api_for_bot.txt")
 # key_abspath = os.path.abspath("private_info/api_for_bot.pickle")

@@ -3,7 +3,9 @@ import pickle
 
 # key_abspath = os.path.abspath("private_info/binance_key.p")
 # print("os.getcwd() :", os.getcwd())
-key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
+
+# key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
+key_abspath = os.path.abspath("private_info/binance_key.p")
 
 with open(key_abspath, 'rb') as f:
     api_list = pickle.load(f)

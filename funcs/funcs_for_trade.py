@@ -374,7 +374,9 @@ def convert_df(df, second_df, second_interval_min=3):
     return df2
 
 
-def to_lower_tf(ltf_df, htf_df, column, show_info=False, backing_i=-2):
+def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backing_i=-2):
+
+    start_0 = time.time()
 
     last_datetime_index = ltf_df.index[-1]
 
@@ -442,6 +444,8 @@ def to_lower_tf(ltf_df, htf_df, column, show_info=False, backing_i=-2):
     # quit()
     # print(len(ltf_df), len(value_list))
     # ltf_df[column] = list(reversed(value_list))
+
+    print("elasped time in to_lower_tf :", time.time() - start_0)
 
     return value_list
 
