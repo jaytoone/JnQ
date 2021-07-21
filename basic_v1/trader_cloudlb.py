@@ -79,6 +79,12 @@ class Trader:
         #        3. key = str(timeindex), value = [ep, ordertype] | [tp (=exit_price)]
         logger_name = "%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
         trade_log = {}
+
+        #        4. init logger (enlist start timestamp)        #
+        with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
+            pickle.dump(trade_log, dict_f)
+            print("entry trade_log dumped !")
+
         while 1:
 
             #       load config       #
@@ -133,6 +139,10 @@ class Trader:
                                     continue
 
                                 new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, timesleep=0.2)
+
+                                #       new_df2 도 검수        #
+                                if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                    continue
 
                                 new_df = new_df_.iloc[-self.use_rows:].copy()
                                 new_df2 = new_df2_.iloc[-self.use_rows2:].copy()
@@ -262,6 +272,7 @@ class Trader:
                     # open_order = False
                     print('res_df[-1] timestamp :', datetime.timestamp(res_df.index[-1]))  # <-- code proof
                     print('current timestamp :', datetime.now().timestamp())
+                    print()
 
                     # time.sleep(fundamental.close_complete_term)   # <-- term for close completion
 
@@ -580,6 +591,9 @@ class Trader:
                                 continue
 
                             new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, timesleep=0.2)
+
+                            if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                continue
 
                             new_df = new_df_.iloc[-self.use_rows:].copy()
                             new_df2 = new_df2_.iloc[-self.use_rows2:].copy()

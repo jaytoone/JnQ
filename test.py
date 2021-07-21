@@ -6,7 +6,7 @@ from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
 import os
 import pickle
 
-with open("./basic_v1/trade_log/" + "1626786265.pkl", "wb") as dict_f:
+with open("./basic_v1/trade_log/" + "1626831963.pkl", "rb") as dict_f:
     trade_log = pickle.load(dict_f)
     print(trade_log)
     # print("entry trade_log dumped !")
