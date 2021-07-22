@@ -82,8 +82,8 @@ class Trader:
         #        2. dict name = str(datetime.now().timestamp()).split(".")[0]      #
         #        3. key = str(timeindex), value = [ep, ordertype] | [tp (=exit_price)]
         #        4. logger_name is the trade start time index        #
-        logger_name = "%s.pkl" % str(datetime.now())  # <-- indexing 을 위해서 df 와 동일하게 설정함
-        # logger_name = "%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
+        # logger_name = "%s.pkl" % str(datetime.now()).split(".")[0]  # <-- invalid arguments
+        logger_name = "%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
         trade_log = {}
 
         while 1:
