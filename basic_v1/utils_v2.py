@@ -169,7 +169,7 @@ def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show
 
 
 # def enlist_eplvrg(df, upper_ep, lower_ep, leverage=1):
-def enlist_eplvrg(df, upper_ep, lower_ep):
+def enlist_epindf(df, upper_ep, lower_ep):
 
     # close = df['close']
 

@@ -23,7 +23,7 @@ class Trader:
         self.symbol = symbol
         self.interval = interval
         self.interval2 = interval2
-        self.use_rows = 200
+        self.use_rows = 200  # <-- important var. for "Trader" latency
         self.use_rows2 = 100
         # self.threshold = threshold
         # self.tp_gap = tp_gap
@@ -57,7 +57,9 @@ class Trader:
         #         1. leverage type => "isolated"          #
         try:
             request_client.change_margin_type(symbol=self.symbol, marginType=FuturesMarginType.ISOLATED)
+
         except Exception as e:
+
             print('error in change_margin_type :', e)
         else:
             print('leverage type --> isolated')
@@ -65,9 +67,11 @@ class Trader:
         #         2. confirm limit leverage          #
         try:
             limit_leverage = get_limit_leverage(symbol_=self.symbol)
+
         except Exception as e:
             print('error in get_limit_leverage :', e)
             quit()
+
         else:
             print('limit leverage :', limit_leverage)
 
@@ -77,15 +81,17 @@ class Trader:
         #        1. save open / close data to dict     #
         #        2. dict name = str(datetime.now().timestamp()).split(".")[0]      #
         #        3. key = str(timeindex), value = [ep, ordertype] | [tp (=exit_price)]
-        logger_name = "%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
+        #        4. logger_name is the trade start time index        #
+        logger_name = "%s.pkl" % str(datetime.now())  # <-- indexing 을 위해서 df 와 동일하게 설정함
+        # logger_name = "%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
         trade_log = {}
 
-        #        4. init logger (enlist start timestamp)        #
-        with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
-            pickle.dump(trade_log, dict_f)
-            print("entry trade_log dumped !")
-
         while 1:
+
+            #       log last trading time     #
+            trade_log["last_trading_time"] = str(datetime.now())
+            with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
+                pickle.dump(trade_log, dict_f)
 
             #       load config       #
             with open('./basic_v1/config.json', 'r') as cfg:
@@ -114,21 +120,21 @@ class Trader:
 
                 if entry_const_check:
 
-                    try:
+                    temp_time = time.time()
 
-                        temp_time = time.time()
+                    if self.stacked_df_on:
 
-                        if self.stacked_df_on:
+                        #       new_df 를 갱신할지 결정        #
+                        try:
+                            back_df  # <-- latest back_df 가 있다면, load_new_df 를 할 필요가 없음
+                        except Exception as e:
+                            load_new_df = True
+                        else:
+                            new_df = back_df
 
-                            #       new_df 를 갱신할지 결정        #
+                        if load_new_df:
+
                             try:
-                                back_df  # <-- latest back_df 가 있다면, load_new_df 를 할 필요가 없음
-                            except Exception as e:
-                                load_new_df = True
-                            else:
-                                new_df = back_df
-
-                            if load_new_df:
 
                                 new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, timesleep=0.2)
 
@@ -149,7 +155,14 @@ class Trader:
                                 load_new_df = False
                                 print("complete load_df execution time :", datetime.now())
 
-                            if self.stack_df:
+                            except Exception as e:
+                                print("error in load new_dfs :", e)
+                                load_new_df = True
+                                continue
+
+                        if self.stack_df:
+
+                            try:
                                 stacked_df = pd.read_excel(df_path, index_col=0)
 
                                 #    use rows   #
@@ -161,8 +174,13 @@ class Trader:
                                 stacked_df = stacked_df[~stacked_df.index.duplicated(keep='first')].iloc[
                                              -order.use_rows:, :]
 
-                        if self.stack_df:
+                            except Exception as e:
+                                print("error in making stacked_df :", e)
+                                continue
 
+                    if self.stack_df:
+
+                        try:
                             if not self.stacked_df_on:
                                 days = calc_train_days(interval=self.interval, use_rows=order.use_rows)
                                 stacked_df, _ = concat_candlestick(self.symbol, self.interval, days=days, timesleep=0.2)
@@ -171,20 +189,26 @@ class Trader:
 
                             stacked_df.to_excel(df_path)
 
-                        entry_const_check = False
+                        except Exception as e:
+                            print("error in load new stacked_df :", e)
+                            self.stacked_df_on = False
+                            continue
 
-                        print("~ load_new_df time : %.2f" % (time.time() - temp_time))
-                        # temp_time = time.time()
+                    print("~ load_new_df time : %.2f" % (time.time() - temp_time))
+                    # temp_time = time.time()
 
+                    try:
                         #       latency 를 줄이기 위해서는, input df length 를 조절해야함     #
                         res_df = sync_check(new_df, new_df2, cloud_on=True)
 
                         print('~ sync_check time : %.5f' % (time.time() - temp_time))
 
-                        # prev_complete_df = indi_add_df.iloc[:-1, :]
+                    except Exception as e:
+                        print("error in sync_check :", e)
+                        continue
 
-                        #       1. 일단은 이곳에서 ep 만 명시     #
-                        #       2. tp 는 dynamic 이기 때문에, 이곳에서 명시하는게 의미 없움      #
+                    #       1. open order constraints phase      #
+                    try:
                         cloud_top = np.max(res_df[["senkou_a1", "senkou_b1"]], axis=1)
                         cloud_bottom = np.min(res_df[["senkou_a1", "senkou_b1"]], axis=1)
 
@@ -227,21 +251,28 @@ class Trader:
                                 # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
                                 # print("over_bottom :", over_bottom.iloc[-self.cloud_lookback:])
 
-                        if short_open or long_open:
-                            pass
-                        else:
-                            continue
+                    except Excetion as e:
+                        print("error in open const phase :", e)
+                        continue
 
-                        #         enlist ep         #
-                        df = enlist_eplvrg(res_df, upper_ep, lower_ep)
+                    if short_open or long_open:
+                        pass
+                    else:
+                        continue
+
+                    #         enlist ep         #
+                    try:
+                        df = enlist_epindf(res_df, upper_ep, lower_ep)
                         print('res_df.index[-1] :', res_df.index[-1])
                         print('~ ep enlist time : %.5f' % (time.time() - temp_time))
                         print()
                         open_order = True
 
                     except Exception as e:
-                        print('error in enlist_eplvrg :', e)
+                        print('error in enlist_epindf :', e)
                         continue
+
+                    entry_const_check = False
 
                 if open_order:
 
@@ -270,7 +301,7 @@ class Trader:
                     entry_const_check = True
                     load_new_df = True
                     # open_order = False
-                    print('res_df[-1] timestamp :', datetime.timestamp(res_df.index[-1]))  # <-- code proof
+                    print('res_df[-1] timestamp :', datetime.timestamp(res_df.index[-1]))
                     print('current timestamp :', datetime.now().timestamp())
                     print()
 
@@ -285,7 +316,7 @@ class Trader:
 
                 #             load open order variables              #
                 if order.entry_type == OrderType.MARKET:
-                    #             ep with Market            #
+                    #             ep with market            #
                     try:
                         ep = get_market_price_v2(self.sub_client)
                     except Exception as e:
@@ -327,12 +358,13 @@ class Trader:
                 #        1. save trade_log      #
                 #        2. check str(res_df.index[-1])     #
                 entry_timeindex = str(res_df.index[-1])
-                trade_log[entry_timeindex] = [ep, str_open_side]
+                trade_log[entry_timeindex] = [ep, str_open_side, "open"]
 
                 try:
                     request_client.change_initial_leverage(symbol=self.symbol, leverage=leverage)
                 except Exception as e:
                     print('error in change_initial_leverage :', e)
+                    continue  # -->  ep market 인 경우에 조심해야함
                 else:
                     print('leverage changed -->', leverage)
 
@@ -492,11 +524,14 @@ class Trader:
                 else:
                     break
 
-            try:
-                if available_balance < self.min_balance:
-                    continue
-            except Exception as e:
-                pass
+            if available_balance < self.min_balance:
+                continue
+
+            #       Todo        #
+            #        일단은, time_gap 을 두어, executed quantity 검사의 정확도를 높임      #
+            #        예외 발생시, 2차 검사 phase 생성     #
+            #        ==> 혹시, 여기도 time index 에 종속적인 걸까       #
+            time.sleep(1)
 
             while 1:  # <-- for complete exec_open_quantity function
                 try:
@@ -508,43 +543,43 @@ class Trader:
 
             if exec_open_quantity == 0.0:  # <-- open order 가 체결되어야 position 이 생김
 
-                while 1:
-                    #        체결량 없을시, 동일틱에서 연속적인 open order 를 방지해야한다        #
-                    #        load_new_df time elapse 가 여러번 찍히는거 봐서는 timestamp 과 데이터는 종속되는 걸로 보임     #
-                    if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
-                        # if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]) + fundamental.close_complete_term:
-
-                        #        dynamic tp 라서, 미체결시 back profit 산출이 불가함        #
-                        #       check back-test profit     #
-                        # while 1:
-                        #     try:
-                        #         back_df, _ = concat_candlestick(self.symbol, self.interval, days=1)                        #
-                        #         back_df2, _ = concat_candlestick(self.symbol, self.interval2, days=1)
-                        #
-                        #         #       realtime candlestick confirmation       #
-                        #         if datetime.timestamp(back_df.index[-1]) > datetime.now().timestamp():
-                        #             break
-                        #
-                        #     except Exception as e:
-                        #         print('error in back-test profit :', e)
-                        #
-                        # #       init temporary back profit      #
-                        # back_tmp_profit = 1.0
-                        #
-                        # if open_side == OrderSide.BUY:
-                        #
-                        #     if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
-                        #         back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
-                        # else:
-                        #     if back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
-                        #         back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
-                        #
-                        # self.accumulated_back_profit *= 1 + (back_tmp_profit - 1) * leverage
-                        # print('temporary_back profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
-                        # # print('accumulated_back_Profit : %.3f %%' % ((self.accumulated_back_profit - 1) * 100))
-                        # print()
-
-                        break
+                # while 1:
+                #            체결량 없을시, 동일틱에서 연속적인 open order 를 방지해야한다        #
+                #            load_new_df time elapse 가 여러번 찍히는거 봐서는 timestamp 과 데이터는 종속되는 걸로 보임     #
+                #     if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                #         if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]) + fundamental.close_complete_term:
+                #
+                #                dynamic tp 라서, 미체결시 back profit 산출이 불가함        #
+                #               check back-test profit     #
+                #         while 1:
+                #             try:
+                #                 back_df, _ = concat_candlestick(self.symbol, self.interval, days=1)                        #
+                #                 back_df2, _ = concat_candlestick(self.symbol, self.interval2, days=1)
+                #
+                #                 #       realtime candlestick confirmation       #
+                #                 if datetime.timestamp(back_df.index[-1]) > datetime.now().timestamp():
+                #                     break
+                #
+                #             except Exception as e:
+                #                 print('error in back-test profit :', e)
+                #
+                #         #       init temporary back profit      #
+                #         back_tmp_profit = 1.0
+                #
+                #         if open_side == OrderSide.BUY:
+                #
+                #             if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
+                #                 back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
+                #         else:
+                #             if back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
+                #                 back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
+                #
+                #         self.accumulated_back_profit *= 1 + (back_tmp_profit - 1) * leverage
+                #         print('temporary_back profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
+                #         # print('accumulated_back_Profit : %.3f %%' % ((self.accumulated_back_profit - 1) * 100))
+                #         print()
+                #
+                #         break
 
                 income = 0
                 # continue
@@ -607,7 +642,7 @@ class Trader:
                                 tp = res_df['middle_line'].iloc[self.last_index] * (1 - self.gap)
 
                         except Exception as e:
-                            print('error in get new_dfs :', e)
+                            print('error in get new_dfs (tp phase) :', e)
                             continue
 
                         else:
@@ -711,6 +746,7 @@ class Trader:
                                 #               remaining tp order check            #
                                 try:
                                     remained_orderId = remaining_order_check(self.symbol)
+
                                 except Exception as e:
                                     print('error in remaining_order_check :', e)
                                     continue
@@ -719,6 +755,7 @@ class Trader:
                                     #           if remained tp order exist, cancel it       #
                                     try:
                                         result = request_client.cancel_all_orders(symbol=self.symbol)
+
                                     except Exception as e:
                                         print('error in cancel remaining tp order (sl phase) :', e)
                                         continue
@@ -728,6 +765,7 @@ class Trader:
                             #          get remaining sl_remain_quantity         #
                             try:
                                 sl_remain_quantity = get_remaining_quantity(self.symbol)
+
                             except Exception as e:
                                 print('error in get_remaining_quantity :', e)
                                 continue
@@ -736,8 +774,10 @@ class Trader:
                             #           -> reatlime 가격 변동으로 인한 precision 변동 가능성       #
                             try:
                                 _, quantity_precision = get_precision(self.symbol)
+
                             except Exception as e:
                                 print('error in get price & volume precision :', e)
+
                             else:
                                 print('quantity_precision :', quantity_precision)
 
@@ -844,9 +884,7 @@ class Trader:
                 #        calc logical profit      #
                 #        check, limit -> market condition        #
 
-                #            tp, division           #
-                exit_timeindex = str(res_df.index[-1])
-
+                #            real_tp, division           #
                 if close_side == OrderSide.BUY:
 
                     if tp > back_df['open'].iloc[-1]:
@@ -866,7 +904,8 @@ class Trader:
                         real_tp = tp
 
                 #            save exit data         #
-                trade_log[exit_timeindex] = [real_tp]
+                exit_timeindex = str(back_df.index[-1])
+                trade_log[exit_timeindex] = [real_tp, "close"]
 
                 with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
@@ -892,6 +931,7 @@ class Trader:
                 try:
                     income = total_income(self.symbol, start_timestamp, end_timestamp)
                     self.accumulated_income += income
+
                 except Exception as e:
                     print('error in total_income :', e)
 
@@ -900,6 +940,6 @@ class Trader:
                 self.calc_accumulated_profit *= 1 + (calc_tmp_profit - 1) * leverage
                 print('temporary profit : %.3f (%.3f) %%' % (tmp_profit * 100, (calc_tmp_profit - 1) * leverage * 100))
                 print('accumulated profit : %.3f (%.3f) %%' % (
-                (self.accumulated_profit - 1) * 100, (self.calc_accumulated_profit - 1) * 100))
+                    (self.accumulated_profit - 1) * 100, (self.calc_accumulated_profit - 1) * 100))
                 print('accumulated income :', self.accumulated_income, 'USDT')
                 print()
