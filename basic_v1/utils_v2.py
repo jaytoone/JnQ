@@ -222,19 +222,48 @@ def calc_train_days(interval, use_rows):
 
 
 if __name__ == '__main__':
+
+    os.chdir("./..")
+    # print()
+
+    from binance_futures_concat_candlestick import concat_candlestick
+
     days = 1
-    symbol = 'DOTUSDT'
-    interval = '30m'
-    date = '2021-05-17'
+    symbol = 'ETHUSDT'
+    interval = '1m'
+    interval2 = '3m'
 
-    # print(calc_train_days('1h', 3000))
-    df = pd.read_excel('../candlestick_concated/%s/%s %s.xlsx' % (interval, date, symbol), index_col=0)
-    # print(df.head())
-    print(len(df))
+    use_rows = 200
+    use_rows2 = 100
 
-    import time
+    gap = 0.00005
 
-    s_time = time.time()
-    #       tp_update       #
-    print(tp_update(df, plotting=False, save_path="test.png"))
-    print("elapsed time :", time.time() - s_time)
+    # # print(calc_train_days('1h', 3000))
+    # df = pd.read_excel('../candlestick_concated/%s/%s %s.xlsx' % (interval, date, symbol), index_col=0)
+    # # print(df.head())
+    # print(len(df))
+
+    # new_df_, _ = concat_candlestick(symbol, interval, days=1, timesleep=0.2)
+    # new_df2_, _ = concat_candlestick(symbol, interval2, days=1, timesleep=0.2)
+    #
+    # new_df = new_df_.iloc[-use_rows:].copy()
+    # new_df2 = new_df2_.iloc[-use_rows2:].copy()
+    # res_df = sync_check(new_df, new_df2)
+    #
+    # tp = res_df['middle_line'].iloc[-1] * (1 + gap)
+    #
+    # print("tp :", tp)
+
+    # prev_tp = tp
+
+    # if open_side == OrderSide.SELL:
+    #     tp = res_df['middle_line'].iloc[self.last_index] * (1 + self.gap)
+    # else:
+    #     tp = res_df['middle_line'].iloc[self.last_index] * (1 - self.gap)
+
+    # import time
+    #
+    # s_time = time.time()
+    # #       tp_update       #
+    # print(tp_update(df, plotting=False, save_path="test.png"))
+    # print("elapsed time :", time.time() - s_time)

@@ -445,7 +445,7 @@ def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backin
     # print(len(ltf_df), len(value_list))
     # ltf_df[column] = list(reversed(value_list))
 
-    print("elasped time in to_lower_tf :", time.time() - start_0)
+    # print("elasped time in to_lower_tf :", time.time() - start_0)
 
     return value_list
 

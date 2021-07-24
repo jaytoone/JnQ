@@ -135,16 +135,16 @@ def error(e: 'BinanceApiException'):
     print(e.error_code + e.error_message)
 
 
-def get_partial_tplist(ep, tp, open_side, partial_num, price_precision):
+def get_partial_tplist(ep, tp, open_side, partial_num, price_precision_):
 
     #       Todo : ultimate tp 설정       #
     #              calc_precision 씌워야함       #
-    tp_list = []
+    tp_list_ = []
     if open_side == OrderSide.BUY:
 
         for part_i in range(partial_num, 0, -1):
             partial_tp = ep + abs(tp - ep) * (part_i / partial_num)
-            tp_list.append(partial_tp)
+            tp_list_.append(partial_tp)
 
         #   Todo : 이부분 왜 있지 ?       #
         # if order.entry_type == OrderType.MARKET:
@@ -154,25 +154,62 @@ def get_partial_tplist(ep, tp, open_side, partial_num, price_precision):
 
     else:
 
+        #      Todo     #
+        #       이부분이 문제네, dynamic tp 라, ep 보다 tp 가 커질 수 있음     #
         for part_i in range(partial_num, 0, -1):
             partial_tp = ep - abs(tp - ep) * (part_i / partial_num)
-            tp_list.append(partial_tp)
+            tp_list_.append(partial_tp)
 
         # if order.entry_type == OrderType.MARKET:
         #     if ep >= sl_level:
         #         print('ep >= level : %s >= %s' % (ep, sl_level))
         #         continue
 
-    tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
+    tp_list_ = list(map(lambda x: calc_with_precision(x, price_precision_), tp_list_))
 
-    return tp_list
+    return tp_list_
 
 
-def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_divider):
+def get_partial_tplist_v2(ep, tp, partial_num, price_precision_):
+
+    #       Todo : ultimate tp 설정       #
+    #              calc_precision 씌워야함       #
+    tp_list_ = []
+    if tp > ep:
+
+        for part_i in range(partial_num, 0, -1):
+            partial_tp = ep + abs(tp - ep) * (part_i / partial_num)
+            tp_list_.append(partial_tp)
+
+        #   Todo : 이부분 왜 있지 ?       #
+        # if order.entry_type == OrderType.MARKET:
+        #     if ep <= sl_level:
+        #         print('ep <= level : %s <= %s' % (ep, sl_level))
+        #         continue  # while loop 가 위에 형성되면서 차후 사용을 위해선 break 으로 바뀌어야할 것
+
+    else:
+
+        #      Todo     #
+        #       이부분이 문제네, dynamic tp 라, ep 보다 tp 가 커질 수 있음     #
+        for part_i in range(partial_num, 0, -1):
+            partial_tp = ep - abs(tp - ep) * (part_i / partial_num)
+            tp_list_.append(partial_tp)
+
+        # if order.entry_type == OrderType.MARKET:
+        #     if ep >= sl_level:
+        #         print('ep >= level : %s >= %s' % (ep, sl_level))
+        #         continue
+
+    tp_list_ = list(map(lambda x: calc_with_precision(x, price_precision_), tp_list_))
+
+    return tp_list_
+
+
+def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_divider):
 
     tp_count = 0
     tp_type = OrderType.LIMIT
-    while tp_count < len(tp_list):  # loop for partial tp
+    while tp_count < len(tp_list_):  # loop for partial tp
 
         #          get remaining quantity         #
         if tp_count == 0:
@@ -183,9 +220,9 @@ def partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_d
                 continue
 
         #           partial tp_level        #
-        tp_level = tp_list[tp_count]
+        tp_level = tp_list_[tp_count]
 
-        if tp_count != len(tp_list) - 1:
+        if tp_count != len(tp_list_) - 1:
             quantity = remain_qty / partial_qty_divider
             quantity = calc_with_precision(quantity, quantity_precision)
             if remain_qty - quantity < 1 / (10 ** quantity_precision):

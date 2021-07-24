@@ -40,6 +40,10 @@ class Trader:
         self.cloud_lookback = 3
         self.gap = 0.00005
 
+        #       partial param       #
+        self.partial_num = 1
+        self.partial_qty_divider = 1.5
+
         #       pr param        #
         self.trading_fee = 1e-4
         self.accumulated_income = 0.0
@@ -88,11 +92,6 @@ class Trader:
 
         while 1:
 
-            #       log last trading time     #
-            trade_log["last_trading_time"] = str(datetime.now())
-            with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
-                pickle.dump(trade_log, dict_f)
-
             #       load config       #
             with open('./basic_v1/config.json', 'r') as cfg:
                 config = EasyDict(json.load(cfg))
@@ -112,7 +111,7 @@ class Trader:
             start_timestamp = int(time.time() * 1000)
             entry_const_check = True
             open_order = False
-            load_new_df = False
+            # load_new_df = False
 
             short_open = False
             long_open = False
@@ -120,45 +119,56 @@ class Trader:
 
                 if entry_const_check:
 
+                    #       log last trading time     #
+                    #       미체결을 고려해, entry_const_check 마다 log 수행       #
+                    trade_log["last_trading_time"] = str(datetime.now())
+                    with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
+                        pickle.dump(trade_log, dict_f)
+
                     temp_time = time.time()
 
                     if self.stacked_df_on:
 
                         #       new_df 를 갱신할지 결정        #
+                        # try:
+                        #     exec_open_quantity
+                        # except Exception as e:
+                        #     load_new_df = True  # initial trade
+                        # else:
+                        #     if exec_open_quantity == 0.0:   # 미체결시, load_new_df
+                        #         load_new_df = True
+                        #     else:
+                        #         #        2nd_df 는 어차피 새로 가져와야함      #
+                        #         new_df = back_df
+                        #         new_df2 =
+
+                        # if load_new_df:
+
                         try:
-                            back_df  # <-- latest back_df 가 있다면, load_new_df 를 할 필요가 없음
-                        except Exception as e:
-                            load_new_df = True
-                        else:
-                            new_df = back_df
 
-                        if load_new_df:
+                            new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, timesleep=0.2)
 
-                            try:
-
-                                new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, timesleep=0.2)
-
-                                #       realtime candlestick confirmation       #
-                                #       new_df 의 index 가 올바르지 않으면, load_new_df      #
-                                if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
-                                    # load_new_df = True
-                                    continue
-
-                                new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, timesleep=0.2)
-
-                                #       new_df2 도 검수        #
-                                if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
-                                    continue
-
-                                new_df = new_df_.iloc[-self.use_rows:].copy()
-                                new_df2 = new_df2_.iloc[-self.use_rows2:].copy()
-                                load_new_df = False
-                                print("complete load_df execution time :", datetime.now())
-
-                            except Exception as e:
-                                print("error in load new_dfs :", e)
-                                load_new_df = True
+                            #       realtime candlestick confirmation       #
+                            #       new_df 의 index 가 올바르지 않으면, load_new_df      #
+                            if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
+                                # load_new_df = True
                                 continue
+
+                            new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, timesleep=0.2)
+
+                            #       new_df2 도 검수        #
+                            if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                continue
+
+                            new_df = new_df_.iloc[-self.use_rows:].copy()
+                            new_df2 = new_df2_.iloc[-self.use_rows2:].copy()
+                            # load_new_df = False
+                            print("complete load_df execution time :", datetime.now())
+
+                        except Exception as e:
+                            print("error in load new_dfs :", e)
+                            # load_new_df = True
+                            continue
 
                         if self.stack_df:
 
@@ -255,6 +265,8 @@ class Trader:
                         print("error in open const phase :", e)
                         continue
 
+                    entry_const_check = False
+
                     if short_open or long_open:
                         pass
                     else:
@@ -270,9 +282,8 @@ class Trader:
 
                     except Exception as e:
                         print('error in enlist_epindf :', e)
+                        entry_const_check = True    # res_df 에 data 가 덮여씌워질 것임
                         continue
-
-                    entry_const_check = False
 
                 if open_order:
 
@@ -299,7 +310,7 @@ class Trader:
 
                 if datetime.timestamp(res_df.index[-1]) < datetime.now().timestamp():
                     entry_const_check = True
-                    load_new_df = True
+                    # load_new_df = True
                     # open_order = False
                     print('res_df[-1] timestamp :', datetime.timestamp(res_df.index[-1]))
                     print('current timestamp :', datetime.now().timestamp())
@@ -354,11 +365,6 @@ class Trader:
                 print('sl :', sl)
                 print('leverage :', leverage)
                 print('~ ep sl lvrg set time : %.5f' % (time.time() - temp_time))
-
-                #        1. save trade_log      #
-                #        2. check str(res_df.index[-1])     #
-                entry_timeindex = str(res_df.index[-1])
-                trade_log[entry_timeindex] = [ep, str_open_side, "open"]
 
                 try:
                     request_client.change_initial_leverage(symbol=self.symbol, leverage=leverage)
@@ -528,6 +534,7 @@ class Trader:
                 continue
 
             #       Todo        #
+            #        " limit order 가 reduceOnly 인지 잘 확인해야함 "       #
             #        일단은, time_gap 을 두어, executed quantity 검사의 정확도를 높임      #
             #        예외 발생시, 2차 검사 phase 생성     #
             #        ==> 혹시, 여기도 time index 에 종속적인 걸까       #
@@ -589,6 +596,11 @@ class Trader:
 
                 print('open order executed')
 
+                #        1. save trade_log      #
+                #        2. check str(res_df.index[-1])     #
+                entry_timeindex = str(res_df.index[-1])
+                trade_log[entry_timeindex] = [ep, str_open_side, "open"]
+
                 with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
                     print("entry trade_log dumped !")
@@ -641,6 +653,8 @@ class Trader:
                             else:
                                 tp = res_df['middle_line'].iloc[self.last_index] * (1 - self.gap)
 
+                            print("tp :", tp)
+
                         except Exception as e:
                             print('error in get new_dfs (tp phase) :', e)
                             continue
@@ -674,14 +688,19 @@ class Trader:
                             print('price_precision :', price_precision)
                             print('quantity_precision :', quantity_precision)
 
-                        partial_num = 1
-                        partial_qty_divider = 1.5
+                        #           Todo            #
+                        #            1. partial 을 ep 기준으로 하면 안댐         #
+                        #            ==> dynamic tp 기 때문에       #
+                        #            2. 따라서, 일단은 tp_list 를 직접 만들어준다     #
+                        #            2-1. tp_list 는 ep 로부터 먼 tp 부터 정렬한다     #
+                        # tp_list = get_partial_tplist(ep, tp, open_side, self.partial_num, price_precision)
+                        tp_list = [tp]
+                        tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
 
-                        tp_list = get_partial_tplist(ep, tp, open_side, partial_num, price_precision)
                         print('tp_list :', tp_list)
 
                         try:
-                            partial_limit(self.symbol, tp_list, close_side, quantity_precision, partial_qty_divider)
+                            partial_limit(self.symbol, tp_list, close_side, quantity_precision, self.partial_qty_divider)
 
                         except Exception as e:
                             print('error in partial_limit :', e)
@@ -888,19 +907,19 @@ class Trader:
                 if close_side == OrderSide.BUY:
 
                     if tp > back_df['open'].iloc[-1]:
-                        calc_tmp_profit = back_df['open'].iloc[-1] / ep - self.trading_fee
+                        calc_tmp_profit = ep / back_df['open'].iloc[-1] - self.trading_fee
                         real_tp = back_df['open'].iloc[-1]
                     else:
-                        calc_tmp_profit = tp / ep - self.trading_fee
+                        calc_tmp_profit = ep / tp - self.trading_fee
                         real_tp = tp
 
                 else:
 
                     if tp < back_df['open'].iloc[-1]:
-                        calc_tmp_profit = ep / back_df['open'].iloc[-1] - self.trading_fee
+                        calc_tmp_profit = back_df['open'].iloc[-1] / ep - self.trading_fee
                         real_tp = back_df['open'].iloc[-1]
                     else:
-                        calc_tmp_profit = ep / tp - self.trading_fee
+                        calc_tmp_profit = tp / ep - self.trading_fee
                         real_tp = tp
 
                 #            save exit data         #
