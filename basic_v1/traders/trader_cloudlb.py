@@ -2,7 +2,7 @@ import os
 
 # switch_path = "C:/Users/Lenovo/PycharmProjects/Project_System_Trading/Rapid_Ascend"
 # os.chdir(switch_path)
-os.chdir("../..")
+os.chdir("../../")
 # print("os.getcwd() :", os.getcwd())
 # quit()
 

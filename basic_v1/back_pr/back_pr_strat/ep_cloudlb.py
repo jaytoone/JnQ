@@ -15,7 +15,7 @@ senkoua_list = ['senkou_a1']
 senkoub_list = ['senkou_b1']
 
 
-def cloud_lb_pr(res_df):
+def back_pr_check(res_df):
 
     for senkou_a, senkou_b in zip(senkoua_list, senkoub_list):
 

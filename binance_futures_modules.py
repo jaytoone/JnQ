@@ -265,6 +265,23 @@ if __name__ == '__main__':
     symbol = 'BTCUSDT'
     close_side = OrderSide.SELL
 
+    result = request_client.get_leverage_bracket()
+    leverage_dict = dict()
+    symbol_list = []
+    for i in range(len(result)):
+        dict_symbol = result[i].symbol
+        print("dict_symbol :", dict_symbol)
+
+        symbol_list.append(dict_symbol)
+
+    with open("ticker_in_futures.pkl", "wb") as f:
+        pickle.dump(symbol_list, f)
+        print("symbol_list saved !")
+
+        # limit_leverage = result[i].brackets[0].initialLeverage
+        # leverage_dict[dict_symbol] = limit_leverage
+
+
     #           Custom Partial Limit        #
     # partial_limit(symbol, tp_list, close_side, quantity_precision, partial_qty_divider)
 
@@ -464,5 +481,5 @@ if __name__ == '__main__':
     # print(result[0])
 
     # print(get_limit_leverage('DOTUSDT'))
-    print(get_availableBalance())
+    # print(get_availableBalance())
     # print(get_precision('BTCUSDT'))

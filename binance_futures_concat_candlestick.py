@@ -79,8 +79,8 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 if __name__ == '__main__':
 
     days = 300
-    days = 1
-    # days = 30
+    # days = 1
+    days = 30
     # days = 21
     end_date = '2021-05-17'
     # end_date = '2021-07-03'
@@ -100,10 +100,16 @@ if __name__ == '__main__':
         except Exception as e:
             print('Error in makedirs :', e)
 
-    with open('future_coin.p', 'rb') as f:
+    # with open('future_coin.p', 'rb') as f:
+    #     coin_list = pickle.load(f)
+    # with open('ticker_in_futures.txt', 'r') as f:
+    #     coin_list = list(f.read())
+    with open('ticker_in_futures.pkl', 'rb') as f:
         coin_list = pickle.load(f)
+        # print(coin_list)
+        # quit()
 
-    coin_list = coin_list[:10]
+    # coin_list = coin_list[:10]
     # coin_list = ['ETH']
     # print(coin_list)
     # coin_list = ['THETA']
@@ -117,7 +123,7 @@ if __name__ == '__main__':
             # print(coin)
 
             try:
-                concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
+                concated_excel, end_date = concat_candlestick(coin, interval, days, end_date=end_date, show_process=True, timesleep=0.2)
 
                 # print("str(concated_excel.index[-1]) :", str(concated_excel.index[-1]))
                 # quit()
