@@ -19,14 +19,17 @@ pd.set_option('display.max_columns', 2500)
 a_day = 3600 * 24 * 1000
 
 
-def concat_candlestick(symbol, interval, days, end_date=None, show_process=False, timesleep=None):
+def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_date=None, show_process=False, timesleep=None):
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
 
     startTime = datetime.timestamp(pd.to_datetime('{} 00:00:00'.format(end_date))) * 1000
-    if interval != '1m':
-        startTime -= a_day
+
+    # if interval != '1m':
+    #       trader 에서 자정 지나면 data 부족해지는 문제로 days >= 2 적용    #
+    # startTime -= a_day
+
     endTime = datetime.timestamp(pd.to_datetime('{} 23:59:59'.format(end_date))) * 1000
 
     if show_process:
@@ -43,13 +46,16 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
             print(datetime.fromtimestamp(endTime / 1000))
 
         try:
+            if by_limit:
+                startTime = None
+
             df = request_client.get_candlestick_data(symbol=symbol,
                                                      interval=interval,
-                                                     startTime=startTime, endTime=endTime, limit=1500)
+                                                     startTime=startTime, endTime=endTime, limit=limit)
             # print(result.tail())
             # quit()
 
-            assert len(df) != 0, "Candlestick Data Doesn't Exist"
+            assert len(df) != 0, "candlestick data doesn't exist"
 
             if day_cnt == 0:
                 sum_df = df
@@ -64,7 +70,7 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
                 time.sleep(timesleep)
 
         except Exception as e:
-            print('Error in get_candlestick_data :', e)
+            print('error in get_candlestick_data :', e)
 
             if len(df) == 0:
                 # quit()
@@ -79,8 +85,8 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
 if __name__ == '__main__':
 
     days = 300
-    # days = 1
-    days = 30
+    days = 1
+    # days = 30
     # days = 21
     end_date = '2021-05-17'
     # end_date = '2021-07-03'
@@ -88,10 +94,14 @@ if __name__ == '__main__':
     # end_date = '2021-05-30'
     # end_date = '2021-04-30'
     # end_date = '2019-12-08'
-    # end_date = None
+    end_date = None
 
     intervals = ['1m', '3m', '5m', '15m', '30m']
     # intervals = ['15m', '30m']
+    intervals = ['1m']
+
+    #       Todo        #
+    #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
 
     for interval in intervals:
 
@@ -123,18 +133,22 @@ if __name__ == '__main__':
             # print(coin)
 
             try:
-                concated_excel, end_date = concat_candlestick(coin, interval, days, end_date=end_date, show_process=True, timesleep=0.2)
+                concated_excel, end_date = concat_candlestick(coin, interval, days, limit=500, by_limit=True,
+                                                              end_date=end_date, show_process=False, timesleep=0.2)
 
                 # print("str(concated_excel.index[-1]) :", str(concated_excel.index[-1]))
                 # quit()
 
             # try:
-                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+            #     concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in to_excel :', e)
                 continue
 
             # print(concated_excel.tail())
+            # print(len(concated_excel))
+            print(concated_excel.head())
+            quit()
             #
             # print('df[-1] timestamp :', datetime.timestamp(concated_excel.index[-1]))
             # print('current timestamp :', datetime.now().timestamp())

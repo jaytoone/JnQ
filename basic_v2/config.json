@@ -12,8 +12,7 @@
   "breakout_qty_ratio": 0.97,
   "exit_execution_wait": 60,
   "tp_type": "LIMIT",
-  "sl_type": "LIMIT",
-  "df_log": true
+  "sl_type": "LIMIT"
  },
  "AI": {
   "model_life": 72000,

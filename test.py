@@ -5,12 +5,24 @@ from binance_futures_concat_candlestick import concat_candlestick
 from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
 import os
 import pickle
+import math
+
+
+def test_func():
+    data = 3123.235
+    data_precision = 2
+
+    data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
+    return
+
+print(test_func())
 
 # with open("./basic_v1/trade_log/" + "1626831963.pkl", "rb") as dict_f:
 #     trade_log = pickle.load(dict_f)
 #     print(trade_log)
 #     # print("entry trade_log dumped !")
-print(str(datetime.now()).split(".")[0])
+# print(str(datetime.now()).replace(":", "").split(".")[0])
+# print(str(datetime.now()).split(".")[0])
 # print(str(datetime.now().timestamp()).split(".")[0])
 # key_abspath = os.path.abspath("private_info/binance_key.p")
 # key_abspath = os.path.abspath("private_info/api_for_bot.txt")

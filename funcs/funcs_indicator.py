@@ -87,6 +87,8 @@ def stdev(df, period):
 def cct_bbo(df, period, smooth):
     avg_ = df['close'].rolling(period).mean()
     stdev_ = stdev(df, period)
+    # print("len(stdev_) :", len(stdev_))
+    # print("len(stdev_.apply(lambda x: 2 * x)) :", len(stdev_.apply(lambda x: 2 * x)))
     cctbbo = 100 * (df['close'] + stdev_.apply(lambda x: 2 * x) - avg_) / (stdev_.apply(lambda x: 4 * x))
     ema_cctbbo = ema(cctbbo, smooth)
 

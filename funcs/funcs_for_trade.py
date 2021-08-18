@@ -422,6 +422,7 @@ def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backin
         #       org backing_i 의 htf data 는 이미 value_list 에 채웠으니,
         #       다음 index 부터 htf data slicing 시작
         backing_i -= 1
+
         # print('backing_i :', backing_i)
 
         # temp_list = [htf_df[column].iloc[backing_i]] * interval

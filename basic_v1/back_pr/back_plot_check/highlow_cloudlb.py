@@ -7,7 +7,6 @@ from basic_v1.utils_v2 import *
 from matplotlib import gridspec
 import mpl_finance as mf
 
-prev_plotsize = 50
 
 # # inversion = True
 # inversion = False
@@ -33,7 +32,7 @@ input_colname = basic_list + senkoua_list + senkoub_list
 # input_cols = basic_cols + sar_cols + ichimoku_cols + macd_cols
 
 
-def plot_check(res_df, i, j):
+def plot_check(res_df, i, j, prev_plotsize=50):
 
     gap = 0.00005
 

@@ -108,6 +108,18 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # print(df['macd_hist'].tail(20))
     # quit()
 
+    #          stochastic           #
+    df['stoch'] = stoch(df)
+
+    #          fisher           #
+    df['fisher'] = fisher(df, 30)
+
+    #          cctbbo           #
+    df['cctbbo'] = cct_bbo(df, 21, 13)
+
+    print(df.iloc[:, -3:].tail(20))
+    quit()
+
     if plotting:
 
         plot_df = df.iloc[-plot_size:, [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 16, 17, 18, 19]]

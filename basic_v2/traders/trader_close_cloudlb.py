@@ -35,9 +35,9 @@ class Trader:
         self.min_balance = 5.0  # USDT
 
         #       const param      #
+        self.close_shift_size = 1
         self.cloud_shift_size = 1
-        # self.cloud_lookback = 50
-        self.cloud_lookback = 3
+        self.cloud_lookback = 69
         self.gap = 0.00005
 
         #       partial param       #
@@ -129,21 +129,6 @@ class Trader:
 
                     if self.stacked_df_on:
 
-                        #       new_df 를 갱신할지 결정        #
-                        # try:
-                        #     exec_open_quantity
-                        # except Exception as e:
-                        #     load_new_df = True  # initial trade
-                        # else:
-                        #     if exec_open_quantity == 0.0:   # 미체결시, load_new_df
-                        #         load_new_df = True
-                        #     else:
-                        #         #        2nd_df 는 어차피 새로 가져와야함      #
-                        #         new_df = back_df
-                        #         new_df2 =
-
-                        # if load_new_df:
-
                         try:
 
                             new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, timesleep=0.2)
@@ -231,11 +216,16 @@ class Trader:
 
                         # print('1')
 
-                        under_top = upper_ep <= cloud_top.shift(self.cloud_shift_size)
-                        over_bottom = lower_ep >= cloud_bottom.shift(self.cloud_shift_size)
+                        under_top = res_df['close'].shift(self.close_shift_size) <= cloud_top.shift(self.cloud_shift_size)
+                        over_bottom = res_df['close'].shift(self.close_shift_size) >= cloud_bottom.shift(self.cloud_shift_size)
 
                         # print('2')
                         # quit()
+
+                        #       Todo        #
+                        #        save res_df before, entry const check      #
+                        excel_name = str(datetime.now()).replace(":", "").split(".")[0]
+                        res_df.to_excel("./basic_v1/df_log/%s.xlsx" % excel_name)
 
                         #       3. res_df 의 모든 length 에 대해 할 필요는 없을 것       #
                         #       3.1 양방향에 limit 을 걸어두고 체결되면 미체결 주문은 all cancel       #
@@ -261,7 +251,7 @@ class Trader:
                                 # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
                                 # print("over_bottom :", over_bottom.iloc[-self.cloud_lookback:])
 
-                    except Excetion as e:
+                    except Exception as e:
                         print("error in open const phase :", e)
                         continue
 
@@ -549,44 +539,6 @@ class Trader:
                 break
 
             if exec_open_quantity == 0.0:  # <-- open order 가 체결되어야 position 이 생김
-
-                # while 1:
-                #            체결량 없을시, 동일틱에서 연속적인 open order 를 방지해야한다        #
-                #            load_new_df time elapse 가 여러번 찍히는거 봐서는 timestamp 과 데이터는 종속되는 걸로 보임     #
-                #     if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
-                #         if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]) + fundamental.close_complete_term:
-                #
-                #                dynamic tp 라서, 미체결시 back profit 산출이 불가함        #
-                #               check back-test profit     #
-                #         while 1:
-                #             try:
-                #                 back_df, _ = concat_candlestick(self.symbol, self.interval, days=1)                        #
-                #                 back_df2, _ = concat_candlestick(self.symbol, self.interval2, days=1)
-                #
-                #                 #       realtime candlestick confirmation       #
-                #                 if datetime.timestamp(back_df.index[-1]) > datetime.now().timestamp():
-                #                     break
-                #
-                #             except Exception as e:
-                #                 print('error in back-test profit :', e)
-                #
-                #         #       init temporary back profit      #
-                #         back_tmp_profit = 1.0
-                #
-                #         if open_side == OrderSide.BUY:
-                #
-                #             if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
-                #                 back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
-                #         else:
-                #             if back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
-                #                 back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
-                #
-                #         self.accumulated_back_profit *= 1 + (back_tmp_profit - 1) * leverage
-                #         print('temporary_back profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
-                #         # print('accumulated_back_Profit : %.3f %%' % ((self.accumulated_back_profit - 1) * 100))
-                #         print()
-                #
-                #         break
 
                 income = 0
                 # continue
@@ -888,61 +840,68 @@ class Trader:
                 #       check back-test profit     #
                 while 1:
                     if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+
                         # if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]) + \
                         #         fundamental.close_complete_term:
-                        try:
-                            back_df, _ = concat_candlestick(self.symbol, self.interval, days=1, timesleep=0.2)
+                        # try:
+                        #     back_df, _ = concat_candlestick(self.symbol, self.interval, days=1, timesleep=0.2)
+                        #
+                        #     #       realtime candlestick confirmation       #
+                        #     if datetime.timestamp(back_df.index[-1]) > datetime.now().timestamp():
+                        #         break
+                        #
+                        # except Exception as e:
+                        #     print('error in back-test profit :', e)
 
-                            #       realtime candlestick confirmation       #
-                            if datetime.timestamp(back_df.index[-1]) > datetime.now().timestamp():
-                                break
-
-                        except Exception as e:
-                            print('error in back-test profit :', e)
+                        break
 
                 #        calc logical profit      #
                 #        check, limit -> market condition        #
 
-                #            real_tp, division           #
+                #             real_tp, division           #
+                #             prev_tp == tp 인 경우는, tp > open 인 경우에도 real_tp 는 tp 와 동일함      #
                 if close_side == OrderSide.BUY:
 
-                    if tp > back_df['open'].iloc[-1]:
-                        calc_tmp_profit = ep / back_df['open'].iloc[-1] - self.trading_fee
-                        real_tp = back_df['open'].iloc[-1]
-                    else:
-                        calc_tmp_profit = ep / tp - self.trading_fee
+                    if prev_tp == tp:
                         real_tp = tp
+
+                    else:
+                        if tp > res_df['open'].iloc[-1]:
+                            real_tp = res_df['open'].iloc[-1]
+                            print("market tp executed !")
+                        else:
+                            real_tp = tp
+
+                    calc_tmp_profit = ep / real_tp - self.trading_fee
 
                 else:
 
-                    if tp < back_df['open'].iloc[-1]:
-                        calc_tmp_profit = back_df['open'].iloc[-1] / ep - self.trading_fee
-                        real_tp = back_df['open'].iloc[-1]
-                    else:
-                        calc_tmp_profit = tp / ep - self.trading_fee
+                    if prev_tp == tp:
                         real_tp = tp
 
+                    else:
+                        if tp < res_df['open'].iloc[-1]:
+                            real_tp = res_df['open'].iloc[-1]
+                            print("market tp executed !")
+                        else:
+                            real_tp = tp
+
+                    calc_tmp_profit = real_tp / ep - self.trading_fee
+
+                #           Todo            #
+                #            check, tp & ep             #
+                print("real_tp :", real_tp)
+                print("ep :", ep)
+                print("self.trading_fee :", self.trading_fee)
+
                 #            save exit data         #
-                exit_timeindex = str(back_df.index[-1])
+                #            exit_timeindex use "-1" index           #
+                exit_timeindex = str(res_df.index[-1])
                 trade_log[exit_timeindex] = [real_tp, "close"]
 
                 with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
                     print("exit trade_log dumped !")
-
-                # #       check profit with back_test logic       #
-                # back_tmp_profit = 1.0
-                #
-                # if open_side == OrderSide.BUY:
-                #     if back_df['low'].iloc[-2] < df['long_ep'].iloc[self.last_index]:
-                #         back_tmp_profit = back_df['close'].iloc[-2] / df['long_ep'].iloc[self.last_index] - self.trading_fee
-                # else:
-                #     if back_df['high'].iloc[-2] > df['short_ep'].iloc[self.last_index]:
-                #         back_tmp_profit = df['short_ep'].iloc[self.last_index] / back_df['close'].iloc[-2] - self.trading_fee
-                #
-                # self.accumulated_back_profit *= 1 + (back_tmp_profit - 1) * leverage
-                # print('temporary back_profit : %.3f %%' % ((back_tmp_profit - 1) * leverage * 100))
-                # print('accumulated back_profit : %.3f %%' % ((self.accumulated_back_profit - 1) * 100))
 
                 end_timestamp = int(time.time() * 1000)
 

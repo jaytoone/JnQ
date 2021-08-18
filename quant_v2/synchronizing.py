@@ -30,78 +30,90 @@ pd.set_option('display.max_columns', 2500)
 def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False):
 
     #           supertrend          #
-    ha_second_df = heikinashi(second_df)
-    # ha_third_df = heikinashi(third_df)
-    # print(ha_second_df.tail(10))
-    # quit()
+    # ha_second_df = heikinashi(second_df)
+    # # ha_third_df = heikinashi(third_df)
+    # # print(ha_second_df.tail(10))
+    # # quit()
+    #
+    # second_df['minor_ST1_Up'], second_df['minor_ST1_Down'], second_df['minor_ST1_Trend'] = supertrend(second_df, 10, 2)
+    # second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7,
+    #                                                                                                   2)
+    # second_df['minor_ST3_Up'], second_df['minor_ST3_Down'], second_df['minor_ST3_Trend'] = supertrend(ha_second_df, 7,
+    #                                                                                                   2.5)
+    # # print(df.head(20))
+    # # quit()
+    #
+    # # startTime = time.time()
+    #
+    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)], backing_i=-2),
+    #                           columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
+    #                               , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
+    #                               , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
+    #
+    # # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
+    # # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
+    # # max_lower = np.maximum(df["minor_ST1_Down"], df["minor_ST2_Down"], df["minor_ST3_Down"])
+    # min_upper = np.min(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]], axis=1)
+    # max_lower = np.max(df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]], axis=1)
+    #
+    # df['middle_line'] = (min_upper + max_lower) / 2
+    #
+    # #           lucid sar              #
+    # second_df['sar'] = lucid_sar(second_df)
+    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['sar1']))
+    #
+    # # third_df['sar'] = lucid_sar(third_df)
+    # # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['sar2']))
+    #
+    # fourth_df['sar'] = lucid_sar(fourth_df)
+    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['sar2']))
+    #
+    # # print(df[['sar1', 'sar2']].tail(20))
+    # # quit()
+    #
+    # #           ichimoku            #
+    # # df['senkou_a'], df['senkou_b'] = ichimoku(df)
+    #
+    # second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
+    # df = df.join( pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
+    #
+    # # third_df['senkou_a'], third_df['senkou_b'] = ichimoku(third_df)
+    # # df = df.join( pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
+    #
+    # # fourth_df['senkou_a'], fourth_df['senkou_b'] = ichimoku(fourth_df)
+    # # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
+    #
+    # #           1-2. displacement           #
+    # # df['senkou_a'] = df['senkou_a'].shift(26 - 1)
+    # # df['senkou_b'] = df['senkou_b'].shift(26 - 1)
+    #
+    # df.iloc[:, -2:] = df.iloc[:, -2:].shift(26 - 1)
+    #
+    # #           macd            #
+    # second_df['macd_hist'] = macd(second_df)
+    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['macd_hist']))
+    #
+    # # fourth_df['macd_hist'] = macd(fourth_df)
+    # # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['macd_hist']))
+    #
+    # # print(df['macd_hist'].tail(20))
+    # # quit()
+    #
+    # #          trix         #
+    # df['trix'] = trix_hist(df, 14, 1, 5)
+    # # print(df['trix'].tail(15))
+    # # quit()
 
-    second_df['minor_ST1_Up'], second_df['minor_ST1_Down'], second_df['minor_ST1_Trend'] = supertrend(second_df, 10, 2)
-    second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7,
-                                                                                                      2)
-    second_df['minor_ST3_Up'], second_df['minor_ST3_Down'], second_df['minor_ST3_Trend'] = supertrend(ha_second_df, 7,
-                                                                                                      2.5)
-    # print(df.head(20))
-    # quit()
+    #          stochastic           #
+    df['stoch'] = stoch(df)
 
-    # startTime = time.time()
+    #          fisher           #
+    df['fisher'] = fisher(df, 30)
 
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)], backing_i=-2),
-                              columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
-                                  , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
-                                  , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
+    #          cctbbo           #
+    df['cctbbo'], _ = cct_bbo(df, 21, 13)
 
-    # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
-    # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
-    # max_lower = np.maximum(df["minor_ST1_Down"], df["minor_ST2_Down"], df["minor_ST3_Down"])
-    min_upper = np.min(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]], axis=1)
-    max_lower = np.max(df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]], axis=1)
-
-    df['middle_line'] = (min_upper + max_lower) / 2
-
-    #           lucid sar              #
-    second_df['sar'] = lucid_sar(second_df)
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['sar1']))
-
-    # third_df['sar'] = lucid_sar(third_df)
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['sar2']))
-
-    fourth_df['sar'] = lucid_sar(fourth_df)
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['sar2']))
-
-    # print(df[['sar1', 'sar2']].tail(20))
-    # quit()
-
-    #           ichimoku            #
-    # df['senkou_a'], df['senkou_b'] = ichimoku(df)
-
-    second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
-    df = df.join( pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
-
-    # third_df['senkou_a'], third_df['senkou_b'] = ichimoku(third_df)
-    # df = df.join( pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
-
-    # fourth_df['senkou_a'], fourth_df['senkou_b'] = ichimoku(fourth_df)
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
-
-    #           1-2. displacement           #
-    # df['senkou_a'] = df['senkou_a'].shift(26 - 1)
-    # df['senkou_b'] = df['senkou_b'].shift(26 - 1)
-
-    df.iloc[:, -2:] = df.iloc[:, -2:].shift(26 - 1)
-
-    #           macd            #
-    second_df['macd_hist'] = macd(second_df)
-    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['macd_hist']))
-
-    # fourth_df['macd_hist'] = macd(fourth_df)
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['macd_hist']))
-
-    # print(df['macd_hist'].tail(20))
-    # quit()
-
-    #          trix         #
-    df['trix'] = trix_hist(df, 14, 1, 5)
-    print(df['trix'].tail(15))
+    print(df.iloc[:, -3:].tail(20))
     quit()
 
     if plotting:

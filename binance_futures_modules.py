@@ -104,6 +104,7 @@ def get_precision(symbol_):
 
 
 def calc_with_precision(data, data_precision, def_type='floor'):
+
     if not pd.isna(data):
         if data_precision > 0:
             if def_type == 'floor':
@@ -209,6 +210,7 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
 
     tp_count = 0
     tp_type = OrderType.LIMIT
+    retry_cnt = 0
     while tp_count < len(tp_list_):  # loop for partial tp
 
         #          get remaining quantity         #
@@ -240,6 +242,9 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
                                       reduceOnly=True)
         except Exception as e:
             print('error in partial tp :', e)
+            retry_cnt += 1
+            if retry_cnt >= 10:
+                return "maximum_retry"
             continue
         else:
             tp_count += 1
