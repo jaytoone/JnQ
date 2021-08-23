@@ -211,7 +211,7 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
     tp_count = 0
     tp_type = OrderType.LIMIT
     retry_cnt = 0
-    while tp_count < len(tp_list_):  # loop for partial tp
+    while 1:  # loop for partial tp
 
         #          get remaining quantity         #
         if tp_count == 0:
@@ -224,13 +224,15 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
         #           partial tp_level        #
         tp_level = tp_list_[tp_count]
 
-        if tp_count != len(tp_list_) - 1:
+        if tp_count == len(tp_list_) - 1:
+            quantity = calc_with_precision(remain_qty, quantity_precision)
+
+        else:
             quantity = remain_qty / partial_qty_divider
             quantity = calc_with_precision(quantity, quantity_precision)
             if remain_qty - quantity < 1 / (10 ** quantity_precision):
                 quantity = calc_with_precision(remain_qty, quantity_precision)
-        else:
-            quantity = calc_with_precision(remain_qty, quantity_precision)
+
         # print('remain_qty, quantity :', remain_qty, quantity)
 
         #           partial tp             #
@@ -242,12 +244,23 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
                                       reduceOnly=True)
         except Exception as e:
             print('error in partial tp :', e)
+
+            #       Todo        #
+            #        1. Quantity error occurs, tp_list_[0] & remain_qty 로 close_order 진행       #
+            #        2. 기존 주문에 추가로 주문이 가능하지 cancel order 진행하지 않고 일단, 진행         #
+            if "zero" in e:
+                tp_count = 0
+                tp_list_ = [tp_list_[0]]
+                continue
+
             retry_cnt += 1
             if retry_cnt >= 10:
                 return "maximum_retry"
             continue
         else:
             tp_count += 1
+            if tp_count >= len(tp_list_):
+                break
             remain_qty -= quantity
             if remain_qty < 1 / (10 ** quantity_precision):  # --> means remain_qty = 0.0
                 break
@@ -267,21 +280,34 @@ if __name__ == '__main__':
     tp_list = [91.8, 91.7, 91.65]
     partial_qty_divider = 1.5
     quantity_precision = 3
-    symbol = 'BTCUSDT'
+    symbol = 'ETHUSDT'
     close_side = OrderSide.SELL
 
-    result = request_client.get_leverage_bracket()
-    leverage_dict = dict()
-    symbol_list = []
-    for i in range(len(result)):
-        dict_symbol = result[i].symbol
-        print("dict_symbol :", dict_symbol)
+    # result = request_client.get_balance_v2()
+    #
+    # for r in result:
+    #     print(r.availableBalance)
 
-        symbol_list.append(dict_symbol)
+    # remained_orderId = remaining_order_check(symbol)
+    # print(remained_orderId)
 
-    with open("ticker_in_futures.pkl", "wb") as f:
-        pickle.dump(symbol_list, f)
-        print("symbol_list saved !")
+    result = request_client.get_open_orders(symbol)
+    print([dir(result[i]) for i in range(len(result))])
+
+    # print(get_remaining_quantity(symbol))
+
+    # result = request_client.get_leverage_bracket()
+    # leverage_dict = dict()
+    # symbol_list = []
+    # for i in range(len(result)):
+    #     dict_symbol = result[i].symbol
+    #     print("dict_symbol :", dict_symbol)
+    #
+    #     symbol_list.append(dict_symbol)
+    #
+    # with open("ticker_in_futures.pkl", "wb") as f:
+    #     pickle.dump(symbol_list, f)
+    #     print("symbol_list saved !")
 
         # limit_leverage = result[i].brackets[0].initialLeverage
         # leverage_dict[dict_symbol] = limit_leverage

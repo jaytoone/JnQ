@@ -32,6 +32,9 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
 
     endTime = datetime.timestamp(pd.to_datetime('{} 23:59:59'.format(end_date))) * 1000
 
+    if limit != 1500:
+        by_limit = True
+
     if show_process:
         print(symbol)
 
@@ -46,6 +49,8 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
             print(datetime.fromtimestamp(endTime / 1000))
 
         try:
+            #       Todo        #
+            #        추후에 문제없으면, 없앨 예정 -> limit != 1500 에 startTime = None 기입        #
             if by_limit:
                 startTime = None
 

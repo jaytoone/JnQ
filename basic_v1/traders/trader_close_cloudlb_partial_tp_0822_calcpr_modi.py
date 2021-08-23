@@ -41,7 +41,7 @@ class Trader:
         self.gap = 0.00005
 
         #       partial param       #
-        self.partial_num = 1
+        # self.partial_num = 1
         self.partial_qty_divider = 1.5
 
         #       pr param        #
@@ -131,7 +131,8 @@ class Trader:
 
                         try:
 
-                            new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, limit=self.use_rows, timesleep=0.2)
+                            new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, limit=self.use_rows,
+                                                            timesleep=0.2, show_process=False)
 
                             #       realtime candlestick confirmation       #
                             #       new_df 의 index 가 올바르지 않으면, load_new_df      #
@@ -139,7 +140,8 @@ class Trader:
                                 # load_new_df = True
                                 continue
 
-                            new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, limit=self.use_rows2, timesleep=0.2)
+                            new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, limit=self.use_rows2,
+                                                             timesleep=0.2)
 
                             #       new_df2 도 검수        #
                             if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
@@ -211,13 +213,15 @@ class Trader:
                         # print("cloud_top :", cloud_top)
                         # quit()
 
-                        upper_ep = res_df['min_upper'] * (1 - self.gap)
-                        lower_ep = res_df['max_lower'] * (1 + self.gap)
+                        short_ep = res_df['min_upper'] * (1 - self.gap)
+                        long_ep = res_df['max_lower'] * (1 + self.gap)
 
                         # print('1')
 
-                        under_top = res_df['close'].shift(self.close_shift_size) <= cloud_top.shift(self.cloud_shift_size)
-                        over_bottom = res_df['close'].shift(self.close_shift_size) >= cloud_bottom.shift(self.cloud_shift_size)
+                        under_top = res_df['close'].shift(self.close_shift_size) <= cloud_top.shift(
+                            self.cloud_shift_size)
+                        over_bottom = res_df['close'].shift(self.close_shift_size) >= cloud_bottom.shift(
+                            self.cloud_shift_size)
 
                         # print('2')
                         # quit()
@@ -228,29 +232,29 @@ class Trader:
                             excel_name = str(datetime.now()).replace(":", "").split(".")[0]
                             res_df.to_excel("./basic_v1/df_log/%s.xlsx" % excel_name)
 
-                        #       3. res_df 의 모든 length 에 대해 할 필요는 없을 것       #
-                        #       3.1 양방향에 limit 을 걸어두고 체결되면 미체결 주문은 all cancel       #
-                        #       3.2 cloud lb const 적용하면, 양방향 될일 거의 없지 않을까, 그래도 양방향 코드 진행       #
-                        #       a. st const        #
-                        if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[
-                                      self.last_index]) != 3:
+                        # ---------------------- short const phase ---------------------- #
+                        # ----------- st const ----------- #
+                        # if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[
+                        #               self.last_index]) != 3:
 
-                            #     b. check cloud constraints   #
-                            if np.sum(under_top.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
-                                short_open = True
-                                # print("short_open :", short_open)
-                                # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
-                                # print("under_top :", under_top.iloc[-self.cloud_lookback:])
+                        # -----------  cloud : close const ----------- #
+                        if np.sum(under_top.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
+                            short_open = True
+                            # print("short_open :", short_open)
+                            # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
+                            # print("under_top :", under_top.iloc[-self.cloud_lookback:])
 
-                        if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[
-                                      self.last_index]) != -3:
+                        # ---------------------- long const phase ---------------------- #
+                        # ----------- st const ----------- #
+                        # if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[
+                        #               self.last_index]) != -3:
 
-                            #     b. check cloud constraints   #
-                            if np.sum(over_bottom.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
-                                long_open = True
-                                # print("long_open :", long_open)
-                                # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
-                                # print("over_bottom :", over_bottom.iloc[-self.cloud_lookback:])
+                        # -----------  cloud : close const ----------- #
+                        if np.sum(over_bottom.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
+                            long_open = True
+                            # print("long_open :", long_open)
+                            # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
+                            # print("over_bottom :", over_bottom.iloc[-self.cloud_lookback:])
 
                     except Exception as e:
                         print("error in open const phase :", e)
@@ -265,7 +269,7 @@ class Trader:
 
                     #         enlist ep         #
                     try:
-                        df = enlist_epindf(res_df, upper_ep, lower_ep)
+                        df = enlist_epindf(res_df, short_ep, long_ep)
                         print('res_df.index[-1] :', res_df.index[-1])
                         print('~ ep enlist time : %.5f' % (time.time() - temp_time))
                         print()
@@ -273,7 +277,7 @@ class Trader:
 
                     except Exception as e:
                         print('error in enlist_epindf :', e)
-                        entry_const_check = True    # res_df 에 data 가 덮여씌워질 것임
+                        entry_const_check = True  # res_df 에 data 가 덮여씌워질 것임
                         continue
 
                 if open_order:
@@ -575,6 +579,8 @@ class Trader:
                     time.sleep(60 - datetime.now().second)
 
                 tp = None
+                tp2 = None
+                tp_exec_dict = {}
                 load_new_df2 = True
                 while 1:
 
@@ -589,12 +595,14 @@ class Trader:
                     if load_new_df2:
 
                         try:
-                            new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, limit=self.use_rows, timesleep=0.2)
+                            new_df_, _ = concat_candlestick(self.symbol, self.interval, days=1, limit=self.use_rows,
+                                                            timesleep=0.2)
 
                             if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
                                 continue
 
-                            new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, limit=self.use_rows2, timesleep=0.2)
+                            new_df2_, _ = concat_candlestick(self.symbol, self.interval2, days=1, limit=self.use_rows2,
+                                                             timesleep=0.2)
 
                             if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
                                 continue
@@ -604,13 +612,21 @@ class Trader:
                             res_df = sync_check(new_df, new_df2)
 
                             prev_tp = tp
+                            prev_tp2 = tp2
 
+                            upper_middle = (res_df['middle_line'] + res_df['min_upper']) / 2
+                            lower_middle = (res_df['middle_line'] + res_df['max_lower']) / 2
+
+                            # ---------- sub tp added ---------- #
                             if open_side == OrderSide.SELL:
-                                tp = res_df['middle_line'].iloc[self.last_index] * (1 + self.gap)
+                                tp = lower_middle.iloc[self.last_index] * (1 + self.gap)
+                                tp2 = res_df['middle_line'].iloc[self.last_index] * (1 + self.gap)
                             else:
-                                tp = res_df['middle_line'].iloc[self.last_index] * (1 - self.gap)
+                                tp = upper_middle.iloc[self.last_index] * (1 - self.gap)
+                                tp2 = res_df['middle_line'].iloc[self.last_index] * (1 - self.gap)
 
                             print("tp :", tp)
+                            print("tp2 :", tp2)
 
                         except Exception as e:
                             print('error in get new_dfs (tp phase) :', e)
@@ -624,7 +640,16 @@ class Trader:
                     #         3. reorder 의 경우, 기존 tp order cancel 해야함       #
                     if prev_tp is None or tp != prev_tp:
 
-                        if tp != prev_tp:
+                        # if tp != prev_tp:
+                        if prev_tp is not None:
+
+                            #           cancle order 전에, sub tp 체결여부를 확인            #
+                            try:
+                                remained_tp_id = remaining_order_check(self.symbol)
+
+                            except Exception as e:
+                                print('error in remaining_order_check :', e)
+                                continue
 
                             #           미체결 tp order 모두 cancel               #
                             #           regardless to position exist, cancel all tp orders       #
@@ -645,19 +670,31 @@ class Trader:
                             print('price_precision :', price_precision)
                             print('quantity_precision :', quantity_precision)
 
-                        #           Todo            #
-                        #            1. partial 을 ep 기준으로 하면 안댐         #
-                        #            ==> dynamic tp 기 때문에       #
-                        #            2. 따라서, 일단은 tp_list 를 직접 만들어준다     #
-                        #            2-1. tp_list 는 ep 로부터 먼 tp 부터 정렬한다     #
-                        # tp_list = get_partial_tplist(ep, tp, open_side, self.partial_num, price_precision)
-                        tp_list = [tp]
-                        tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
+                        #            tp_list 는 ep 로부터 먼 tp 부터 정렬한다     #
+                        #            1. 체결된 tp 에 대해서는 tp_list 에서 제외시켜야함         #
+                        #            2. 체결되지 않은 tp 에 대해서 static 한 경우 취소할 필요가 없을건데,
+                        #               static 여부는 tp_list 내부 모든 tp 에 동일하게 적용될 거니까 일단 무시
+                        #            3. 체결 검수 부분만 한번더 확인
+                        #             4. static 이면 어뜩함 ?           #
+                        #             4-1. 어차피 reorder 할 필요가 없으면, tp_list 를 수정할 필요가 없음      #
+                        tp_list = [tp, tp2]
+                        # if tp != prev_tp:
+                        if prev_tp is not None:
+                            if remained_tp_id is not None:
+                                if len(remained_tp_id) != 2:
+                                    tp_list = [tp]
 
+                                    #       Todo        #
+                                    #        1. calc_pr 을 위해 체결된 시간 (res_df.index[-2]) 과 해당 tp 를 한번만 기록함        #
+                                    if len(tp_exec_dict) == 0:
+                                        tp_exec_dict[res_df.index[-2]] = [prev_tp2, tp2]
+
+                        tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
                         print('tp_list :', tp_list)
 
                         try:
-                            result = partial_limit(self.symbol, tp_list, close_side, quantity_precision, self.partial_qty_divider)
+                            result = partial_limit(self.symbol, tp_list, close_side, quantity_precision,
+                                                   self.partial_qty_divider)
 
                             if result is not None:
                                 print(result)
@@ -847,9 +884,9 @@ class Trader:
                         break  # <--- break for all close order loop, break partial tp loop
 
                 #       check back-test profit     #
+                #       정확한 pr 비교를 위해 해당 틱 종료까지 기다림       #
                 while 1:
                     if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
-
                         # if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]) + \
                         #         fundamental.close_complete_term:
                         # try:
@@ -867,41 +904,61 @@ class Trader:
                 #        calc logical profit      #
                 #        check, limit -> market condition        #
 
+                #           Todo            #
+                #            1. adjust partial tp             #
+                #            2. -1 이 아니라, timestamp index 로 접근해야할듯      #
+                #            2-1. len(tp_list) 가 2 -> 1 로 변한 순간을 catch, time_idx 를 기록
+                #            3. 마지막 체결 정보를 기록 : (res_df.index[-1]) 과 해당 tp 를 기록        #
+                tp_exec_dict[res_df.index[-1]] = [prev_tp, tp]
+                print("tp_exec_dict :", tp_exec_dict)
+
                 #             real_tp, division           #
                 #             prev_tp == tp 인 경우는, tp > open 인 경우에도 real_tp 는 tp 와 동일함      #
-                if close_side == OrderSide.BUY:
+                calc_tmp_profit = 1
+                r_qty = 1
+                # ---------- calc in for loop ---------- #
+                for q_i, (k_ts, v_tp) in enumerate(sorted(tp_exec_dict.items(), key=lambda x: x[0], reverse=True)):
+
+                    prev_tp, tp = v_tp
 
                     if prev_tp == tp:
                         real_tp = tp
 
                     else:
-                        if tp > res_df['open'].iloc[-1]:
-                            real_tp = res_df['open'].iloc[-1]
-                            print("market tp executed !")
+                        if close_side == OrderSide.BUY:
+                            if tp > res_df['open'].loc[k_ts]:
+                                real_tp = res_df['open'].loc[k_ts]
+                                print("market tp executed !")
+                            else:
+                                real_tp = tp
                         else:
-                            real_tp = tp
+                            if tp < res_df['open'].loc[k_ts]:
+                                real_tp = res_df['open'].loc[k_ts]
+                                print("market tp executed !")
+                            else:
+                                real_tp = tp
 
-                    calc_tmp_profit = ep / real_tp - self.trading_fee
-
-                else:
-
-                    if prev_tp == tp:
-                        real_tp = tp
-
+                    if len(tp_exec_dict) == 1:
+                        temp_qty = r_qty
                     else:
-                        if tp < res_df['open'].iloc[-1]:
-                            real_tp = res_df['open'].iloc[-1]
-                            print("market tp executed !")
+                        # if q_i != 0:
+                        if q_i != len(tp_exec_dict) - 1:
+                            temp_qty = r_qty / self.partial_qty_divider
                         else:
-                            real_tp = tp
+                            temp_qty = r_qty
 
-                    calc_tmp_profit = real_tp / ep - self.trading_fee
+                    r_qty -= temp_qty
 
-                #           Todo            #
-                #            check, tp & ep             #
-                print("real_tp :", real_tp)
-                print("ep :", ep)
-                print("self.trading_fee :", self.trading_fee)
+                    if close_side == OrderSide.BUY:
+                        calc_tmp_profit += (ep / real_tp - self.trading_fee - 1) * temp_qty
+                        # calc_tmp_profit += ep / real_tp - self.trading_fee
+                    else:
+                        calc_tmp_profit += (real_tp / ep - self.trading_fee - 1) * temp_qty
+
+                    print("real_tp :", real_tp)
+                    print("ep :", ep)
+                    print("self.trading_fee :", self.trading_fee)
+                    print("temp_qty :", temp_qty)
 
                 #            save exit data         #
                 #            exit_timeindex use "-1" index           #

@@ -13,7 +13,7 @@
   "exit_execution_wait": 60,
   "tp_type": "LIMIT",
   "sl_type": "LIMIT",
-  "df_log": true
+  "df_log": false
  },
  "AI": {
   "model_life": 72000,
