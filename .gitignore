@@ -31,7 +31,7 @@ __pycache__/
 # Exclude Folder
 df_log/
 trade_log/
-back_pr/
+#back_pr/
 
 test_set/
 #funcs/

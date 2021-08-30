@@ -91,11 +91,12 @@ if __name__ == '__main__':
 
     days = 300
     days = 1
-    # days = 30
+    days = 62
     # days = 21
     end_date = '2021-05-17'
     # end_date = '2021-07-03'
     end_date = '2021-07-01'
+    end_date = '2019-12-01'
     # end_date = '2021-05-30'
     # end_date = '2021-04-30'
     # end_date = '2019-12-08'
@@ -103,7 +104,8 @@ if __name__ == '__main__':
 
     intervals = ['1m', '3m', '5m', '15m', '30m']
     # intervals = ['15m', '30m']
-    intervals = ['1m']
+    intervals = ['5m', '15m', '30m']
+    intervals = ['4h', '1d']
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
@@ -125,7 +127,7 @@ if __name__ == '__main__':
         # quit()
 
     # coin_list = coin_list[:10]
-    # coin_list = ['ETH']
+    coin_list = ['ETHUSDT']
     # print(coin_list)
     # coin_list = ['THETA']
     # coin_list.remove('BTC')
@@ -138,22 +140,25 @@ if __name__ == '__main__':
             # print(coin)
 
             try:
-                concated_excel, end_date = concat_candlestick(coin, interval, days, limit=500, by_limit=True,
-                                                              end_date=end_date, show_process=False, timesleep=0.2)
+                concated_excel, end_date = concat_candlestick(coin, interval, days,
+                                                              end_date=end_date, show_process=True, timesleep=0.2)
+                # concated_excel, end_date = concat_candlestick(coin, interval, days, limit=1500, by_limit=False,
+                #                                               end_date=end_date, show_process=True, timesleep=0.2)
 
                 # print("str(concated_excel.index[-1]) :", str(concated_excel.index[-1]))
                 # quit()
 
             # try:
-            #     concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin))
+                # concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in to_excel :', e)
                 continue
 
             # print(concated_excel.tail())
             # print(len(concated_excel))
-            print(concated_excel.head())
-            quit()
+            # print(concated_excel.head())
+            # quit()
             #
             # print('df[-1] timestamp :', datetime.timestamp(concated_excel.index[-1]))
             # print('current timestamp :', datetime.now().timestamp())

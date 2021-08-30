@@ -231,9 +231,10 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
             quantity = remain_qty / partial_qty_divider
             quantity = calc_with_precision(quantity, quantity_precision)
             if remain_qty - quantity < 1 / (10 ** quantity_precision):
+                print('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) :', remain_qty, quantity)
                 quantity = calc_with_precision(remain_qty, quantity_precision)
 
-        # print('remain_qty, quantity :', remain_qty, quantity)
+        print('remain_qty, quantity :', remain_qty, quantity)
 
         #           partial tp             #
         try:
@@ -248,7 +249,7 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
             #       Todo        #
             #        1. Quantity error occurs, tp_list_[0] & remain_qty 로 close_order 진행       #
             #        2. 기존 주문에 추가로 주문이 가능하지 cancel order 진행하지 않고 일단, 진행         #
-            if "zero" in e:
+            if "zero" in str(e):
                 tp_count = 0
                 tp_list_ = [tp_list_[0]]
                 continue
