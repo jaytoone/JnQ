@@ -38,6 +38,7 @@ class Trader:
         self.close_shift_size = 1
         self.cloud_shift_size = 1
         self.cloud_lookback = 69
+        self.sma_period = 100
         self.gap = 0.00005
 
         #       partial param       #
@@ -223,6 +224,8 @@ class Trader:
                         over_bottom = res_df['close'].shift(self.close_shift_size) >= cloud_bottom.shift(
                             self.cloud_shift_size)
 
+                        res_df['sma1'] = res_df['close'].rolling(self.sma_period).mean()
+
                         # print('2')
                         # quit()
 
@@ -237,24 +240,36 @@ class Trader:
                         # if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[
                         #               self.last_index]) != 3:
 
-                        # -----------  cloud : close const ----------- #
-                        if np.sum(under_top.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
-                            short_open = True
-                            # print("short_open :", short_open)
-                            # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
-                            # print("under_top :", under_top.iloc[-self.cloud_lookback:])
+                        # ----------- sma const ----------- #
+                        if res_df['close'].shift(1).iloc[self.last_index] < res_df['sma1'].shift(1).iloc[self.last_index]:  # and \
+                            #   short_ep.iloc[self.last_index] <= res_df['sma1'].shift(sma_shift_size).iloc[self.last_index]:
+                            # # under_sma = short_ep <= res_df['sma'].shift(sma_shift_size)
+                            # # if np.sum(under_sma.iloc[self.last_index + 1 - sma_lookback:self.last_index + 1]) == sma_lookback:
+
+                            # -----------  cloud : close const ----------- #
+                            if np.sum(under_top.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
+                                short_open = True
+                                # print("short_open :", short_open)
+                                # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
+                                # print("under_top :", under_top.iloc[-self.cloud_lookback:])
 
                         # ---------------------- long const phase ---------------------- #
                         # ----------- st const ----------- #
                         # if np.sum(res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[
                         #               self.last_index]) != -3:
 
-                        # -----------  cloud : close const ----------- #
-                        if np.sum(over_bottom.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
-                            long_open = True
-                            # print("long_open :", long_open)
-                            # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
-                            # print("over_bottom :", over_bottom.iloc[-self.cloud_lookback:])
+                        # ----------- sma const ----------- #
+                        if res_df['close'].shift(1).iloc[self.last_index] > res_df['sma1'].shift(1).iloc[self.last_index]:  # and \
+                            #   long_ep.iloc[self.last_index] >= res_df['sma1'].shift(sma_shift_size).iloc[self.last_index]:
+                            # # upper_sma = long_ep >= res_df['sma'].shift(sma_shift_size)
+                            # # if np.sum(upper_sma.iloc[self.last_index + 1 - sma_lookback:self.last_index + 1]) == sma_lookback:
+
+                            # -----------  cloud : close const ----------- #
+                            if np.sum(over_bottom.iloc[-self.cloud_lookback:]) == self.cloud_lookback:
+                                long_open = True
+                                # print("long_open :", long_open)
+                                # print("sum trend :", res_df[['minor_ST1_Trend', 'minor_ST2_Trend', 'minor_ST3_Trend']].iloc[self.last_index])
+                                # print("over_bottom :", over_bottom.iloc[-self.cloud_lookback:])
 
                     except Exception as e:
                         print("error in open const phase :", e)
@@ -960,10 +975,11 @@ class Trader:
                     print("self.trading_fee :", self.trading_fee)
                     print("temp_qty :", temp_qty)
 
-                #            save exit data         #
-                #            exit_timeindex use "-1" index           #
-                exit_timeindex = str(res_df.index[-1])
-                trade_log[exit_timeindex] = [real_tp, "close"]
+                    #            save exit data         #
+                    #            exit_timeindex use "-1" index           #
+                    # exit_timeindex = str(res_df.index[-1])
+                    # trade_log[exit_timeindex] = [real_tp, "close"]
+                    trade_log[k_ts] = [real_tp, "close"]
 
                 with open("./basic_v1/trade_log/" + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)

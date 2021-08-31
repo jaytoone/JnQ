@@ -90,22 +90,21 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
 if __name__ == '__main__':
 
     days = 300
-    days = 1
-    days = 62
+    # days = 1
+    # days = 62
     # days = 21
     end_date = '2021-05-17'
     # end_date = '2021-07-03'
     end_date = '2021-07-01'
-    end_date = '2019-12-01'
-    # end_date = '2021-05-30'
-    # end_date = '2021-04-30'
-    # end_date = '2019-12-08'
-    end_date = None
+    end_date = '2021-08-31'
+    # end_date = '2019-12-01'
+    # end_date = None
 
     intervals = ['1m', '3m', '5m', '15m', '30m']
     # intervals = ['15m', '30m']
     intervals = ['5m', '15m', '30m']
     intervals = ['4h', '1d']
+    intervals = ['30m']
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
@@ -127,7 +126,7 @@ if __name__ == '__main__':
         # quit()
 
     # coin_list = coin_list[:10]
-    coin_list = ['ETHUSDT']
+    # coin_list = ['ETHUSDT']
     # print(coin_list)
     # coin_list = ['THETA']
     # coin_list.remove('BTC')
@@ -139,9 +138,22 @@ if __name__ == '__main__':
 
             # print(coin)
 
+            #       check existing file     #
+            #       Todo        #
+            #        1. this phase require valid end_date       #
+            save_dir = './candlestick_concated/%s/' % interval
+            save_name = '%s %s.xlsx' % (end_date, coin)
+            exist_files = os.listdir(save_dir)
+            # print(exist_files)
+            # print(save_name)
+            # quit()
+            if save_name in exist_files:
+                print(save_name, 'exist !')
+                continue
+
             try:
                 concated_excel, end_date = concat_candlestick(coin, interval, days,
-                                                              end_date=end_date, show_process=True, timesleep=0.2)
+                                                              end_date=end_date, show_process=True, timesleep=0.3)
                 # concated_excel, end_date = concat_candlestick(coin, interval, days, limit=1500, by_limit=False,
                 #                                               end_date=end_date, show_process=True, timesleep=0.2)
 

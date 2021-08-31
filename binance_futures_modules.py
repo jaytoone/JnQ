@@ -230,6 +230,8 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
         else:
             quantity = remain_qty / partial_qty_divider
             quantity = calc_with_precision(quantity, quantity_precision)
+
+            #       남을 qty 가 기준 이하보다 작다면, 모든 remain_qty 로 order 진행    #
             if remain_qty - quantity < 1 / (10 ** quantity_precision):
                 print('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) :', remain_qty, quantity)
                 quantity = calc_with_precision(remain_qty, quantity_precision)
@@ -246,9 +248,12 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
         except Exception as e:
             print('error in partial tp :', e)
 
+            # quit()
+
             #       Todo        #
             #        1. Quantity error occurs, tp_list_[0] & remain_qty 로 close_order 진행       #
             #        2. 기존 주문에 추가로 주문이 가능하지 cancel order 진행하지 않고 일단, 진행         #
+            #        3. e 를 str 로 변환해주지 않으면, argument of type 'BinanceApiException' is not iterable error 가 발생함
             if "zero" in str(e):
                 tp_count = 0
                 tp_list_ = [tp_list_[0]]
@@ -284,16 +289,16 @@ if __name__ == '__main__':
     symbol = 'ETHUSDT'
     close_side = OrderSide.SELL
 
-    # result = request_client.get_balance_v2()
-    #
-    # for r in result:
-    #     print(r.availableBalance)
+    result = request_client.get_balance_v2()
+
+    for r in result:
+        print(r.availableBalance)
 
     # remained_orderId = remaining_order_check(symbol)
     # print(remained_orderId)
 
-    result = request_client.get_open_orders(symbol)
-    print([dir(result[i]) for i in range(len(result))])
+    # result = request_client.get_open_orders(symbol)
+    # print([dir(result[i]) for i in range(len(result))])
 
     # print(get_remaining_quantity(symbol))
 
