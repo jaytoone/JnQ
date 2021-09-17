@@ -28,7 +28,8 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
 
     # if interval != '1m':
     #       trader 에서 자정 지나면 data 부족해지는 문제로 days >= 2 적용    #
-    # startTime -= a_day
+    if interval == '1d':
+        startTime -= a_day
 
     endTime = datetime.timestamp(pd.to_datetime('{} 23:59:59'.format(end_date))) * 1000
 

@@ -394,8 +394,34 @@ def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backin
     if interval < 60:
         sliced_index_len = last_min % interval + 1  # +1 하는 이유는, 나머지가 0 인 경우에 대해서도 value 를 채워주어야하기 때문임
                                                     # 채우지않으면, ltf 에 np.nan 이 생김
+        # ==> 59.9999 붙어서 그런걸로 알고 있음 (31 분이면 실제로 30:59.999999 니까)
     else:
-        sliced_index_len = (last_hour * 60 + last_min) % interval + 1
+
+        if interval == 240:  # 4h
+            modi_last_hour = last_hour % 4 - 1
+            if modi_last_hour < 0:
+                modi_last_hour += 4
+
+        elif interval == 1440:  # 1d
+            modi_last_hour = last_hour - 9
+            if modi_last_hour < 0:
+                modi_last_hour += 24
+
+        else:
+            modi_last_hour = last_hour
+
+        if show_info:
+            print("modi_last_hour :", modi_last_hour)
+
+        sliced_index_len = (modi_last_hour * 60 + last_min) % interval + 1  # 이렇게 하면 하루를 기준으로 잡는거내
+
+        #       Todo        #
+        #        1. 4h, 1d timestamp 시작 시간이 다르기 때문에 각 interval 의 기준으로 재정의해야할 것      #
+        #           a. 1d 는 9:00:00 기준으로 현재까지의 시간을 모두 minute 으로 변경 (sliced_index_len)
+        #               i. last_hour -> last_hour - 9, if < 0 => + 24
+        #           b. 4h 는 1, 5, 9... 시 기준으로 현재까지의 시간을 minute 으로 변경 (sliced_index_len)
+        #               i. last_hour -> last_hour % 4(h) - 1, if < 0 => + 4 
+        #        2. 1h 는 아직
 
     #           -2 => 오차없는 이전 데이터를 사용하기 위함           #
     # backing_i = -2
@@ -404,6 +430,7 @@ def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backin
 
     if show_info:
         print("backing_i :", backing_i)
+        print("sliced_index_len :", sliced_index_len)
 
     # value_list = [htf_df[column].iloc[backing_i]] * sliced_index_len
 
@@ -423,7 +450,8 @@ def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backin
         #       다음 index 부터 htf data slicing 시작
         backing_i -= 1
 
-        # print('backing_i :', backing_i)
+        if show_info:
+            print('backing_i :', backing_i)
 
         # temp_list = [htf_df[column].iloc[backing_i]] * interval
 

@@ -30,25 +30,30 @@ pd.set_option('display.max_columns', 2500)
 def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False):
 
     #           supertrend          #
-    # ha_second_df = heikinashi(second_df)
-    # # ha_third_df = heikinashi(third_df)
-    # # print(ha_second_df.tail(10))
-    # # quit()
-    #
-    # second_df['minor_ST1_Up'], second_df['minor_ST1_Down'], second_df['minor_ST1_Trend'] = supertrend(second_df, 10, 2)
-    # second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7,
-    #                                                                                                   2)
-    # second_df['minor_ST3_Up'], second_df['minor_ST3_Down'], second_df['minor_ST3_Trend'] = supertrend(ha_second_df, 7,
-    #                                                                                                   2.5)
-    # # print(df.head(20))
-    # # quit()
-    #
-    # # startTime = time.time()
-    #
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)], backing_i=-2),
-    #                           columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
-    #                               , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
-    #                               , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
+    ha_second_df = heikinashi(second_df)
+    # ha_third_df = heikinashi(third_df)
+    # print(ha_second_df.tail(10))
+    # quit()
+
+    second_df['minor_ST1_Up'], second_df['minor_ST1_Down'], second_df['minor_ST1_Trend'] = supertrend(second_df, 10, 2)
+    second_df['minor_ST2_Up'], second_df['minor_ST2_Down'], second_df['minor_ST2_Trend'] = supertrend(ha_second_df, 7,
+                                                                                                      2)
+    second_df['minor_ST3_Up'], second_df['minor_ST3_Down'], second_df['minor_ST3_Trend'] = supertrend(ha_second_df, 7,
+                                                                                                      2.5)
+    # print(df.head(20))
+    # quit()
+
+    # startTime = time.time()
+    # print(df.index[-5:])
+
+    df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [i for i in range(-9, 0, 1)], backing_i=-2, show_info=True),
+                              columns=['minor_ST1_Up', 'minor_ST1_Down', 'minor_ST1_Trend'
+                                  , 'minor_ST2_Up', 'minor_ST2_Down', 'minor_ST2_Trend'
+                                  , 'minor_ST3_Up', 'minor_ST3_Down', 'minor_ST3_Trend']))
+
+    print(df.tail(60))
+    quit()
+
     #
     # # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
     # # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
@@ -166,6 +171,9 @@ if __name__=="__main__":
 
     interval = "1m"
     interval2 = "3m"
+    interval2 = "4h"
+    interval2 = "1d"
+
     interval3 = "5m"
     interval4 = "15m"
     symbol = "ETHUSDT"
@@ -175,7 +183,12 @@ if __name__=="__main__":
     # while 1:
 
     df, _ = concat_candlestick(symbol, interval, days=1)
-    second_df, _ = concat_candlestick(symbol, interval2, days=1)
+    # print(df.tail())
+    # quit()
+    # second_df, _ = concat_candlestick(symbol, interval2, days=1)
+    # second_df, _ = concat_candlestick(symbol, interval2, days=3) # >= 30m
+    # second_df, _ = concat_candlestick(symbol, interval2, days=10) # for 4h
+    second_df, _ = concat_candlestick(symbol, interval2, days=50) # for 1d
     # print(second_df.tail())
     # quit()
 
