@@ -1,6 +1,6 @@
 import os
 # from basic_v1.back_pr.back_pr_strat.close_cloudlb import back_pr_check
-from basic_v1.back_pr.back_pr_strat.close_cloudlb_partial import back_pr_check
+from basic_v1.back_pr.back_pr_strat.close_cloudlb_partial_sma import back_pr_check
 import pandas as pd
 import pickle
 from basic_v1.utils_v2 import *
@@ -23,12 +23,13 @@ if __name__ == "__main__":
     history = False
 
     # ----------- history ver. ----------- #
-    # res_df_name = "candlestick_concated/res_df/%s %s_trix_backi2.xlsx" % (date, symbol)
-    # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
+    # # res_df_name = "candlestick_concated/res_df/%s %s_trix_backi2.xlsx" % (date, symbol)
+    # # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
+    # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_majorst_backi2.xlsx"
     # history = True
 
     # ----------- trade log ver. ----------- #
-    log_name = "1630281780.pkl"
+    log_name = "1630721613.pkl"
 
     #        1. trade_log 의 start ~ end index 만큼 일단 res_df 잘라야함     #
     #        2. log 의 open & close data 를 사용해, back_pr 수익과 비교해야함        #
@@ -127,7 +128,10 @@ if __name__ == "__main__":
                 res_df['real_tp'].loc[pd.to_datetime(t_k)] = t_v[0]
 
     #       span 이 길면 xlsx 저장이 어려울 수 있음 (오래걸림)      #
-    res_df.to_excel("basic_v1/back_pr/back_pr.xlsx", index=True)
+    if history:
+        res_df.to_excel("basic_v1/back_pr/back_pr_history.xlsx", index=True)
+    else:
+        res_df.to_excel("basic_v1/back_pr/back_pr.xlsx", index=True)
 
     print("back_pr.xlsx saved !")
 

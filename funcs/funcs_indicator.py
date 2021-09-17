@@ -41,11 +41,23 @@ def heikinashi(df):
     return ha_df
 
 
+def roc(data, period):
+    roc_ = 100 * (data - data.shift(period)) / data.shift(period)
+
+    return roc_
+
+
+def ema_roc(data, roc_period, period):
+    ema_roc_ = ema(roc(data, roc_period), period)
+
+    return ema_roc_
+
+
 def trix_hist(df, period, multiplier, signal_period):
     triple = ema(ema(ema(df['close'], period), period), period)
 
-    roc = 100 * (triple.diff() / triple)
-    trix = multiplier * roc
+    roc_ = 100 * (triple.diff() / triple)
+    trix = multiplier * roc_
     signal = trix.rolling(signal_period).mean()
 
     hist = trix - signal

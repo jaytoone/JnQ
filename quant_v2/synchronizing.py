@@ -104,6 +104,12 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # # print(df['trix'].tail(15))
     # # quit()
 
+    # ------------ ema_roc ------------ #
+    df['ema_roc'] = ema_roc(df['close'], 13, 9)
+
+    print(df.iloc[:, -3:].tail(20))
+    quit()
+
     #          stochastic           #
     df['stoch'] = stoch(df)
 
@@ -168,8 +174,8 @@ if __name__=="__main__":
     interval2 = "3m"
     interval3 = "5m"
     interval4 = "15m"
-    symbol = "ETHUSDT"
-    # symbol = "NEOUSDT"
+    # symbol = "ETHUSDT"
+    symbol = "NEOUSDT"
 
     # initial = True
     # while 1:

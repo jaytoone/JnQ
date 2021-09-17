@@ -28,7 +28,8 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
 
     # if interval != '1m':
     #       trader 에서 자정 지나면 data 부족해지는 문제로 days >= 2 적용    #
-    # startTime -= a_day
+    if interval == '1d':
+        startTime -= a_day
 
     endTime = datetime.timestamp(pd.to_datetime('{} 23:59:59'.format(end_date))) * 1000
 
@@ -96,7 +97,7 @@ if __name__ == '__main__':
     end_date = '2021-05-17'
     # end_date = '2021-07-03'
     end_date = '2021-07-01'
-    end_date = '2021-08-31'
+    # end_date = '2021-08-31'
     # end_date = '2019-12-01'
     # end_date = None
 
@@ -104,7 +105,7 @@ if __name__ == '__main__':
     # intervals = ['15m', '30m']
     intervals = ['5m', '15m', '30m']
     intervals = ['4h', '1d']
-    intervals = ['30m']
+    # intervals = ['30m']
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
@@ -122,8 +123,12 @@ if __name__ == '__main__':
     #     coin_list = list(f.read())
     with open('ticker_in_futures.pkl', 'rb') as f:
         coin_list = pickle.load(f)
-        # print(coin_list)
-        # quit()
+
+    #       custom list for yearly survey 0701      #
+    coin_list = ['ETCUSDT', 'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
+                 'BCHUSDT']
+    # print(coin_list)
+    # quit()
 
     # coin_list = coin_list[:10]
     # coin_list = ['ETHUSDT']
