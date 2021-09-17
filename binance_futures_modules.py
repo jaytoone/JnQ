@@ -97,10 +97,23 @@ def get_precision(symbol_):
         # print(result.symbols[i].symbol)
         # print(result.symbols[i].pricePrecision)
         # print(result.symbols[i].quantityPrecision)
+        # print(symbols_data[i].symbol, '->', symbols_data[i].pricePrecision, symbols_data[i].quantityPrecision)
         precision_dict[symbols_data[i].symbol] = [symbols_data[i].pricePrecision, symbols_data[i].quantityPrecision]
         # print(precision_dict['BTCUSDT'])
 
     return precision_dict[symbol_]
+
+
+def calc_precision(number):
+
+    precision_ = 0
+    while 1:
+        if number * (10 ** precision_) == int(number * (10 ** precision_)):
+            break
+        else:
+            precision_ += 1
+
+    return precision_
 
 
 def calc_with_precision(data, data_precision, def_type='floor'):
@@ -226,17 +239,29 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
 
         if tp_count == len(tp_list_) - 1:
             quantity = calc_with_precision(remain_qty, quantity_precision)
+            # quantity = calc_with_precision(remain_qty, quantity_precision, def_type='ceil')
 
         else:
             quantity = remain_qty / partial_qty_divider
             quantity = calc_with_precision(quantity, quantity_precision)
 
-            #       남을 qty 가 기준 이하보다 작다면, 모든 remain_qty 로 order 진행    #
-            if remain_qty - quantity < 1 / (10 ** quantity_precision):
-                print('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) :', remain_qty, quantity)
-                quantity = calc_with_precision(remain_qty, quantity_precision)
+        #       1. 남을 qty 가 최소 주분 qty 보다 작고
+        #       2. 반올림 주문 가능한 양이라면, remain_qty 로 order 진행    #
+        if 9 / (10 ** (quantity_precision + 1)) < remain_qty - quantity < 1 / (10 ** quantity_precision):
+            print('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) :', remain_qty, quantity)
+
+            #       Todo        #
+            #        1. calc_with_precision 은 내림 상태라 r_qty 를 온전히 반영하지 못함      #
+            #        2. r_qty - qty < 1 / (10 ** quantity_precision) --> 따라서, ceil 로 반영함
+            # quantity = calc_with_precision(remain_qty, quantity_precision)
+            quantity = calc_with_precision(remain_qty, quantity_precision, def_type='ceil')
 
         print('remain_qty, quantity :', remain_qty, quantity)
+
+        #   Todo    #
+        #    1. 남은 qty 가 최소 주문 qty_precision 보다 작다면, tp order 하지말고 return       #
+        if quantity < 1 / (10 ** quantity_precision):
+            return
 
         #           partial tp             #
         try:
@@ -250,7 +275,6 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
 
             # quit()
 
-            #       Todo        #
             #        1. Quantity error occurs, tp_list_[0] & remain_qty 로 close_order 진행       #
             #        2. 기존 주문에 추가로 주문이 가능하지 cancel order 진행하지 않고 일단, 진행         #
             #        3. e 를 str 로 변환해주지 않으면, argument of type 'BinanceApiException' is not iterable error 가 발생함
@@ -289,10 +313,17 @@ if __name__ == '__main__':
     symbol = 'ETHUSDT'
     close_side = OrderSide.SELL
 
-    result = request_client.get_balance_v2()
+    # result = request_client.get_balance_v2()
+    #
+    # for r in result:
+    #     print(r.availableBalance)
 
-    for r in result:
-        print(r.availableBalance)
+    # print(get_precision('ADAUSDT'))
+    # print(calc_precision(2.2321, ))
+    # print(calc_with_precision(0.23299999999999993, 3, def_type='ceil'))
+    print(9 / (10 ** (3 + 1)) < 0.23289999999999993 - 0.232 < 1 / (10 ** (3)))
+    print(9 / (10 ** (3 + 1)))
+    quit()
 
     # remained_orderId = remaining_order_check(symbol)
     # print(remained_orderId)

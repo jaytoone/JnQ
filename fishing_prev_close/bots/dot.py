@@ -1,4 +1,4 @@
-from fishing_prev_close.long_close_updown import *
+from fishing_prev_close.traders.long_close_updown import *
 
 if __name__=='__main__':
 
