@@ -41,7 +41,7 @@ class ARIMA_Bot:
         try:
             request_client.change_margin_type(symbol=self.symbol, marginType=FuturesMarginType.ISOLATED)
         except Exception as e:
-            print('Error in change_margin_type :', e)
+            print('error in change_margin_type :', e)
         else:
             print('Leverage type --> Isolated')
 
@@ -49,7 +49,7 @@ class ARIMA_Bot:
         try:
             limit_leverage = get_limit_leverage(symbol_=self.symbol)
         except Exception as e:
-            print('Error in get_limit_leverage :', e)
+            print('error in get_limit_leverage :', e)
             quit()
         else:
             print('Limit Leverage :', limit_leverage)
@@ -158,7 +158,7 @@ class ARIMA_Bot:
                         print('~ tp set time : %.5f' % (time.time() - temp_time))
 
                     except Exception as e:
-                        print('Error in arima_profit :', e)
+                        print('error in arima_profit :', e)
                         continue
 
                 if arima_on:
@@ -169,7 +169,7 @@ class ARIMA_Bot:
                     #     realtime_price = get_market_price_v2(self.sub_client)
                     #
                     # except Exception as e:
-                    #     print('Error in get_market_price :', e)
+                    #     print('error in get_market_price :', e)
                     #     continue
 
                     # if realtime_price < pred_close - err_range / 2:
@@ -212,7 +212,7 @@ class ARIMA_Bot:
                     try:
                         ep = get_market_price_v2(self.sub_client)
                     except Exception as e:
-                        print('Error in get_market_price :', e)
+                        print('error in get_market_price :', e)
                 else:
                     #             ep with Limit             #
                     if open_side == OrderSide.BUY:
@@ -230,7 +230,7 @@ class ARIMA_Bot:
                 try:
                     price_precision, quantity_precision = get_precision(self.symbol)
                 except Exception as e:
-                    print('Error in get price & volume precision :', e)
+                    print('error in get price & volume precision :', e)
                     continue
                 else:
                     print('price_precision :', price_precision)
@@ -277,7 +277,7 @@ class ARIMA_Bot:
                 try:
                     request_client.change_initial_leverage(symbol=self.symbol, leverage=leverage)
                 except Exception as e:
-                    print('Error in change_initial_leverage :', e)
+                    print('error in change_initial_leverage :', e)
                 else:
                     print('leverage changed -->', leverage)
 
@@ -313,7 +313,7 @@ class ARIMA_Bot:
                         break
 
                 except Exception as e:
-                    print('Error in get_availableBalance :', e)
+                    print('error in get_availableBalance :', e)
                     print()
                     continue
 
@@ -321,7 +321,8 @@ class ARIMA_Bot:
 
                 #          Get available quantity         #
                 quantity = available_balance / ep * leverage
-                quantity = calc_with_precision(quantity, quantity_precision)
+                quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
+
                 if self.over_balance is not None:
                     print('available_balance (temp) :', available_balance)
                 else:
@@ -341,11 +342,11 @@ class ARIMA_Bot:
                             request_client.post_order(symbol=self.symbol, side=open_side, ordertype=OrderType.MARKET,
                                                       quantity=str(quantity))
                         except Exception as e:
-                            print('Error in Open Order :', e)
+                            print('error in Open Order :', e)
 
                             open_retry_cnt += 1
-                            if 'insufficient' in str(e):
 
+                            if '-2019' in str(e):
                                 try:
                                     max_available_balance = get_availableBalance()
                                     #    예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치    #
@@ -353,12 +354,12 @@ class ARIMA_Bot:
                                     available_balance = max_available_balance * 0.9
                                     #          Get available quantity         #
                                     quantity = available_balance / ep * leverage
-                                    quantity = calc_with_precision(quantity, quantity_precision)
+                                    quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
                                     print('available_balance (temp) :', available_balance)
                                     print('quantity :', quantity)
 
                                 except Exception as e:
-                                    print('Error in get_availableBalance() :', e)
+                                    print('error in get_availableBalance() :', e)
 
                             elif open_retry_cnt > 100:
                                 print('open_retry_cnt over 100')
@@ -383,24 +384,39 @@ class ARIMA_Bot:
                                                                quantity=str(quantity), price=str(ep),
                                                                reduceOnly=False)
                         except Exception as e:
-                            print('Error in Open Order :', e)
+                            print('error in Open Order :', e)
 
-                            #       Todo        #
                             #        1. price precision validation      #
                             if '-4014' in str(e):
                                 try:
                                     realtime_price = get_market_price_v2(self.sub_client)
                                     price_precision = calc_precision(realtime_price)
                                     ep = calc_with_precision(ep, price_precision)
+                                    print('modified price & precision :', ep, price_precision)
 
                                 except Exception as e:
-                                    print('Error in get_market_price :', e)
+                                    print('error in get_market_price :', e)
+
+                                continue
+
+                            #        -1111 : Precision is over the maximum defined for this asset   #
+                            #         = quantity precision error        #
+                            if '-1111' in str(e):
+                                try:
+                                    _, quantity_precision = get_precision(self.symbol)
+                                    quantity = available_balance / ep * leverage
+                                    quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
+                                    print('modified qty & precision :', quantity, quantity_precision)
+
+                                except Exception as e:
+                                    print('error in get modified qty_precision :', e)
 
                                 continue
 
                             open_retry_cnt += 1
-                            if 'insufficient' in str(e):
 
+                            #        -2019 : Margin is insufficient     #
+                            if '-2019' in str(e):
                                 try:
                                     max_available_balance = get_availableBalance()
                                     #    예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치    #
@@ -408,12 +424,12 @@ class ARIMA_Bot:
                                     available_balance = max_available_balance * 0.9
                                     #          Get available quantity         #
                                     quantity = available_balance / ep * leverage
-                                    quantity = calc_with_precision(quantity, quantity_precision)
+                                    quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
                                     print('available_balance (temp) :', available_balance)
                                     print('quantity :', quantity)
 
                                 except Exception as e:
-                                    print('Error in get_availableBalance() :', e)
+                                    print('error in get_availableBalance() :', e)
 
                             elif open_retry_cnt > 100:
                                 print('open_retry_cnt over 100')
@@ -435,7 +451,7 @@ class ARIMA_Bot:
                         # try:
                         #     realtime_price = get_market_price_v2(self.sub_client)
                         # except Exception as e:
-                        #     print('Error in get_market_price :', e)
+                        #     print('error in get_market_price :', e)
                         #     continue
 
                         #          Check order type change condition       #
@@ -446,7 +462,7 @@ class ARIMA_Bot:
                         #         try:
                         #             exec_quantity = get_remaining_quantity(self.symbol)
                         #         except Exception as e:
-                        #             print('Error in exec_quantity check :', e)
+                        #             print('error in exec_quantity check :', e)
                         #             continue
                         #
                         #         if exec_quantity == 0.0:
@@ -461,7 +477,7 @@ class ARIMA_Bot:
                         #         try:
                         #             exec_quantity = get_remaining_quantity(self.symbol)
                         #         except Exception as e:
-                        #             print('Error in exec_quantity check :', e)
+                        #             print('error in exec_quantity check :', e)
                         #             continue
                         #
                         #         if exec_quantity == 0.0:
@@ -477,14 +493,14 @@ class ARIMA_Bot:
                 # try:
                 #     remained_orderId = remaining_order_check(self.symbol)
                 # except Exception as e:
-                #     print('Error in remaining_order_check :', e)
+                #     print('error in remaining_order_check :', e)
 
                 # if remained_orderId is not None:
                 #           regardless to position exist, cancel all open orders       #
                 try:
                     result = request_client.cancel_all_orders(symbol=self.symbol)
                 except Exception as e:
-                    print('Error in cancel remaining open order :', e)
+                    print('error in cancel remaining open order :', e)
 
                 if orderside_changed:
                     first_iter = False
@@ -504,7 +520,7 @@ class ARIMA_Bot:
                 try:
                     exec_quantity = get_remaining_quantity(self.symbol)
                 except Exception as e:
-                    print('Error in exec_quantity check :', e)
+                    print('error in exec_quantity check :', e)
                     continue
                 break
 
@@ -525,7 +541,7 @@ class ARIMA_Bot:
                                     break
 
                             except Exception as e:
-                                print('Error in back-test_Profit :', e)
+                                print('error in back-test_Profit :', e)
 
                         #       init temporary back profit      #
                         back_tmp_profit = 1.0
@@ -570,7 +586,7 @@ class ARIMA_Bot:
                             partial_limit(self.symbol, tp_list, close_side, quantity_precision, partial_qty_divider)
 
                         except Exception as e:
-                            print('Error in partial_limit :', e)
+                            print('error in partial_limit :', e)
                             time.sleep(1)
                             continue
 
@@ -587,7 +603,7 @@ class ARIMA_Bot:
                                 realtime_price = get_market_price_v2(self.sub_client)
 
                             except Exception as e:
-                                print('Error in get_market_price :', e)
+                                print('error in get_market_price :', e)
                                 continue
 
                             print(current_datetime, 'realtime_price :', realtime_price)
@@ -610,7 +626,7 @@ class ARIMA_Bot:
                                 try:
                                     remained_orderId = remaining_order_check(self.symbol)
                                 except Exception as e:
-                                    print('Error in remaining_order_check :', e)
+                                    print('error in remaining_order_check :', e)
                                     continue
 
                                 if remained_orderId is not None:
@@ -618,7 +634,7 @@ class ARIMA_Bot:
                                     try:
                                         result = request_client.cancel_all_orders(symbol=self.symbol)
                                     except Exception as e:
-                                        print('Error in cancel remaining TP Close order :', e)
+                                        print('error in cancel remaining TP Close order :', e)
                                         continue
 
                                 cancel_tp = True
@@ -627,18 +643,18 @@ class ARIMA_Bot:
                             try:
                                 quantity = get_remaining_quantity(self.symbol)
                             except Exception as e:
-                                print('Error in get_remaining_quantity :', e)
+                                print('error in get_remaining_quantity :', e)
                                 continue
 
                             #           Get price, volume precision       #
                             try:
                                 _, quantity_precision = get_precision(self.symbol)
                             except Exception as e:
-                                print('Error in get price & volume precision :', e)
+                                print('error in get price & volume precision :', e)
                             else:
                                 print('quantity_precision :', quantity_precision)
 
-                            quantity = calc_with_precision(quantity, quantity_precision)
+                            quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
                             print('quantity :', quantity)
 
                             #           Close             #
@@ -680,9 +696,9 @@ class ARIMA_Bot:
                                                                        quantity=str(quantity), reduceOnly=True)
 
                             except Exception as e:
-                                print('Error in Close Order :', e)
+                                print('error in Close Order :', e)
 
-                                #       Check Error Message     #
+                                #       Check error Message     #
                                 if 'Quantity less than zero' in str(e):
                                     break
 
@@ -701,7 +717,7 @@ class ARIMA_Bot:
                             try:
                                 quantity = get_remaining_quantity(self.symbol)
                             except Exception as e:
-                                print('Error in get_remaining_quantity :', e)
+                                print('error in get_remaining_quantity :', e)
                                 continue
 
                             if quantity == 0.0:
@@ -729,7 +745,7 @@ class ARIMA_Bot:
                                 break
 
                         except Exception as e:
-                            print('Error in back-test_Profit :', e)
+                            print('error in back-test_Profit :', e)
 
                 if open_side == OrderSide.BUY:
                     calc_tmp_profit = back_df['close'].iloc[-2] / ep - self.trading_fee
@@ -755,7 +771,7 @@ class ARIMA_Bot:
                     income = total_income(self.symbol, start_timestamp, end_timestamp)
                     self.accumulated_income += income
                 except Exception as e:
-                    print('Error in total_income :', e)
+                    print('error in total_income :', e)
 
                 tmp_profit = income / available_balance
                 self.accumulated_profit *= (1 + tmp_profit)

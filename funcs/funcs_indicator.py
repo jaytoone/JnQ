@@ -25,6 +25,15 @@ def ema(data, period, adjust=True):
     return pd.Series(data.ewm(span=period, adjust=adjust).mean())
 
 
+def cloud_bline(df, period):
+
+    h = df['high'].rolling(period).max()
+    l = df['low'].rolling(period).min()
+    avg = (h + l) / 2
+
+    return avg
+
+
 def heikinashi(df):
 
     ha_df = df.copy()
@@ -182,7 +191,7 @@ def fisher_trend(df, column, tc_upper, tc_lower):
     return fisher_trend_df.values
 
 
-def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2):
+def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_uptrend=True):
 
     uptrend = pd.Series(True, index=df.index)
     new_trend = pd.Series(False, index=df.index)
@@ -253,6 +262,9 @@ def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2):
                     ep.iloc[i] = df['high'].iloc[i]
                     reversal_state.iloc[i] = 1
                     uptrend.iloc[i] = True
+
+    if return_uptrend:
+        return sar, uptrend
 
     return sar
 
@@ -405,6 +417,9 @@ def supertrend(df, period, multiplier, cal_st=False):
 
     atr_trend = pd.Series(index=df.index)
     atr_trend.iloc[0] = 0
+
+    #       Todo        #
+    #        이부분을 주석 처리한 이유가 있음
     # atr_trend = np.where(atr_trend.shift(1) == np.nan, atr_trend, atr_trend)
     for i in range(1, len(df)):
         if df['close'].iloc[i] > atr_up[i - 1]:
@@ -418,9 +433,49 @@ def supertrend(df, period, multiplier, cal_st=False):
     if not cal_st:
         return atr_up, atr_down, atr_trend
     else:
-        st = np.where(atr_trend == -1, pd.Series(atr_up), np.nan)
-        st = np.where(atr_trend == 1, pd.Series(atr_down), st)
-        return st
+        # st = np.where(atr_trend == -1, pd.Series(atr_up), np.nan)
+        # st = np.where(atr_trend == 1, pd.Series(atr_down), st)
+        # st = np.where(atr_trend == -1, atr_up, atr_down)
+        return np.where(atr_trend == -1, atr_up, atr_down)
+
+
+# def mmh_st(df, mp1, mp2, pd1=10, pd2=10):   # makemoney_hybrid
+def mmh_st(df, mp1, pd1=10):   # makemoney_hybrid
+
+    hlc3 = (df['high'] + df['low'] + df['close']) / 3
+
+    up1 = hlc3 - (mp1 * atr(df, pd1))
+    # up2 = hlc3 - (mp2 * atr(df, pd2))
+
+    down1 = hlc3 + (mp1 * atr(df, pd1))
+    # down2 = hlc3 + (mp2 * atr(df, pd2))
+
+    # 이전 결과를 recursively 하게 사용하기 때문에 for loop 가 맞을 것임
+    for i in range(1, len(df)):
+        if df['close'].iloc[i - 1] > up1[i - 1]:
+            up1[i] = max(up1[i], up1[i - 1])
+        # if df['close'].iloc[i - 1] > up2[i - 1]:
+        #     up2[i] = max(up2[i], up2[i - 1])
+
+        if df['close'].iloc[i - 1] < down1[i - 1]:
+            down1[i] = min(down1[i], down1[i - 1])
+        # if df['close'].iloc[i - 1] < down2[i - 1]:
+        #     down2[i] = min(down2[i], down2[i - 1])
+
+    trend1 = pd.Series(index=df.index)
+    trend1.iloc[0] = 1
+    for i in range(1, len(df)):
+        if df['close'].iloc[i - 1] > down1[i - 1]:
+            trend1.iloc[i] = 1
+        else:
+            if df['close'].iloc[i] < up1[i - 1]:
+                trend1.iloc[i] = -1
+            else:
+                trend1.iloc[i] = trend1.iloc[i - 1]
+
+    tls = np.where(trend1 == 1, up1, down1)
+
+    return tls
 
 
 def ichimoku(ohlc, tenkan_period=9, kijun_period=26, senkou_period=52, chikou_period=1):

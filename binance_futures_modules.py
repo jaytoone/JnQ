@@ -122,6 +122,8 @@ def calc_with_precision(data, data_precision, def_type='floor'):
         if data_precision > 0:
             if def_type == 'floor':
                 data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
+            elif def_type == 'round':
+                data = float(round(data, data_precision))
             else:
                 data = math.ceil(data * (10 ** data_precision)) / (10 ** data_precision)
         else:

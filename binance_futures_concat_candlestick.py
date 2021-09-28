@@ -105,6 +105,7 @@ if __name__ == '__main__':
     # intervals = ['15m', '30m']
     intervals = ['5m', '15m', '30m']
     intervals = ['4h', '1d']
+    intervals = ['1h']
     # intervals = ['30m']
 
     #       Todo        #
@@ -127,6 +128,7 @@ if __name__ == '__main__':
     #       custom list for yearly survey 0701      #
     coin_list = ['ETCUSDT', 'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
                  'BCHUSDT']
+    # coin_list = ['ETCUSDT']
     # print(coin_list)
     # quit()
 

@@ -29,6 +29,21 @@ pd.set_option('display.max_columns', 2500)
 
 def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False):
 
+    #       mmh_st      #
+    # df['tsl'] = mmh_st(df, 5)
+    # print(df.tail(40))
+    # quit()
+
+    # ----- cloud bline ----- #
+    df['cloud_bline'] = cloud_bline(df, 26)
+    print(df.tail(40))
+    quit()
+
+    #       normal st      #
+    df['st'] = supertrend(df, 5, 6, cal_st=True)
+    print(df.tail(40))
+    quit()
+
     #           supertrend          #
     ha_second_df = heikinashi(second_df)
     # ha_third_df = heikinashi(third_df)
@@ -64,7 +79,7 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # df['middle_line'] = (min_upper + max_lower) / 2
     #
     # #           lucid sar              #
-    # second_df['sar'] = lucid_sar(second_df)
+    second_df['sar'] = lucid_sar(second_df)
     # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['sar1']))
     #
     # # third_df['sar'] = lucid_sar(third_df)
@@ -177,13 +192,13 @@ if __name__=="__main__":
 
     interval = "1m"
     interval2 = "3m"
-    interval2 = "4h"
-    interval2 = "1d"
+    # interval2 = "4h"
+    # interval2 = "1d"
 
     interval3 = "5m"
     interval4 = "15m"
-    # symbol = "ETHUSDT"
-    symbol = "NEOUSDT"
+    symbol = "ETHUSDT"
+    # symbol = "NEOUSDT"
 
     # initial = True
     # while 1:
@@ -191,10 +206,10 @@ if __name__=="__main__":
     df, _ = concat_candlestick(symbol, interval, days=1)
     # print(df.tail())
     # quit()
-    # second_df, _ = concat_candlestick(symbol, interval2, days=1)
+    second_df, _ = concat_candlestick(symbol, interval2, days=1)
     # second_df, _ = concat_candlestick(symbol, interval2, days=3) # >= 30m
     # second_df, _ = concat_candlestick(symbol, interval2, days=10) # for 4h
-    second_df, _ = concat_candlestick(symbol, interval2, days=50) # for 1d
+    # second_df, _ = concat_candlestick(symbol, interval2, days=50) # for 1d
     # print(second_df.tail())
     # quit()
 
