@@ -1,0 +1,56 @@
+{
+  "init_set": {
+    "run": true,
+    "df_log": false,
+    "bar_close_second": 59,
+    "realtime_term": 0.01,
+    "last_index": -2,
+    "symbol": "ETHUSDT",
+    "symbol_changed": false,
+    "interval": "1m",
+    "interval2": "3m",
+    "interval3": "5m",
+    "use_rows": 200,
+    "use_rows2": 100,
+    "use_rows3": 100,
+    "save_stacked_df": false,
+    "stacked_df_exist": true
+  },
+  "ep_set": {
+    "entry_type": "MARKET",
+    "entry_execution_wait": 60,
+    "breakout_qty_ratio": 0.97,
+    "static_ep": 1,
+    "ep_gap": 0.5,
+    "ep_protect_gap": 0.2,
+    "entry_incycle": 0
+  },
+  "out_set": {
+    "out_type": "MARKET",
+    "exit_execution_wait": 60,
+    "close_complete_term": 5,
+    "use_out": 1,
+    "static_out": 1,
+    "hl_out": 1,
+    "price_restoration": 1,
+    "retouch": 0,
+    "retouch_out_period": 500,
+    "second_out": 0,
+    "out_gap": 0.25,
+    "approval_st_gap": 1.5,
+    "second_out_gap": 0.5
+  },
+  "tp_set": {
+    "tp_type": "MARKET",
+    "pgfr": 0.3,
+    "static_tp": 1,
+    "tp_gap": 2.5,
+    "partial_num": 1,
+    "partial_qty_divider": 1.5
+  },
+  "lvrg_set": {
+    "leverage": 1,
+    "static_lvrg": 1,
+    "target_pct": 0.05
+  }
+}

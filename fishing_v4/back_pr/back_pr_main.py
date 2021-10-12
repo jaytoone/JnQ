@@ -1,12 +1,21 @@
 import os
-# from basic_v1.back_pr.back_pr_strat.close_cloudlb import back_pr_check
-from basic_v1.back_pr.back_pr_strat.close_cloudlb_partial import back_pr_check
+# from fishing_v4.back_pr.back_pr_strat.close_cloudlb import back_pr_check
+from fishing_v4.back_pr.back_pr_strat.fishing import back_pr_check
 import pandas as pd
 import pickle
-from basic_v1.utils_v2 import *
+from fishing_v4.utils_v2 import *
 from datetime import datetime
 
+#       Todo        #
+#        1. change upper dir
+
+dir_path = os.path.abspath('./../')
+print("dir_path :", dir_path)
+
 os.chdir("./../..")
+print("os.getcwd() :", os.getcwd())
+
+# quit()
 
 from binance_futures_concat_candlestick import concat_candlestick
 
@@ -21,11 +30,13 @@ if __name__ == "__main__":
 
     show_log = False
     history = False
+    # print("os.getcwd() :", os.getcwd())
 
     # ----------- history ver. ----------- #
     # res_df_name = "candlestick_concated/res_df/%s %s_trix_backi2.xlsx" % (date, symbol)
     # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
-    # history = True
+    res_df_name = "candlestick_concated/res_df/2021-07-01 ADAUSDT_majorst_backi2.xlsx"
+    history = True
 
     # ----------- trade log ver. ----------- #
     log_name = "1630281780.pkl"
@@ -37,7 +48,8 @@ if __name__ == "__main__":
     #        3. plot_check 도 고려     #
     if not history:
 
-        with open("basic_v1/trade_log/" + log_name, "rb") as dict_f:
+        # with open("basic_v1/trade_log/" + log_name, "rb") as dict_f:
+        with open(dir_path + "/trade_log/" + log_name, "rb") as dict_f:
             trade_log = pickle.load(dict_f)
             # print(trade_log)
             # print(list(trade_log.items())[1:])
@@ -81,6 +93,7 @@ if __name__ == "__main__":
         # new_df_real = new_df
         # new_df_real = new_df.loc[start_datetime:]
         res_df = res_df_.loc[start_datetime:end_datetime].copy()
+        print("sync_check phase done !")
 
         # print(new_df_real.tail())
         # quit()
@@ -88,12 +101,12 @@ if __name__ == "__main__":
     #       3. directly load res_df     #
     if history:
         res_df = pd.read_excel(res_df_name, index_col=0)
-        print("sync_check phase done !")
+        print("read_excel phase done !")
 
     #       Todo        #
     #        adjust proper strategy     #
     #        check pr        #
-    ep_tp_list, trade_list = back_pr_check(res_df)
+    ep_tp_list, trade_list = back_pr_check(res_df, dir_path)
 
     #       insert open & close data to res_df --> plot_check 를 고려하면, res_df 에 삽입하는게 좋을것         "
     res_df['back_ep'] = np.nan
@@ -127,7 +140,8 @@ if __name__ == "__main__":
                 res_df['real_tp'].loc[pd.to_datetime(t_k)] = t_v[0]
 
     #       span 이 길면 xlsx 저장이 어려울 수 있음 (오래걸림)      #
-    res_df.to_excel("basic_v1/back_pr/back_pr.xlsx", index=True)
+    # res_df.to_excel("basic_v1/back_pr/back_pr.xlsx", index=True)
+    res_df.to_excel(dir_path + "/back_pr/back_pr.xlsx", index=True)
 
     print("back_pr.xlsx saved !")
 

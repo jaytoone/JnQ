@@ -16,8 +16,9 @@ if __name__ == '__main__':
     concat_type = 'new'
     # symbol = 'DOTUSDT'
 
-    with open('future_coin.p', 'rb') as f:
-        coin_list = pickle.load(f)
+    # with open('future_coin.p', 'rb') as f:
+    #     coin_list = pickle.load(f)
+    coin_list = ['BTC']
 
     for coin in coin_list:
 
@@ -29,7 +30,7 @@ if __name__ == '__main__':
             df2 = pd.read_excel('candlestick_concated/%s/2021-05-17 %s.xlsx' % (interval, symbol), index_col=0)
 
             df3 = df1.append(df2)
-            df3 = df3[~df3.index.duplicated(keep='first')]
+            df3 = df3[~df3.index.duplicated(keep='last')]
             df3.to_excel('candlestick_concated/%s/2021-05-17 %s.xlsx' % (interval, symbol))
 
             print(symbol, 'concatenated !')

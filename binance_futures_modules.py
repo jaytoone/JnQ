@@ -7,6 +7,7 @@ import pandas as pd
 
 
 def get_limit_leverage(symbol_):
+    
     result = request_client.get_leverage_bracket()
     leverage_dict = dict()
     for i in range(len(result)):
@@ -19,14 +20,19 @@ def get_limit_leverage(symbol_):
 
 
 #               Get Balance V2              #
-def get_availableBalance():
-    result = request_client.get_balance_v2()
+def get_availableBalance(asset_type='USDT'):
+
+    results = request_client.get_balance_v2()
 
     # print(dir(result[0]))
-    # for i in range(len(result)):
-    #     print(result[i].availableBalance)
+    for result in results:
 
-    return calc_with_precision(result[1].availableBalance, 2)
+        # --- check asset : USDT --- #
+        if result.asset == asset_type:
+        # print(result.availableBalance)
+            available_asset = result.availableBalance
+
+    return calc_with_precision(available_asset, 2)
 
 
 # result = request_client.get_balance_v2()
@@ -300,7 +306,7 @@ def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_
     return
 
 
-def get_trade_history_info(symbol_):
+def get_trade_history_info(symbol_):    # pnl != percentage
     result = request_client.get_account_trades(symbol=symbol_)
     # for i in range(len(result)):
     #     print(result[i].price, result[i].realizedPnl)
@@ -315,10 +321,20 @@ if __name__ == '__main__':
     symbol = 'ETHUSDT'
     close_side = OrderSide.SELL
 
+    # result = request_client.get_income_history(symbol=symbol)
+    # PrintMix.print_data(result)
+
+    # result = get_trade_history_info(symbol)
+    # PrintMix.print_data(result)
+
+    # print(result)
+
     # result = request_client.get_balance_v2()
-    #
+    # PrintMix.print_data(result)
+    print(get_availableBalance())
     # for r in result:
     #     print(r.availableBalance)
+    quit()
 
     # print(get_precision('ADAUSDT'))
     # print(calc_precision(2.2321, ))

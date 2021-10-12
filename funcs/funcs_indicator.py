@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-
+from funcs.funcs_for_trade import to_lower_tf
 
 def nz(x, y=0):
     # print(x)
@@ -128,6 +128,47 @@ def bb_width(df, period, multiple):
     return upper, lower, bbw
 
 
+def st_price_line(ltf_df, htf_df, interval):
+
+    ha_htf_df = heikinashi(htf_df)
+
+    st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
+    st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
+    st1_trend, st2_trend, st3_trend = 'ST1_Trend_%s' % interval, 'ST2_Trend_%s' % interval, 'ST3_Trend_%s' % interval
+
+    htf_df[st1_up], htf_df[st1_down], htf_df[st1_trend] = supertrend(htf_df, 10, 2)
+    htf_df[st2_up], htf_df[st2_down], htf_df[st2_trend] = supertrend(ha_htf_df, 7, 2)
+    htf_df[st3_up], htf_df[st3_down], htf_df[st3_trend] = supertrend(ha_htf_df, 7, 2.5)
+    # print(df.head(20))
+    # quit()
+
+    # startTime = time.time()
+
+    ltf_df = ltf_df.join(
+        pd.DataFrame(index=ltf_df.index, data=to_lower_tf(ltf_df, htf_df, [i for i in range(-9, 0, 1)]),
+                     columns=[st1_up, st1_down, st1_trend
+                         , st2_up, st2_down, st2_trend
+                         , st3_up, st3_down, st3_trend]))
+
+    return ltf_df
+
+
+def bb_line(ltf_df, htf_df, interval):
+
+    bb_upper = 'bb_upper_%s' % interval
+    bb_lower = 'bb_lower_%s' % interval
+
+    if interval != '1m':
+        htf_df[bb_upper], htf_df[bb_lower], _ = bb_width(htf_df, 20, 1)
+        ltf_df = ltf_df.join(
+            pd.DataFrame(index=ltf_df.index, data=to_lower_tf(ltf_df, htf_df, [i for i in range(-2, 0, 1)]),
+                         columns=[bb_upper, bb_lower]))
+    else:
+        ltf_df[bb_upper], ltf_df[bb_lower], _ = bb_width(ltf_df, 20, 1)
+
+    return ltf_df
+
+
 def fisher(df, period):
     hl2 = (df['high'] + df['low']) / 2
     high_ = hl2.rolling(period).max()
@@ -154,6 +195,63 @@ def fisher(df, period):
     fish.iloc[0] = np.nan
 
     return fish
+
+
+def st_level(ltf_df, interval, st_gap_multiple):
+    st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
+    st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
+
+    min_upper, max_lower = 'min_upper_%s' % interval, 'max_lower_%s' % interval
+    st_base = 'st_base_%s' % interval
+    st_gap = 'st_gap_%s' % interval
+    st_upper, st_lower = 'st_upper_%s' % interval, 'st_lower_%s' % interval
+    st_upper2, st_lower2 = 'st_upper2_%s' % interval, 'st_lower2_%s' % interval
+    st_upper3, st_lower3 = 'st_upper3_%s' % interval, 'st_lower3_%s' % interval
+
+    ltf_df[min_upper] = np.min(ltf_df[[st1_up, st2_up, st3_up]], axis=1)
+    ltf_df[max_lower] = np.max(ltf_df[[st1_down, st2_down, st3_down]], axis=1)
+
+    ltf_df[st_base] = (ltf_df[min_upper] + ltf_df[max_lower]) / 2
+    ltf_df[st_gap] = (ltf_df[min_upper] - ltf_df[st_base]) * st_gap_multiple
+
+    # --------------- levels --------------- #
+    ltf_df[st_upper] = ltf_df[st_base] + ltf_df[st_gap]
+    ltf_df[st_lower] = ltf_df[st_base] - ltf_df[st_gap]
+
+    ltf_df[st_upper2] = ltf_df[st_base] + ltf_df[st_gap] * 2
+    ltf_df[st_lower2] = ltf_df[st_base] - ltf_df[st_gap] * 2
+
+    ltf_df[st_upper3] = ltf_df[st_base] + ltf_df[st_gap] * 3
+    ltf_df[st_lower3] = ltf_df[st_base] - ltf_df[st_gap] * 3
+
+    return ltf_df
+
+
+def bb_level(ltf_df, interval, bb_gap_multiple):
+    bb_upper = 'bb_upper_%s' % interval
+    bb_lower = 'bb_lower_%s' % interval
+    bb_base = 'bb_base_%s' % interval
+
+    ltf_df[bb_base] = (ltf_df[bb_upper] + ltf_df[bb_lower]) / 2
+
+    bb_gap = 'bb_gap_%s' % interval
+    bb_upper2 = 'bb_upper2_%s' % interval
+    bb_lower2 = 'bb_lower2_%s' % interval
+    bb_upper3 = 'bb_upper3_%s' % interval
+    bb_lower3 = 'bb_lower3_%s' % interval
+
+    ltf_df[bb_gap] = (ltf_df[bb_upper] - ltf_df[bb_base]) * bb_gap_multiple
+
+    ltf_df[bb_upper] = ltf_df[bb_base] + ltf_df[bb_gap]
+    ltf_df[bb_lower] = ltf_df[bb_base] - ltf_df[bb_gap]
+
+    ltf_df[bb_upper2] = ltf_df[bb_base] + ltf_df[bb_gap] * 2
+    ltf_df[bb_lower2] = ltf_df[bb_base] - ltf_df[bb_gap] * 2
+
+    ltf_df[bb_upper3] = ltf_df[bb_base] + ltf_df[bb_gap] * 3
+    ltf_df[bb_lower3] = ltf_df[bb_base] - ltf_df[bb_gap] * 3
+
+    return ltf_df
 
 
 def fisher_trend(df, column, tc_upper, tc_lower):

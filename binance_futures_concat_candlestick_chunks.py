@@ -49,7 +49,7 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
             # print(result.tail())
             # quit()
 
-            assert len(df) != 0, "Candlestick Data Doesn't Exist"
+            assert len(df) != 0, "len(df) == 0"
 
             if day_cnt == 0:
                 sum_df = df
@@ -64,7 +64,7 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
                 time.sleep(timesleep)
 
         except Exception as e:
-            print('Error in get_candlestick_data :', e)
+            print('error in get_candlestick_data :', e)
 
             if len(df) == 0:
                 # quit()
@@ -73,7 +73,8 @@ def concat_candlestick(symbol, interval, days, end_date=None, show_process=False
     # end_date = str(datetime.fromtimestamp(endTime / 1000)).split(' ')[0]
     # print(len(sum_df[~sum_df.index.duplicated(keep='first')]))
 
-    return sum_df[~sum_df.index.duplicated(keep='first')], end_date
+    # keep = 'last' 로 해야 중복기준 최신 df 를 넣는건데, 왜 first 로 해놓은거지
+    return sum_df[~sum_df.index.duplicated(keep='last')], end_date
 
 
 if __name__ == '__main__':

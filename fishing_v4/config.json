@@ -7,12 +7,12 @@
  },
  "ORDER": {
   "use_rows": 200,
-  "entry_type": "LIMIT",
+  "entry_type": "MARKET",
   "entry_execution_wait": 60,
   "breakout_qty_ratio": 0.97,
   "exit_execution_wait": 60,
   "tp_type": "LIMIT",
-  "sl_type": "LIMIT",
+  "sl_type": "MARKET",
   "df_log": false
  },
  "AI": {

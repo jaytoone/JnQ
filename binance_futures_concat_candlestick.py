@@ -61,7 +61,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
             # print(result.tail())
             # quit()
 
-            assert len(df) != 0, "candlestick data doesn't exist"
+            assert len(df) != 0, "len(df) == 0"
 
             if day_cnt == 0:
                 sum_df = df
@@ -85,28 +85,23 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
     # end_date = str(datetime.fromtimestamp(endTime / 1000)).split(' ')[0]
     # print(len(sum_df[~sum_df.index.duplicated(keep='first')]))
 
-    return sum_df[~sum_df.index.duplicated(keep='first')], end_date
+    # keep = 'last' 로 해야 중복기준 최신 df 를 넣는건데, 왜 first 로 해놓은거지
+    return sum_df[~sum_df.index.duplicated(keep='last')], end_date
 
 
 if __name__ == '__main__':
 
     days = 300
-    # days = 1
-    # days = 62
-    # days = 21
-    end_date = '2021-05-17'
-    # end_date = '2021-07-03'
+    days = 105
+
     end_date = '2021-07-01'
-    # end_date = '2021-08-31'
-    # end_date = '2019-12-01'
+    end_date = '2021-10-10'
     # end_date = None
 
     intervals = ['1m', '3m', '5m', '15m', '30m']
-    # intervals = ['15m', '30m']
-    intervals = ['5m', '15m', '30m']
-    intervals = ['4h', '1d']
-    intervals = ['1h']
-    # intervals = ['30m']
+    # intervals = ['5m', '15m', '30m']
+    # intervals = ['4h', '1d']
+    # intervals = ['1h']
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
@@ -128,7 +123,7 @@ if __name__ == '__main__':
     #       custom list for yearly survey 0701      #
     coin_list = ['ETCUSDT', 'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
                  'BCHUSDT']
-    # coin_list = ['ETCUSDT']
+    # coin_list = ['ETHUSDT']
     # print(coin_list)
     # quit()
 

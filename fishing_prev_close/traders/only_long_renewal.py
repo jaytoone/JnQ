@@ -374,6 +374,7 @@ class ARIMA_Bot:
 
                 else:
 
+                    code_1111 = 0
                     while 1:    # <-- loop for complete open order
                         #       If Limit Order used, Set Order Execute Time & Check Remaining Order         #
                         try:
@@ -402,8 +403,14 @@ class ARIMA_Bot:
                             #        -1111 : Precision is over the maximum defined for this asset   #
                             #         = quantity precision error        #
                             if '-1111' in str(e):
+                                code_1111 += 1
                                 try:
                                     _, quantity_precision = get_precision(self.symbol)
+                                    if code_1111 % 3 == 0:
+                                        quantity_precision -= 1
+                                    elif code_1111 % 3 == 2:
+                                        quantity_precision += 1
+
                                     quantity = available_balance / ep * leverage
                                     quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
                                     print('modified qty & precision :', quantity, quantity_precision)

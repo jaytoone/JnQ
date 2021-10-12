@@ -14,7 +14,7 @@ pd.set_option('display.max_rows', 2500)
 pd.set_option('display.max_columns', 2500)
 
 
-def sync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show_msg=False,
+def ync_check(df, second_df, third_df=None, fourth_df=None, fifth_df=None, show_msg=False,
                sar_on=False, cloud_on=False, macd_on=False, trix_on=False):
 
     #           supertrend          #
