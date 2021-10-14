@@ -35,9 +35,10 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # quit()
 
     # ----- bb ----- #
-    # df['bb_upper'], df['bb_lower'], _ = bb_width(df, 20, 0.5)
-    # print(df.tail(40))
-    # quit()
+    df = bb_line(df, None, '1m')
+    df = bb_level(df, '1m', 1)
+    print(df.iloc[:, -6:].tail(40))
+    quit()
 
     # ----- cloud bline ----- #
     # df['cloud_bline'] = cloud_bline(df, 26)

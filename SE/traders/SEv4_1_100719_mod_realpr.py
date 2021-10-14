@@ -949,6 +949,7 @@ class Trader:
                             #           1. order side should be opposite side to the open          #
                             #           2. reduceOnly = 'true'       #
                             code_1111 = 0
+                            code_2022 = 0
                             while 1:  # <-- loop for complete close order
                                 try:
                                     #       Todo        #
@@ -993,7 +994,12 @@ class Trader:
 
                                     #       check error codes     #
                                     #       Todo        #
-                                    #        1. quantity less than zero ?
+                                    #       -2022 ReduceOnly Order is rejected      #
+                                    if '-2022' in str(e):
+                                        code_2022 = 1
+                                        break
+
+                                    #        -4003 quantity less than zero ?
                                     if '-4003' in str(e):
                                         print('error code check (-4003) :', str(e))
                                         break
@@ -1038,14 +1044,14 @@ class Trader:
                             else:
                                 time.sleep(1)   # time for qty consumed
 
-                            #               check remaining close_remain_quantity             #
-                            try:
-                                close_remain_quantity = get_remaining_quantity(init_set.symbol)
-                            except Exception as e:
-                                print('error in get_remaining_quantity :', e)
-                                continue
+                            # #               check remaining close_remain_quantity             #
+                            # try:
+                            #     close_remain_quantity = get_remaining_quantity(init_set.symbol)
+                            # except Exception as e:
+                            #     print('error in get_remaining_quantity :', e)
+                            #     continue
 
-                            if close_remain_quantity == 0.0:
+                            if close_remain_quantity == 0.0 or code_2022:
                                 print('market close order executed')
                                 break
 

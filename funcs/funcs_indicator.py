@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from funcs.funcs_for_trade import to_lower_tf
 
+
 def nz(x, y=0):
     # print(x)
     if np.isnan(x):
@@ -117,6 +118,7 @@ def cct_bbo(df, period, smooth):
 
 
 def bb_width(df, period, multiple):
+
     basis = df['close'].rolling(period).mean()
     # print(stdev(df, period))
     # quit()
@@ -198,6 +200,7 @@ def fisher(df, period):
 
 
 def st_level(ltf_df, interval, st_gap_multiple):
+
     st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
     st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
 
@@ -228,6 +231,7 @@ def st_level(ltf_df, interval, st_gap_multiple):
 
 
 def bb_level(ltf_df, interval, bb_gap_multiple):
+
     bb_upper = 'bb_upper_%s' % interval
     bb_lower = 'bb_lower_%s' % interval
     bb_base = 'bb_base_%s' % interval
@@ -240,10 +244,14 @@ def bb_level(ltf_df, interval, bb_gap_multiple):
     bb_upper3 = 'bb_upper3_%s' % interval
     bb_lower3 = 'bb_lower3_%s' % interval
 
+    # bb_width_ = 'bb_width_%s' % interval
+
     ltf_df[bb_gap] = (ltf_df[bb_upper] - ltf_df[bb_base]) * bb_gap_multiple
 
     ltf_df[bb_upper] = ltf_df[bb_base] + ltf_df[bb_gap]
     ltf_df[bb_lower] = ltf_df[bb_base] - ltf_df[bb_gap]
+
+    # ltf_df[bb_width_] = (ltf_df[bb_upper] - ltf_df[bb_lower]) / ltf_df[bb_base]
 
     ltf_df[bb_upper2] = ltf_df[bb_base] + ltf_df[bb_gap] * 2
     ltf_df[bb_lower2] = ltf_df[bb_base] - ltf_df[bb_gap] * 2
@@ -252,6 +260,14 @@ def bb_level(ltf_df, interval, bb_gap_multiple):
     ltf_df[bb_lower3] = ltf_df[bb_base] - ltf_df[bb_gap] * 3
 
     return ltf_df
+
+
+def bbwp(bb_gap, st_gap, ma_period=10):
+
+    bbwp_ = bb_gap / st_gap
+    bbwp_ma = bbwp_.rolling(ma_period).mean()
+
+    return bbwp_, bbwp_ma
 
 
 def fisher_trend(df, column, tc_upper, tc_lower):

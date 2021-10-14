@@ -37,7 +37,7 @@
     "retouch": 0,
     "retouch_out_period": 500,
     "second_out": 0,
-    "out_gap": 0.25,
+    "out_gap": 0.0,
     "approval_st_gap": 1.5,
     "second_out_gap": 0.5
   },

@@ -21,6 +21,7 @@ __pycache__/
 #binance_futures_arima*.py
 #arima*.py
 *.xlsx
+*.zip
 
 # ppt
 *.pptx
