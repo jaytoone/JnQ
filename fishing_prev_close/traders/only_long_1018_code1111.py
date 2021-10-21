@@ -3,9 +3,9 @@ import os
 # os.chdir(switch_path)
 os.chdir("../../")
 
-from binance_futures_modules import *
+from binance_funcs.binance_futures_modules import *
 from funcs.funcs_for_trade import *
-from binance_futures_concat_candlestick import concat_candlestick
+from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 from fishing_prev_close.utils import arima_profit, calc_train_days, tp_update, interval_to_min
 
@@ -403,26 +403,11 @@ class ARIMA_Bot:
                             #        -1111 : Precision is over the maximum defined for this asset   #
                             #         = quantity precision error        #
                             if '-1111' in str(e):
-                                code_1111 += 1
-                                try:
-                                    _, quantity_precision = get_precision(self.symbol)
-                                    if code_1111 % 5 == 0:
-                                        quantity_precision -= 1
-                                    elif code_1111 % 5 == 2:
-                                        quantity_precision += 1
-                                    elif code_1111 % 5 == 3:
-                                        quantity_precision += 2
-                                    elif code_1111 % 5 == 4:
-                                        quantity_precision -= 2
-
-                                    quantity = available_balance / ep * leverage
-                                    quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
-                                    print('modified qty & precision :', quantity, quantity_precision)
-
-                                except Exception as e:
-                                    print('error in get modified qty_precision :', e)
-
-                                continue
+                                code_1111 = 1
+                                print("ep :", ep)
+                                print("quantity :", quantity)
+                                print()
+                                break
 
                             open_retry_cnt += 1
 
@@ -453,7 +438,10 @@ class ARIMA_Bot:
                     #       Set Order Execute Time & Check breakout_qty_ratio         #
                     while 1:
 
-                        #       1분전까지 체결 대기     #
+                        if code_1111:
+                            break
+
+                        #       wait interval ends     #
                         if datetime.now().timestamp() + order.entry_execution_wait > datetime.timestamp(stacked_df.index[-1]):
                             break
 
@@ -538,6 +526,10 @@ class ARIMA_Bot:
             if exec_quantity == 0.0:
 
                 while 1:
+
+                    if code_1111:
+                        break
+
                     #        체결량 없을시 연속적인 open order 를 방지해야한다        #
                     if datetime.now().timestamp() > datetime.timestamp(stacked_df.index[-1]) + fundamental.close_complete_term:  # close 데이터가 완성되기 위해 충분한 시간
 

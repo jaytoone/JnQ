@@ -1,21 +1,34 @@
 import pandas as pd
 from datetime import datetime
 import numpy as np
-from binance_futures_concat_candlestick import concat_candlestick
-from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
+# from binance_futures_concat_candlestick import concat_candlestick
+# from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
+from funcs.funcs_for_trade import intmin
 import os
 import pickle
 import math
+from pathlib import Path
+import json
+from easydict import EasyDict
 
+with open(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\SE\config\configv15.json", 'r') as cfg:
+    config = EasyDict(json.load(cfg))
 
-def test_func():
-    data = 3123.235
-    data_precision = 2
+print(config.init_set.interval_list)
+print(config.init_set.row_list)
+# print((datetime.now().second))
+# print(Path(__file__).stem) #myfile
+# print(Path(__file__).name)
+# print(os.path.basename(__file__))
 
-    data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
-    return
-
-print(test_func())
+# def test_func():
+#     data = 3123.235
+#     data_precision = 2
+#
+#     data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
+#     return
+#
+# print(test_func())
 
 # with open("./basic_v1/trade_log/" + "1626831963.pkl", "rb") as dict_f:
 #     trade_log = pickle.load(dict_f)

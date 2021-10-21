@@ -14,7 +14,7 @@ from binance_futures_modules import *
 # from funcs.funcs_for_trade import *
 from binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
-from SE.utils.v4_1_noninv_101414 import *
+from SE.utils.utilsv4_1_longinv_101523 import *
 import pickle
 
 #       Todo        #
@@ -136,27 +136,39 @@ class Trader:
 
                         try:
 
-                            new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, limit=config.init_set.use_rows,
-                                                            timesleep=0.2, show_process=False)
-                            #       Todo        #
-                            #        1. 모든 inveral 의 마지막 time_index 은 현재시간보다 커야함 (최신이라면)        #
-                            if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
-                                # load_new_df = True
-                                continue
+                            if config.init_set.interval is not None:
+                                new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, limit=config.init_set.use_rows,
+                                                                timesleep=0.2, show_process=False)
+                                #       Todo        #
+                                #        1. 모든 inveral 의 마지막 time_index 은 현재시간보다 커야함 (최신이라면)        #
+                                if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
+                                    # load_new_df = True
+                                    continue
+                                else:
+                                    new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
+                            else:
+                                new_df = None
 
-                            new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2, days=1, limit=config.init_set.use_rows2,
-                                                             timesleep=0.2)
-                            if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
-                                continue
+                            if config.init_set.interval2 is not None:
+                                new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2, days=1, limit=config.init_set.use_rows2,
+                                                                 timesleep=0.2)
+                                if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                    continue
+                                else:
+                                    new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
+                            else:
+                                new_df2 = None
 
-                            new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=1, limit=config.init_set.use_rows3,
-                                                             timesleep=0.2)
-                            if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
-                                continue
+                            if config.init_set.interval3 is not None:
+                                new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=1, limit=config.init_set.use_rows3,
+                                                                 timesleep=0.2)
+                                if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
+                                    continue
+                                else:
+                                    new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
+                            else:
+                                new_df3 = None
 
-                            new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
-                            new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
-                            new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
                             print("complete load_df execution time :", datetime.now())
 
                         except Exception as e:
@@ -308,15 +320,27 @@ class Trader:
 
                 #             ep limit & market open             #
                 #       Todo        #
-                #        note, if inversion adjusted
+                #        check, if inversion adjusted
                 if open_side == OrderSide.BUY:
+
                     ep = res_df['long_ep'].iloc[config.init_set.last_index]
-                    out = res_df['long_out'].iloc[config.init_set.last_index]
-                    tp = res_df['long_tp'].iloc[config.init_set.last_index]
+                    if config.ep_set.long_inversion:
+                        open_side = OrderSide.SELL  # side change (inversion)
+                        out = res_df['long_tp'].iloc[config.init_set.last_index]
+                        tp = res_df['long_out'].iloc[config.init_set.last_index]
+                    else:
+                        out = res_df['long_out'].iloc[config.init_set.last_index]
+                        tp = res_df['long_tp'].iloc[config.init_set.last_index]
                 else:
+
                     ep = res_df['short_ep'].iloc[config.init_set.last_index]
-                    out = res_df['short_out'].iloc[config.init_set.last_index]
-                    tp = res_df['short_tp'].iloc[config.init_set.last_index]
+                    if config.ep_set.short_inversion:
+                        open_side = OrderSide.BUY
+                        out = res_df['short_tp'].iloc[config.init_set.last_index]
+                        tp = res_df['short_out'].iloc[config.init_set.last_index]
+                    else:
+                        out = res_df['short_out'].iloc[config.init_set.last_index]
+                        tp = res_df['short_tp'].iloc[config.init_set.last_index]
 
                 leverage = config.lvrg_set.leverage
 
@@ -491,19 +515,24 @@ class Trader:
 
                 # -------- execution wait time -------- #
                 if config.ep_set.entry_type == OrderType.MARKET:
-                    #       enough time for open_quantity consumed      #
-                    time.sleep(60 - config.init_set.bar_close_second)
+
+                    #           market : prevent close at open bar           #
+                    #           + enough time for open_quantity consumed
+                    while 1:
+                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                            break
+                        else:
+                            time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
+
                 else:
                     #       limit only, order execution wait time & check breakout_qty_ratio         #
                     while 1:
 
-                        #       temporary : 해당 종가까지 체결 대기       #
-                        #       datetime.timestamp(res_df.index[-1]) -> 2분이면, 01:59:999 이런식으로 될것
+                        #       temporary - wait bar close       #
                         if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
-                            # if datetime.now().timestamp() + config.ep_set.entry_execution_wait > datetime.timestamp(res_df.index[-1]):
                             break
-
-                        time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
+                        else:
+                            time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
 
                 #           1. when, open order time expired or executed              #
                 #           2. regardless to position exist, cancel all open orders       #
@@ -528,12 +557,8 @@ class Trader:
             if available_balance < self.min_balance:
                 continue
 
-            #       Todo        #
-            #        " limit order 가 reduceOnly 인지 잘 확인해야함 "       #
-            #        일단은, time_gap 을 두어, executed quantity 검사의 정확도를 높임      #
-            #        예외 발생시, 2차 검사 phase 생성     #
-            #        ==> 혹시, 여기도 time index 에 종속적인 걸까       #
-            time.sleep(1)
+            #       여기도 time index 에 종속적일 거란 가설 --> 따라서 time.sleep 불필요       #
+            # time.sleep(1)
 
             while 1:  # <-- for complete exec_open_quantity function
                 try:
@@ -570,15 +595,6 @@ class Trader:
                 else:
                     close_side = OrderSide.BUY
 
-                #           market : prevent close at open bar           #
-                #           Todo            #
-                #            1. 더 정확히하려면, time_index confirmation 진행
-                if config.ep_set.entry_type == OrderType.MARKET:
-                    time.sleep(60 - datetime.now().second)
-
-                # if config.tp_set.static_tp and config.out_set.static_out:
-                #     load_new_df2 = 0    # dynamic out / tp 인 경우만 진행
-                # else:
                 load_new_df2 = 1
                 limit_tp = 0
                 remained_tp_id = None
@@ -598,25 +614,40 @@ class Trader:
                         if load_new_df2:    # dynamic_out & tp phase
     
                             try:
-                                new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, limit=config.init_set.use_rows,
-                                                                timesleep=0.2)
-                                if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
-                                    continue
-    
-                                new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2, days=1, limit=config.init_set.use_rows2,
-                                                                 timesleep=0.2)
-                                if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
-                                    continue
-    
-                                new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=1, limit=config.init_set.use_rows3,
-                                                                 timesleep=0.2)
-                                if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
-                                    continue
-    
-                                new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
-                                new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
-                                new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
-    
+                                if config.init_set.interval is not None:
+                                    new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval,
+                                                                    days=1, limit=config.init_set.use_rows,
+                                                                    timesleep=0.2, show_process=False)
+                                    if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
+                                        # load_new_df = True
+                                        continue
+                                    else:
+                                        new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
+                                else:
+                                    new_df = None
+
+                                if config.init_set.interval2 is not None:
+                                    new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2,
+                                                                     days=1, limit=config.init_set.use_rows2,
+                                                                     timesleep=0.2)
+                                    if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                        continue
+                                    else:
+                                        new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
+                                else:
+                                    new_df2 = None
+
+                                if config.init_set.interval3 is not None:
+                                    new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3,
+                                                                     days=1, limit=config.init_set.use_rows3,
+                                                                     timesleep=0.2)
+                                    if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
+                                        continue
+                                    else:
+                                        new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
+                                else:
+                                    new_df3 = None
+
                                 res_df = sync_check(new_df, new_df2, new_df3)
 
                                 try:
@@ -1065,12 +1096,12 @@ class Trader:
                             else:
                                 time.sleep(1)   # time for qty consumed
 
-                            # #               check remaining close_remain_quantity             #
-                            # try:
-                            #     close_remain_quantity = get_remaining_quantity(config.init_set.symbol)
-                            # except Exception as e:
-                            #     print('error in get_remaining_quantity :', e)
-                            #     continue
+                            #       check remaining close_remain_quantity - after market order      #
+                            try:
+                                close_remain_quantity = get_remaining_quantity(config.init_set.symbol)
+                            except Exception as e:
+                                print('error in get_remaining_quantity :', e)
+                                continue
 
                             if close_remain_quantity == 0.0 or code_2022:
                                 print('market close order executed')

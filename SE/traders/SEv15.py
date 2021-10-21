@@ -1,7 +1,5 @@
 import os
 
-# switch_path = "C:/Users/Lenovo/PycharmProjects/Project_System_Trading/Rapid_Ascend"
-
 dir_path = os.path.abspath('./../')
 print("dir_path :", dir_path)
 
@@ -10,12 +8,13 @@ os.chdir("../../")
 # print("os.getcwd() :", os.getcwd())
 # quit()
 
-from binance_futures_modules import *
+from binance_funcs.binance_futures_modules import *
 # from funcs.funcs_for_trade import *
-from binance_futures_concat_candlestick import concat_candlestick
+from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
-from SE.utils.v4_1_noninv_101414 import *
+from SE.utils.utilsv4_1_longinv_101523 import *
 import pickle
+from pathlib import Path
 
 #       Todo        #
 #        1. check upper dir
@@ -44,13 +43,19 @@ class Trader:
 
         print('# ----------- Trader v1 ----------- #')
 
-        #        1. save open / close data to dict     #
-        #        2. dict name = str(datetime.now().timestamp()).split(".")[0]      #
-        #        3. key = str(timeindex), value = [ep, ordertype] | [tp (=exit_price)]
-        #        4. logger_name is the trade start time index        #
-        # logger_name = "%s.pkl" % str(datetime.now()).split(".")[0]  # <-- invalid arguments
-        logger_name = "%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
+        logger_name = "/%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
         trade_log = {}
+
+        log_dir = Path(__file__).stem
+        trade_log_path = os.path.join(dir_path, "trade_log", log_dir)
+        df_log_path = os.path.join(dir_path, "df_log", log_dir)
+
+        try:
+            os.makedirs(trade_log_path, exist_ok=True)
+            os.makedirs(df_log_path, exist_ok=True)
+
+        except Exception as e:
+            print("error in makedirs for logger :", e)
 
         config_path = '/config/' + self.config_name
 
@@ -127,7 +132,7 @@ class Trader:
                     #       Todo        #
                     #        1. future work : makedirs
                     trade_log["last_trading_time"] = str(datetime.now())
-                    with open(dir_path + "/trade_log/" + logger_name, "wb") as dict_f:
+                    with open(trade_log_path + logger_name, "wb") as dict_f:
                         pickle.dump(trade_log, dict_f)
 
                     temp_time = time.time()
@@ -136,27 +141,36 @@ class Trader:
 
                         try:
 
-                            new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, limit=config.init_set.use_rows,
-                                                            timesleep=0.2, show_process=False)
-                            #       Todo        #
-                            #        1. 모든 inveral 의 마지막 time_index 은 현재시간보다 커야함 (최신이라면)        #
-                            if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
-                                # load_new_df = True
-                                continue
+                            if config.init_set.interval is not None:
+                                new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, limit=config.init_set.use_rows,
+                                                                timesleep=0.2, show_process=False)
+                                if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
+                                    continue
+                                else:
+                                    new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
+                            else:
+                                new_df = None
 
-                            new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2, days=1, limit=config.init_set.use_rows2,
-                                                             timesleep=0.2)
-                            if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
-                                continue
+                            if config.init_set.interval2 is not None:
+                                new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2, days=1, limit=config.init_set.use_rows2,
+                                                                 timesleep=0.2)
+                                if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                    continue
+                                else:
+                                    new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
+                            else:
+                                new_df2 = None
 
-                            new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=1, limit=config.init_set.use_rows3,
-                                                             timesleep=0.2)
-                            if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
-                                continue
+                            if config.init_set.interval3 is not None:
+                                new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=1, limit=config.init_set.use_rows3,
+                                                                 timesleep=0.2)
+                                if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
+                                    continue
+                                else:
+                                    new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
+                            else:
+                                new_df3 = None
 
-                            new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
-                            new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
-                            new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
                             print("complete load_df execution time :", datetime.now())
 
                         except Exception as e:
@@ -210,7 +224,8 @@ class Trader:
 
                     try:
                         #       latency 를 줄이기 위해서는, input df length 를 조절해야함     #
-                        res_df = sync_check(new_df, third_df=new_df2, fourth_df=new_df3)
+                        # res_df = sync_check(new_df, third_df=new_df2, fourth_df=new_df3)
+                        res_df = new_df
                         print('~ sync_check time : %.5f' % (time.time() - temp_time))
 
                     except Exception as e:
@@ -239,15 +254,10 @@ class Trader:
                         #        1. future work : makedirs
                         if config.init_set.df_log:
                             excel_name = str(datetime.now()).replace(":", "").split(".")[0]
-                            res_df.to_excel(dir_path + "/df_log/%s.xlsx" % excel_name)
+                            res_df.to_excel(df_log_path + "/%s.xlsx" % excel_name)
 
-                        mr_score = mr_check(res_df, config)
-
-                        # --------- score summation --------- #
-                        if mr_score == config.ep_set.short_mr_score:
-                            open_side = OrderSide.SELL  # inversion
-                        elif mr_score == -config.ep_set.short_mr_score:
-                            open_side = OrderSide.BUY
+                        # open_side = mr_check(res_df, config)
+                        open_side = OrderSide.BUY
 
                     except Exception as e:
                         print("error in mr_check phase :", e)
@@ -258,13 +268,18 @@ class Trader:
                 check_entry_sec = datetime.now().second
                 if open_side is not None:
 
-                    #       Todo        #
                     #        1. const. open market second
                     if check_entry_sec > config.ep_set.check_entry_sec:
                         open_side = None
                         print("check_entry_sec :", check_entry_sec)
                         print()
                         continue    # mr_score_check = False 라서 open_side None phase 로 감
+
+                    #        1. init fee        #
+                    if config.ep_set.entry_type == "MARKET":
+                        fee = config.init_set.market_fee
+                    else:
+                        fee = config.init_set.limit_fee
 
                     break
 
@@ -308,15 +323,27 @@ class Trader:
 
                 #             ep limit & market open             #
                 #       Todo        #
-                #        note, if inversion adjusted
+                #        check, if inversion adjusted
                 if open_side == OrderSide.BUY:
+
                     ep = res_df['long_ep'].iloc[config.init_set.last_index]
-                    out = res_df['long_out'].iloc[config.init_set.last_index]
-                    tp = res_df['long_tp'].iloc[config.init_set.last_index]
+                    if config.ep_set.long_inversion:
+                        open_side = OrderSide.SELL  # side change (inversion)
+                        out = res_df['long_tp'].iloc[config.init_set.last_index]
+                        tp = res_df['long_out'].iloc[config.init_set.last_index]
+                    else:
+                        out = res_df['long_out'].iloc[config.init_set.last_index]
+                        tp = res_df['long_tp'].iloc[config.init_set.last_index]
                 else:
+
                     ep = res_df['short_ep'].iloc[config.init_set.last_index]
-                    out = res_df['short_out'].iloc[config.init_set.last_index]
-                    tp = res_df['short_tp'].iloc[config.init_set.last_index]
+                    if config.ep_set.short_inversion:
+                        open_side = OrderSide.BUY
+                        out = res_df['short_tp'].iloc[config.init_set.last_index]
+                        tp = res_df['short_out'].iloc[config.init_set.last_index]
+                    else:
+                        out = res_df['short_out'].iloc[config.init_set.last_index]
+                        tp = res_df['short_tp'].iloc[config.init_set.last_index]
 
                 leverage = config.lvrg_set.leverage
 
@@ -444,22 +471,12 @@ class Trader:
                         #        -1111 : Precision is over the maximum defined for this asset   #
                         #         = quantity precision error        #
                         if '-1111' in str(e):
-                            code_1111 += 1
-                            try:
-                                _, quantity_precision = get_precision(config.init_set.symbol)
-                                if code_1111 % 3 == 0:
-                                    quantity_precision -= 1
-                                elif code_1111 % 3 == 2:
-                                    quantity_precision += 1
 
-                                quantity = available_balance / ep * leverage
-                                quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
-                                print('modified qty & precision :', quantity, quantity_precision)
-
-                            except Exception as e:
-                                print('error in get modified qty_precision :', e)
-
-                            continue
+                            code_1111 = 1
+                            print("ep :", ep)
+                            print("quantity :", quantity)
+                            print()
+                            break
 
                         open_retry_cnt += 1
 
@@ -489,21 +506,30 @@ class Trader:
                         print('open order enlisted :', datetime.now())
                         break
 
+                if code_1111:
+                    break
+
                 # -------- execution wait time -------- #
                 if config.ep_set.entry_type == OrderType.MARKET:
-                    #       enough time for open_quantity consumed      #
-                    time.sleep(60 - config.init_set.bar_close_second)
+
+                    #           market : prevent close at open bar           #
+                    #           + enough time for open_quantity consumed
+                    while 1:
+                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                            break
+                        else:
+                            time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
+
                 else:
                     #       limit only, order execution wait time & check breakout_qty_ratio         #
                     while 1:
 
-                        #       temporary : 해당 종가까지 체결 대기       #
-                        #       datetime.timestamp(res_df.index[-1]) -> 2분이면, 01:59:999 이런식으로 될것
-                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
-                            # if datetime.now().timestamp() + config.ep_set.entry_execution_wait > datetime.timestamp(res_df.index[-1]):
+                        #       temporary - wait htf bar close       #
+                        # if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                        if intmin(datetime.now()) % config.ep_set.htf_entry == config.ep_set.htf_entry - 1:
                             break
-
-                        time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
+                        else:
+                            time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
 
                 #           1. when, open order time expired or executed              #
                 #           2. regardless to position exist, cancel all open orders       #
@@ -528,13 +554,6 @@ class Trader:
             if available_balance < self.min_balance:
                 continue
 
-            #       Todo        #
-            #        " limit order 가 reduceOnly 인지 잘 확인해야함 "       #
-            #        일단은, time_gap 을 두어, executed quantity 검사의 정확도를 높임      #
-            #        예외 발생시, 2차 검사 phase 생성     #
-            #        ==> 혹시, 여기도 time index 에 종속적인 걸까       #
-            time.sleep(1)
-
             while 1:  # <-- for complete exec_open_quantity function
                 try:
                     exec_open_quantity = get_remaining_quantity(config.init_set.symbol)
@@ -558,7 +577,7 @@ class Trader:
                 entry_timeindex = str(res_df.index[-2])
                 trade_log[entry_timeindex] = [ep, open_side, "open"]
 
-                with open(dir_path + "/trade_log/" + logger_name, "wb") as dict_f:
+                with open(trade_log_path + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
                     print("entry trade_log dumped !")
 
@@ -570,15 +589,6 @@ class Trader:
                 else:
                     close_side = OrderSide.BUY
 
-                #           market : prevent close at open bar           #
-                #           Todo            #
-                #            1. 더 정확히하려면, time_index confirmation 진행
-                if config.ep_set.entry_type == OrderType.MARKET:
-                    time.sleep(60 - datetime.now().second)
-
-                # if config.tp_set.static_tp and config.out_set.static_out:
-                #     load_new_df2 = 0    # dynamic out / tp 인 경우만 진행
-                # else:
                 load_new_df2 = 1
                 limit_tp = 0
                 remained_tp_id = None
@@ -598,26 +608,41 @@ class Trader:
                         if load_new_df2:    # dynamic_out & tp phase
     
                             try:
-                                new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, limit=config.init_set.use_rows,
-                                                                timesleep=0.2)
-                                if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
-                                    continue
-    
-                                new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2, days=1, limit=config.init_set.use_rows2,
-                                                                 timesleep=0.2)
-                                if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
-                                    continue
-    
-                                new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=1, limit=config.init_set.use_rows3,
-                                                                 timesleep=0.2)
-                                if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
-                                    continue
-    
-                                new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
-                                new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
-                                new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
-    
-                                res_df = sync_check(new_df, new_df2, new_df3)
+                                if config.init_set.interval is not None:
+                                    new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval,
+                                                                    days=1, limit=config.init_set.use_rows,
+                                                                    timesleep=0.2, show_process=False)
+                                    if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
+                                        # load_new_df = True
+                                        continue
+                                    else:
+                                        new_df = new_df_.iloc[-config.init_set.use_rows:].copy()
+                                else:
+                                    new_df = None
+
+                                if config.init_set.interval2 is not None:
+                                    new_df2_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval2,
+                                                                     days=1, limit=config.init_set.use_rows2,
+                                                                     timesleep=0.2)
+                                    if datetime.timestamp(new_df2_.index[-1]) < datetime.now().timestamp():
+                                        continue
+                                    else:
+                                        new_df2 = new_df2_.iloc[-config.init_set.use_rows2:].copy()
+                                else:
+                                    new_df2 = None
+
+                                if config.init_set.interval3 is not None:
+                                    new_df3_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3,
+                                                                     days=1, limit=config.init_set.use_rows3,
+                                                                     timesleep=0.2)
+                                    if datetime.timestamp(new_df3_.index[-1]) < datetime.now().timestamp():
+                                        continue
+                                    else:
+                                        new_df3 = new_df3_.iloc[-config.init_set.use_rows3:].copy()
+                                else:
+                                    new_df3 = None
+
+                                res_df = sync_check(new_df, third_df=new_df2, fourth_df=new_df3)
 
                                 try:
                                     res_df = enlist_epouttp(res_df, config)
@@ -793,6 +818,7 @@ class Trader:
                                 else:
                                     tp_exec_dict[res_df.index[-2]] = [tp]
                                 print("tp_exec_dict :", tp_exec_dict)
+
                                 limit_done = 1
                                 break
 
@@ -835,43 +861,52 @@ class Trader:
                             if config.out_set.hl_out:
                                 realtime_price = get_market_price_v2(self.sub_client)
 
+                            np_timeidx = np.array(list(map(lambda x: intmin(x), new_df_.index)))
+
                             # ---------- out & tp check ---------- #
                             if open_side == OrderSide.BUY:
 
                                 #       long hl_out       #
-                                if config.out_set.hl_out:
-                                    if realtime_price <= out:  # hl_out
-                                        market_close_on = True
-                                        log_tp = out
-                                        print("out :", out)
+                                if config.out_set.use_out:
+                                    if config.out_set.hl_out:
+                                        if realtime_price <= out:  # hl_out
+                                            market_close_on = True
+                                            log_tp = out
+                                            print("out :", out)
 
-                                #       long close_out       #
-                                else:
-                                    if new_df_['close'].iloc[config.init_set.last_index] <= out:
-                                        market_close_on = True
-                                        log_tp = new_df_['close'].iloc[config.init_set.last_index]
-                                        print("out :", out)
+                                    #       long close_out       #
+                                    else:
+                                        if new_df_['close'].iloc[config.init_set.last_index] <= out:
+                                            market_close_on = True
+                                            log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                            print("out :", out)
 
                                 #       long market tp       #
-                                if new_df_['close'].iloc[config.init_set.last_index] >= tp:
+                                    #       by tp line      #
+                                # if new_df_['close'].iloc[config.init_set.last_index] >= tp:
+                                #     log_tp = new_df_['close'].iloc[config.init_set.last_index]
+
+                                    #       timestamp checked forhead - limit exec_wait      #
+                                if datetime.now().second >= 55:
                                     market_close_on = True
-                                    log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                    log_tp = new_df_['close'].iloc[config.init_set.last_index + 1]
                                     print("tp :", tp)
 
                             else:
-                                #       short hl_out      #
-                                if config.out_set.hl_out:
-                                    if realtime_price >= out:
-                                        market_close_on = True
-                                        log_tp = out
-                                        print("out :", out)
+                                if config.out_set.use_out:
+                                    #       short hl_out      #
+                                    if config.out_set.hl_out:
+                                        if realtime_price >= out:
+                                            market_close_on = True
+                                            log_tp = out
+                                            print("out :", out)
 
-                                #       short close_out     #
-                                else:
-                                    if new_df_['close'].iloc[config.init_set.last_index] >= out:
-                                        market_close_on = True
-                                        log_tp = new_df_['close'].iloc[config.init_set.last_index]
-                                        print("out :", out)
+                                    #       short close_out     #
+                                    else:
+                                        if new_df_['close'].iloc[config.init_set.last_index] >= out:
+                                            market_close_on = True
+                                            log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                            print("out :", out)
 
                                 #       short market tp      #
                                 if new_df_['close'].iloc[config.init_set.last_index] <= tp:
@@ -883,6 +918,7 @@ class Trader:
                                 if config.out_set.hl_out:
                                     print("realtime_price :", realtime_price)
                                 print("market_close_on is True")
+
                                 # --- log tp --- #
                                 tp_exec_dict[new_df_.index[-2]] = [log_tp]
                                 print("tp_exec_dict :", tp_exec_dict)
@@ -909,6 +945,7 @@ class Trader:
 
                     #   all limit close executed     #
                     if limit_done:
+                        fee += config.init_set.limit_fee
                         break
 
                     # if load_new_df2:    # new_df 와 dynamic limit_tp reorder 가 필요한 경우
@@ -919,6 +956,8 @@ class Trader:
 
                     #               market close phase - get market signal               #
                     else:   # market_close_on = 1
+
+                        fee += config.init_set.market_fee
 
                         remain_tp_canceled = False  # 미체결 limit tp 존재가능함
                         while 1:  # <--- This loop for out close & complete close
@@ -1065,12 +1104,12 @@ class Trader:
                             else:
                                 time.sleep(1)   # time for qty consumed
 
-                            # #               check remaining close_remain_quantity             #
-                            # try:
-                            #     close_remain_quantity = get_remaining_quantity(config.init_set.symbol)
-                            # except Exception as e:
-                            #     print('error in get_remaining_quantity :', e)
-                            #     continue
+                            #       check remaining close_remain_quantity - after market order      #
+                            try:
+                                close_remain_quantity = get_remaining_quantity(config.init_set.symbol)
+                            except Exception as e:
+                                print('error in get_remaining_quantity :', e)
+                                continue
 
                             if close_remain_quantity == 0.0 or code_2022:
                                 print('market close order executed')
@@ -1088,22 +1127,9 @@ class Trader:
                 #       total_income() function confirming -> wait close confirm       #
                 while 1:
 
-                    # if config.tp_set.tp_type == OrderType.LIMIT:
-                    #     lastest_close_timeindex = res_df.index[-1]
-                    # else:
                     lastest_close_timeindex = new_df_.index[-1]
 
                     if datetime.now().timestamp() > datetime.timestamp(lastest_close_timeindex):
-                        # try:
-                        #     back_df, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval, days=1, timesleep=0.2)
-                        #
-                        #     #       realtime candlestick confirmation       #
-                        #     if datetime.timestamp(back_df.index[-1]) > datetime.now().timestamp():
-                        #         break
-                        #
-                        # except Exception as e:
-                        #     print('error in back-test profit :', e)
-
                         break
 
                 # ---------- back_pr calculation ---------- #
@@ -1156,14 +1182,14 @@ class Trader:
                     r_qty -= temp_qty
 
                     if open_side == OrderSide.SELL:
-                        calc_tmp_profit += (ep / real_tp - config.init_set.fee - 1) * temp_qty
-                        # calc_tmp_profit += ep / real_tp - config.init_set.fee
+                        calc_tmp_profit += (ep / real_tp - fee - 1) * temp_qty
+                        # calc_tmp_profit += ep / real_tp - fee
                     else:
-                        calc_tmp_profit += (real_tp / ep - config.init_set.fee - 1) * temp_qty
+                        calc_tmp_profit += (real_tp / ep - fee - 1) * temp_qty
 
                     print("real_tp :", real_tp)
                     print("ep :", ep)
-                    print("config.init_set.fee :", config.init_set.fee)
+                    print("fee :", fee)
                     print("temp_qty :", temp_qty)
 
                     #            save exit data         #
@@ -1172,7 +1198,7 @@ class Trader:
                     # trade_log[exit_timeindex] = [real_tp, "close"]
                     trade_log[k_ts] = [real_tp, "close"]
 
-                with open(dir_path + "/trade_log/" + logger_name, "wb") as dict_f:
+                with open(trade_log_path + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
                     print("exit trade_log dumped !")
 
@@ -1191,7 +1217,7 @@ class Trader:
                     else:
                         break
 
-                tmp_profit = income / real_balance
+                tmp_profit = income / real_balance * leverage
                 self.accumulated_profit *= (1 + tmp_profit)
                 self.calc_accumulated_profit *= 1 + (calc_tmp_profit - 1) * leverage
                 print('temporary profit : %.3f (%.3f) %%' % (tmp_profit * 100, (calc_tmp_profit - 1) * leverage * 100))

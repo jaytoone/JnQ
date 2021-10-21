@@ -1,11 +1,11 @@
 # import pybithumb
+# from datetime import datetime
+# import os
+# from scipy import stats
+# from asq.initiators import query
+# from sklearn.preprocessing import MaxAbsScaler
 import numpy as np
 import pandas as pd
-from datetime import datetime
-import os
-from scipy import stats
-# from asq.initiators import query
-from sklearn.preprocessing import MaxAbsScaler
 import time
 
 
@@ -27,207 +27,6 @@ def transh_hour(realtime, numb):
 def transh_min(realtime, numb):
     Minute = realtime[numb].split(':')[1]
     return int(Minute)
-
-
-# print(transh_min(-1))
-# def transh_fluc(Coin):
-#     try:
-#         TransH = pybithumb.transaction_history(Coin)
-#         TransH = TransH['data']
-#         Realtime = query(TransH).select(lambda item: item['transaction_date'].split(' ')[1]).to_list()
-#
-#         # 거래 활발한지 검사
-#         if (transh_hour(Realtime, -1) - transh_hour(Realtime, 0)) < 0:
-#             if 60 + (transh_min(Realtime, -1) - transh_min(Realtime, 0)) > 30:
-#                 return 0, 0
-#         elif 60 * (transh_hour(Realtime, -1) - transh_hour(Realtime, 0)) + (
-#                 transh_min(Realtime, -1) - transh_min(Realtime, 0)) > 30:
-#             return 0, 0
-#
-#         # 1분 동안의 거래 이력을 조사하는 루프, 0 - 59 와 같은 음수처리를 해주어야한다.
-#         i = 1
-#         while True:
-#             i += 1
-#             if i > len(Realtime):
-#                 m = i
-#                 break
-#             # 음수 처리
-#             if (transh_min(Realtime, -1) - transh_min(Realtime, -i)) < 0:
-#                 if (60 + transh_min(Realtime, -1) - transh_min(Realtime, -i)) > 1:
-#                     m = i - 1
-#                     break
-#             elif (transh_min(Realtime, -1) - transh_min(Realtime, -i)) > 1:
-#                 m = i - 1
-#                 break
-#
-#         # Realtime = query(TransH[-i:]).select(lambda item: item['transaction_date'].split(' ')[1]).to_list()
-#         Price = list(map(float, query(TransH[-m:]).select(lambda item: item['price']).to_list()))
-#
-#         # print(Realtime)
-#         # print(Price)
-#         fluc = max(Price) / min(Price)
-#         if TransH[-1]['type'] == 'ask':
-#             fluc = -fluc
-#         return fluc, min(Price)
-#
-#     except Exception as e:
-#         print("Error in transh_fluc :", e)
-#         return 0, 0
-#
-#
-# def realtime_transaction(Coin, display=5):
-#     Transaction_history = pybithumb.transaction_history(Coin)
-#     Realtime = query(Transaction_history['data'][-display:]).select(
-#         lambda item: item['transaction_date'].split(' ')[1]).to_list()
-#     Realtime_Price = list(
-#         map(float, query(Transaction_history['data'][-display:]).select(lambda item: item['price']).to_list()))
-#     Realtime_Volume = list(
-#         map(float, query(Transaction_history['data'][-display:]).select(lambda item: item['units_traded']).to_list()))
-#
-#     print("##### 실시간 체결 #####")
-#     print("{:^10} {:^10} {:^20}".format('시간', '가격', '거래량'))
-#     for i in reversed(range(display)):
-#         print("%-10s %10.2f %20.3f" % (Realtime[i], Realtime_Price[i], Realtime_Volume[i]))
-#     return
-#
-#
-# def realtime_hogachart(Coin, display=3):
-#     Hogachart = pybithumb.get_orderbook(Coin)
-#
-#     print("##### 실시간 호가창 #####")
-#     print("{:^10} {:^20}".format('가격', '거래량'))
-#     for i in reversed(range(display)):
-#         print("%10.2f %20.3f" % (Hogachart['asks'][i]['price'], Hogachart['asks'][i]['quantity']))
-#     print('-' * 30)
-#     for j in range(display):
-#         print("%10.2f %20.3f" % (Hogachart['bids'][j]['price'], Hogachart['bids'][j]['quantity']))
-#
-#
-# def realtime_volume(Coin):
-#     Transaction_history = pybithumb.transaction_history(Coin)
-#     Realtime_Volume = query(Transaction_history['data']).where(lambda item: item['type'] == 'bid').select(
-#         lambda item: item['units_traded']).to_list()
-#     Realtime_Volume = sum(list(map(float, Realtime_Volume)))
-#     return Realtime_Volume
-#
-#
-# def realtime_volume_ratio(Coin):
-#     Transaction_history = pybithumb.transaction_history(Coin)
-#     Realtime_bid = query(Transaction_history['data']).where(lambda item: item['type'] == 'bid').select(
-#         lambda item: item['units_traded']).to_list()
-#     Realtime_ask = query(Transaction_history['data']).where(lambda item: item['type'] == 'ask').select(
-#         lambda item: item['units_traded']).to_list()
-#     Realtime_bid = sum(list(map(float, Realtime_bid)))
-#     Realtime_ask = sum(list(map(float, Realtime_ask)))
-#     Realtime_Volume_Ratio = Realtime_bid / Realtime_ask
-#     return Realtime_Volume_Ratio
-#
-#
-# def topcoinlist(Date):
-#     temp = []
-#     dir = 'C:/Users/장재원/OneDrive/Hacking/CoinBot/ohlcv/'
-#     ohlcv_list = os.listdir(dir)
-#
-#     for file in ohlcv_list:
-#         if file.find(Date) is not -1:  # 해당 파일이면 temp[i] 에 넣겠다.
-#             filename = os.path.splitext(file)
-#             temp.append(filename[0].split(" ")[1])
-#     return temp
-#
-#
-# def get_ma_min(Coin):
-#     df = pybithumb.get_ohlcv(Coin, "KRW", 'minute1')
-#
-#     df['MA20'] = df['close'].rolling(20).mean()
-#
-#     DatetimeIndex = df.axes[0]
-#     period = 20
-#     if inthour(DatetimeIndex[-1]) - inthour(DatetimeIndex[-period]) < 0:
-#         if 60 + (intmin(DatetimeIndex[-1]) - intmin(DatetimeIndex[-period])) > 30:
-#             return 0
-#     elif 60 * (inthour(DatetimeIndex[-1]) - inthour(DatetimeIndex[-period])) + intmin(DatetimeIndex[-1]) - intmin(
-#             DatetimeIndex[-period]) > 30:
-#         return 0
-#     slope, intercept, r_value, p_value, stderr = stats.linregress([i for i in range(period)], df.MA20[-period:])
-#
-#     return slope
-#
-#
-# def get_ma20_min(Coin):
-#     df = pybithumb.get_ohlcv(Coin, "KRW", 'minute1')
-#
-#     maxAbsScaler = MaxAbsScaler()
-#
-#     df['MA20'] = df['close'].rolling(20).mean()
-#     MA_array = np.array(df['MA20']).reshape(len(df.MA20), 1)
-#     maxAbsScaler.fit(MA_array)
-#     scaled_MA = maxAbsScaler.transform(MA_array)
-#
-#     period = 5
-#     slope, intercept, r_value, p_value, stderr = stats.linregress([i for i in range(period)], scaled_MA[-period:])
-#
-#     return slope
-#
-#
-# def get_obv_min(Coin):
-#     df = pybithumb.get_ohlcv(Coin, "KRW", "minute1")
-#
-#     obv = [0] * len(df.index)
-#     for m in range(1, len(df.index)):
-#         if df['close'].iloc[m] > df['close'].iloc[m - 1]:
-#             obv[m] = obv[m - 1] + df['volume'].iloc[m]
-#         elif df['close'].iloc[m] == df['close'].iloc[m - 1]:
-#             obv[m] = obv[m - 1]
-#         else:
-#             obv[m] = obv[m - 1] - df['volume'].iloc[m]
-#     df['OBV'] = obv
-#
-#     # 24시간의 obv를 잘라서 box 높이를 만들어주어야한다.
-#     DatetimeIndex = df.axes[0]
-#     boxheight = [0] * len(df.index)
-#     whaleincome = [0] * len(df.index)
-#     for m in range(len(df.index)):
-#         # 24시간 시작행 찾기, obv 데이터가 없으면 stop
-#         n = m
-#         while True:
-#             n -= 1
-#             if n < 0:
-#                 n = 0
-#                 break
-#             if inthour(DatetimeIndex[m]) - inthour(DatetimeIndex[n]) < 0:
-#                 if 60 - (intmin(DatetimeIndex[m]) - intmin(DatetimeIndex[n])) >= 60 * 24:
-#                     break
-#             elif 60 * (inthour(DatetimeIndex[m]) - inthour(DatetimeIndex[n])) + intmin(DatetimeIndex[m]) - intmin(
-#                     DatetimeIndex[n]) >= 60 * 24:
-#                 break
-#         obv_trim = obv[n:m]
-#         if len(obv_trim) != 0:
-#             boxheight[m] = max(obv_trim) - min(obv_trim)
-#             if obv[m] - min(obv_trim) != 0:
-#                 whaleincome[m] = abs(max(obv_trim) - obv[m]) / abs(obv[m] - min(obv_trim))
-#
-#     df['BoxHeight'] = boxheight
-#     df['Whaleincome'] = whaleincome
-#
-#     period = 0
-#     while True:
-#         period += 1
-#         if period >= len(DatetimeIndex):
-#             break
-#         if inthour(DatetimeIndex[-1]) - inthour(DatetimeIndex[-period]) < 0:
-#             if 60 + (intmin(DatetimeIndex[-1]) - intmin(DatetimeIndex[-period])) >= 10:
-#                 break
-#         elif 60 * (inthour(DatetimeIndex[-1]) - inthour(DatetimeIndex[-period])) + intmin(DatetimeIndex[-1]) - intmin(
-#                 DatetimeIndex[-period]) >= 10:
-#             break
-#
-#     slope, intercept, r_value, p_value, stderr = stats.linregress([i for i in range(period)], df.OBV[-period:])
-#     if period < 3:
-#         df['Whaleincome'].iloc[-1], slope = 0, 0
-#     else:
-#         slope = slope / df['BoxHeight'].iloc[-1]
-#
-#     return df['Whaleincome'].iloc[-1], slope
 
 
 def GetHogaunit(Hoga):
@@ -532,6 +331,37 @@ def to_higher_candlestick_v2(first_df, interval):
     # quit()
 
     return htf_df_copy
+
+
+def interval_to_min(interval):
+    if interval == '15m':
+        int_minute = 15
+    elif interval == '30m':
+        int_minute = 30
+    elif interval == '1h':
+        int_minute = 60
+    elif interval == '4h':
+        int_minute = 240
+
+    return int_minute
+
+
+def calc_train_days(interval, use_rows):
+    if interval == '15m':
+        data_amt = 96
+    elif interval == '30m':
+        data_amt = 48
+    elif interval == '1h':
+        data_amt = 24
+    elif interval == '4h':
+        data_amt = 6
+    else:
+        print('interval out of range')
+        quit()
+
+    days = int(use_rows / data_amt) + 1
+
+    return days
 
 
 def get_precision_by_price(price):
