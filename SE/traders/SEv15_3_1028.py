@@ -25,10 +25,9 @@ from pathlib import Path
 
 class Trader:
 
-    def __init__(self, initial_asset, utils_lib, config_name):
+    def __init__(self, utils_lib, config_name):
 
         #           static platform variables        #
-        self.initial_asset = initial_asset
         self.utils = utils_lib
         self.config_name = config_name
 
@@ -148,6 +147,7 @@ class Trader:
                             for itv_i, interval_ in enumerate(config.init_set.interval_list):
 
                                 if interval_ != "None":
+
                                     new_df_, _ = concat_candlestick(config.init_set.symbol, interval_,
                                                                     days=1,
                                                                     limit=config.init_set.row_list[itv_i],
@@ -373,10 +373,19 @@ class Trader:
                     #          define start asset          #
                     if self.accumulated_income == 0.0:
 
-                        available_balance = self.initial_asset  # USDT
+                        available_balance = config.init_set.initial_asset  # USDT
 
                     else:
-                        available_balance += income
+                        if config.init_set.asset_changed:
+                            available_balance = config.init_set.initial_asset
+
+                            #       asset_changed -> 0      #
+                            config.init_set.asset_changed = 0
+
+                            with open(dir_path + config_path, 'w') as cfg:
+                                json.dump(config, cfg, indent=2)
+                        else:
+                            available_balance += income
 
                 #          get availableBalance          #
                 try:
@@ -516,8 +525,9 @@ class Trader:
                     #       limit only, order execution wait time & check breakout_qty_ratio         #
                     while 1:
 
-                        #       temporary - wait bar close       #
-                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                        #       temporary - wait htf bar close       #
+                        # if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                        if intmin(datetime.now()) % config.ep_set.htf_entry == config.ep_set.htf_entry - 1:
                             break
                         else:
                             time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
@@ -867,9 +877,14 @@ class Trader:
                                             print("out :", out)
 
                                 #       long market tp       #
-                                if new_df_['close'].iloc[config.init_set.last_index] >= tp:
+                                    #       by tp line      #
+                                # if new_df_['close'].iloc[config.init_set.last_index] >= tp:
+                                #     log_tp = new_df_['close'].iloc[config.init_set.last_index]
+
+                                    #       timestamp checked forhead - limit exec_wait      #
+                                if datetime.now().second >= 55:
                                     market_close_on = True
-                                    log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                    log_tp = new_df_['close'].iloc[config.init_set.last_index + 1]
                                     print("tp :", tp)
 
                             else:

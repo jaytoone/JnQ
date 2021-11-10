@@ -30,9 +30,10 @@ __pycache__/
 *.h5
 
 
-# Exclude Folder
+# excluded directories
 df_log/
 trade_log/
+legacy/
 #back_pr/
 
 test_set/

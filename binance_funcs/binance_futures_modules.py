@@ -321,6 +321,7 @@ def get_trade_history_info(symbol_):    # pnl != percentage
 
 
 if __name__ == '__main__':
+
     tp_list = [91.8, 91.7, 91.65]
     partial_qty_divider = 1.5
     quantity_precision = 1
@@ -334,8 +335,10 @@ if __name__ == '__main__':
     # print(total_income(symbol))
     # print(get_precision(symbol))
 
-    info = request_client.futures_exchange_info()
-    PrintMix.print_data(info)
+    print(remaining_order_check(symbol))
+
+    # info = request_client.futures_exchange_info()
+    # PrintMix.print_data(info)
     quit()
 
     # if info['symbols'][0]['pair'] == tradingPairs[i]:

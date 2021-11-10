@@ -6,16 +6,16 @@ pwd = os.getcwd()
 switch_path = os.path.dirname(pwd)
 os.chdir(switch_path)
 
-from binance_f import RequestClient
-from binance_f.model import *
-from binance_f.constant.test import *
-from binance_f.base.printobject import *
+# from binance_f import RequestClient
+# from binance_f.model import *
+# from binance_f.constant.test import *
+# from binance_f.base.printobject import *
 
-from binance_futures_concat_candlestick import concat_candlestick
+from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
 
 import matplotlib.pyplot as plt
 
-from funcs.funcs_for_trade import *
+# from funcs.funcs_for_trade import *
 from funcs.funcs_indicator import *
 import mpl_finance as mf
 
@@ -35,10 +35,17 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # quit()
 
     # ----- bb ----- #
-    df = bb_line(df, None, '1m')
-    df = bb_level(df, '1m', 1)
-    print(df.iloc[:, -6:].tail(40))
+    # df = bb_line(df, None, '1m')
+    # df = bb_level(df, '1m', 1)
+    # print(df.iloc[:, -6:].tail(40))
+    # quit()
+
+    # ----- dc ----- #
+    df = dc_line(df, None, '1m')
+    df = dc_level(df, '1m', 1)
+    print(df.iloc[:, -8:].tail(40))
     quit()
+
 
     # ----- cloud bline ----- #
     # df['cloud_bline'] = cloud_bline(df, 26)

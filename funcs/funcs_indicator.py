@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from funcs.funcs_for_trade import to_lower_tf
+from funcs.funcs_for_trade import to_lower_tf, intmin
 
 
 def nz(x, y=0):
@@ -93,6 +93,27 @@ def tozero(fst, snd):
     return result
 
 
+def ffill(arr):
+    arr = np.array(arr)
+    mask = np.isnan(arr)
+    # print(mask.shape)
+    # print(type(arr))
+    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+    np.maximum.accumulate(idx, axis=1, out=idx)
+    # print("idx :", idx)
+    out = arr[np.arange(idx.shape[0])[:,None], idx]
+    return out
+
+
+def bfill(arr):
+    arr = np.array(arr)
+    mask = np.isnan(arr)
+    idx = np.where(~mask, np.arange(mask.shape[1]), mask.shape[1] - 1)
+    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
+    out = arr[np.arange(idx.shape[0])[:,None], idx]
+    return out
+
+
 def stdev(df, period):
     avg = df['close'].rolling(period).mean()
     std = pd.Series(index=df.index)
@@ -106,6 +127,25 @@ def stdev(df, period):
     return std
 
 
+def h_candle(res_df, interval_):
+
+    np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
+
+    hclose = res_df['close'].iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
+    repeated_df = np.repeat(hclose, interval_)
+
+    row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item() + 1
+    res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
+
+    hopen = res_df['open'].iloc[np.argwhere(np_timeidx % interval_ == 0).reshape(-1, )]
+    repeated_df = np.repeat(hopen, interval_)
+    row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item()
+    res_df['hopen_%s' % interval_] = np.nan
+    res_df['hopen_%s' % interval_].iloc[row_idx:] = repeated_df.values
+
+    return res_df
+
+
 def cct_bbo(df, period, smooth):
     avg_ = df['close'].rolling(period).mean()
     stdev_ = stdev(df, period)
@@ -115,6 +155,15 @@ def cct_bbo(df, period, smooth):
     ema_cctbbo = ema(cctbbo, smooth)
 
     return cctbbo, ema_cctbbo
+
+
+def donchian_channel(df, period):
+
+    hh = df['high'].rolling(period).max()
+    ll = df['low'].rolling(period).min()
+    base = (hh + ll) / 2
+
+    return hh, ll, base
 
 
 def bb_width(df, period, multiple):
@@ -128,6 +177,23 @@ def bb_width(df, period, multiple):
     bbw = 2 * dev / basis
 
     return upper, lower, bbw
+
+
+def dc_line(ltf_df, htf_df, interval, dc_period=20):
+
+    dc_upper = 'dc_upper_%s' % interval
+    dc_lower = 'dc_lower_%s' % interval
+    dc_base = 'dc_base_%s' % interval
+
+    if interval != '1m':
+        htf_df[dc_upper], htf_df[dc_lower], htf_df[dc_base] = donchian_channel(htf_df, dc_period)
+        ltf_df = ltf_df.join(
+            pd.DataFrame(index=ltf_df.index, data=to_lower_tf(ltf_df, htf_df, [i for i in range(-3, 0, 1)]),
+                         columns=[dc_upper, dc_lower, dc_base]))
+    else:
+        ltf_df[dc_upper], ltf_df[dc_lower], ltf_df[dc_base] = donchian_channel(ltf_df, dc_period)
+
+    return ltf_df
 
 
 def st_price_line(ltf_df, htf_df, interval):
@@ -258,6 +324,36 @@ def bb_level(ltf_df, interval, bb_gap_multiple):
 
     ltf_df[bb_upper3] = ltf_df[bb_base] + ltf_df[bb_gap] * 3
     ltf_df[bb_lower3] = ltf_df[bb_base] - ltf_df[bb_gap] * 3
+
+    return ltf_df
+
+
+def dc_level(ltf_df, interval, dc_gap_multiple):
+
+    dc_upper = 'dc_upper_%s' % interval
+    dc_lower = 'dc_lower_%s' % interval
+    dc_base = 'dc_base_%s' % interval
+
+    dc_gap = 'dc_gap_%s' % interval
+    dc_upper2 = 'dc_upper2_%s' % interval
+    dc_lower2 = 'dc_lower2_%s' % interval
+    dc_upper3 = 'dc_upper3_%s' % interval
+    dc_lower3 = 'dc_lower3_%s' % interval
+
+    # dc_width_ = 'dc_width_%s' % interval
+
+    ltf_df[dc_gap] = (ltf_df[dc_upper] - ltf_df[dc_base]) * dc_gap_multiple
+
+    ltf_df[dc_upper] = ltf_df[dc_base] + ltf_df[dc_gap]
+    ltf_df[dc_lower] = ltf_df[dc_base] - ltf_df[dc_gap]
+
+    # ltf_df[dc_width_] = (ltf_df[dc_upper] - ltf_df[dc_lower]) / ltf_df[dc_base]
+
+    ltf_df[dc_upper2] = ltf_df[dc_base] + ltf_df[dc_gap] * 2
+    ltf_df[dc_lower2] = ltf_df[dc_base] - ltf_df[dc_gap] * 2
+
+    ltf_df[dc_upper3] = ltf_df[dc_base] + ltf_df[dc_gap] * 3
+    ltf_df[dc_lower3] = ltf_df[dc_base] - ltf_df[dc_gap] * 3
 
     return ltf_df
 

@@ -5,7 +5,8 @@ import pickle
 # print("os.getcwd() :", os.getcwd())
 
 # key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
-key_abspath = os.path.abspath("private_info/binance_key.p")
+key_abspath = os.path.abspath("../private_info/mademerich.pkl")
+key_abspath = os.path.abspath("../private_info/JnQ2.pkl")
 
 with open(key_abspath, 'rb') as f:
     api_list = pickle.load(f)
@@ -23,9 +24,6 @@ else:
 
     # print(g_api_key)
 
-
 # g_account_id = 12345678
-# g_account_id = 'toomuch2281@gmail.com'
-# g_account_id = 'nave94@naver.com'
 
 
