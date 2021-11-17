@@ -10,12 +10,14 @@ import math
 from pathlib import Path
 import json
 from easydict import EasyDict
+import time
 
-with open(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\SE\config\configv15.json", 'r') as cfg:
-    config = EasyDict(json.load(cfg))
-
-print(config.init_set.interval_list)
-print(config.init_set.row_list)
+print(time.time())
+# with open(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\SE\config\configv15.json", 'r') as cfg:
+#     config = EasyDict(json.load(cfg))
+#
+# print(config.init_set.interval_list)
+# print(config.init_set.row_list)
 # print((datetime.now().second))
 # print(Path(__file__).stem) #myfile
 # print(Path(__file__).name)

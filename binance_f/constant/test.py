@@ -6,7 +6,8 @@ import pickle
 
 # key_abspath = os.path.abspath("private_info/api_for_bot.pickle")
 key_abspath = os.path.abspath("../private_info/mademerich.pkl")
-key_abspath = os.path.abspath("../private_info/JnQ2.pkl")
+
+# key_abspath = os.path.abspath("../private_info/JnQ.pkl")
 
 with open(key_abspath, 'rb') as f:
     api_list = pickle.load(f)

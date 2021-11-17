@@ -50,6 +50,9 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
             print(datetime.fromtimestamp(endTime / 1000))
 
         try:
+            startTime = int(startTime)
+            endTime = int(endTime)
+
             #       Todo        #
             #        추후에 문제없으면, 없앨 예정 -> limit != 1500 에 startTime = None 기입        #
             if by_limit:
@@ -58,7 +61,9 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
             df = request_client.get_candlestick_data(symbol=symbol,
                                                      interval=interval,
                                                      startTime=startTime, endTime=endTime, limit=limit)
-            # print(result.tail())
+
+            # print("endTime :", endTime)
+            # print(df.tail())
             # quit()
 
             assert len(df) != 0, "len(df) == 0"
@@ -92,16 +97,16 @@ def concat_candlestick(symbol, interval, days, limit=1500, by_limit=False, end_d
 if __name__ == '__main__':
 
     days = 300
-    days = 105
+    days = 35
 
     end_date = '2021-07-01'
     end_date = '2021-10-10'
-    # end_date = None
+    end_date = None
 
-    intervals = ['1m', '3m', '5m', '15m', '30m']
     # intervals = ['5m', '15m', '30m']
-    # intervals = ['4h', '1d']
-    # intervals = ['1h']
+    intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+
+    concat_path = '../candlestick_concated'
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
@@ -109,7 +114,7 @@ if __name__ == '__main__':
     for interval in intervals:
 
         try:
-            os.makedirs(os.path.join('./candlestick_concated', interval))
+            os.makedirs(os.path.join(concat_path, interval))
         except Exception as e:
             print('Error in makedirs :', e)
 
@@ -117,11 +122,11 @@ if __name__ == '__main__':
     #     coin_list = pickle.load(f)
     # with open('ticker_in_futures.txt', 'r') as f:
     #     coin_list = list(f.read())
-    with open('ticker_in_futures.pkl', 'rb') as f:
+    with open('../ticker_in_futures.pkl', 'rb') as f:
         coin_list = pickle.load(f)
 
     #       custom list for yearly survey 0701      #
-    coin_list = ['ETCUSDT', 'BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
+    coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
                  'BCHUSDT']
     # coin_list = ['ETHUSDT']
     # print(coin_list)
@@ -143,7 +148,7 @@ if __name__ == '__main__':
             #       check existing file     #
             #       Todo        #
             #        1. this phase require valid end_date       #
-            save_dir = './candlestick_concated/%s/' % interval
+            save_dir = os.path.join(concat_path, '%s' % interval)
             save_name = '%s %s.xlsx' % (end_date, coin)
             exist_files = os.listdir(save_dir)
             # print(exist_files)
@@ -163,10 +168,10 @@ if __name__ == '__main__':
                 # quit()
 
             # try:
-                concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin))
+                concated_excel.to_excel(os.path.join(concat_path, '%s/%s %s.xlsx' % (interval, end_date, coin)))
                 # concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
-                print('Error in to_excel :', e)
+                print('Error in save to_excel :', e)
                 continue
 
             # print(concated_excel.tail())

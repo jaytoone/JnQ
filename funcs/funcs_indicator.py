@@ -127,6 +127,46 @@ def stdev(df, period):
     return std
 
 
+def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line):
+
+    np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
+
+    res_df['short_dtk_plot_1'] = res_df['bb_lower_%s' % dtk_itv2]
+    res_df['short_dtk_plot_0'] = res_df['dc_upper_%s' % dtk_itv2]
+    res_df['short_dtk_plot_gap'] = res_df['short_dtk_plot_0'] - res_df['short_dtk_plot_1']
+
+    res_df['long_dtk_plot_1'] = res_df['bb_upper_%s' % dtk_itv2]
+    res_df['long_dtk_plot_0'] = res_df['dc_lower_%s' % dtk_itv2]
+    res_df['long_dtk_plot_gap'] = res_df['long_dtk_plot_1'] - res_df['long_dtk_plot_0']
+
+    res_df['hh_entry'] = np.zeros(len(res_df))
+
+    res_df['hh_entry'] = np.where(  # (res_df['open'] >= res_df['bb_lower_%s' % dtk_itv2]) &
+        (res_df['close'].shift(hhtf_entry * 1) >= res_df['bb_lower_%s' % dtk_itv2]) &
+        (res_df['close'] < res_df['bb_lower_%s' % dtk_itv2]) &
+        (np_timeidx % hhtf_entry == (hhtf_entry - 1))
+        , res_df['hh_entry'] - 1, res_df['hh_entry'])
+
+    res_df['hh_entry'] = np.where(  # (res_df['open'] <= res_df['bb_upper_%s' % dtk_itv2]) &
+        (res_df['close'].shift(hhtf_entry * 1) <= res_df['bb_upper_%s' % dtk_itv2]) &
+        (res_df['close'] > res_df['bb_upper_%s' % dtk_itv2]) &
+        (np_timeidx % hhtf_entry == (hhtf_entry - 1))
+        , res_df['hh_entry'] + 1, res_df['hh_entry'])
+
+    if use_dtk_line:
+        res_df['short_dtk_plot_1'] = np.where(res_df['hh_entry'] == -1, res_df['short_dtk_plot_1'], np.nan)
+        res_df['short_dtk_plot_1'] = ffill(res_df['short_dtk_plot_1'].values.reshape(1, -1)).reshape(-1, 1)
+        res_df['short_dtk_plot_gap'] = np.where(res_df['hh_entry'] == -1, res_df['short_dtk_plot_gap'], np.nan)
+        res_df['short_dtk_plot_gap'] = ffill(res_df['short_dtk_plot_gap'].values.reshape(1, -1)).reshape(-1, 1)
+
+        res_df['long_dtk_plot_1'] = np.where(res_df['hh_entry'] == 1, res_df['long_dtk_plot_1'], np.nan)
+        res_df['long_dtk_plot_1'] = ffill(res_df['long_dtk_plot_1'].values.reshape(1, -1)).reshape(-1, 1)
+        res_df['long_dtk_plot_gap'] = np.where(res_df['hh_entry'] == 1, res_df['long_dtk_plot_gap'], np.nan)
+        res_df['long_dtk_plot_gap'] = ffill(res_df['long_dtk_plot_gap'].values.reshape(1, -1)).reshape(-1, 1)
+
+    return res_df
+
+
 def h_candle(res_df, interval_):
 
     np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))

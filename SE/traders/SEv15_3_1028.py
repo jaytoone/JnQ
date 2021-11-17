@@ -904,10 +904,11 @@ class Trader:
                                             print("out :", out)
 
                                 #       short market tp      #
-                                if new_df_['close'].iloc[config.init_set.last_index] <= tp:
-                                    market_close_on = True
-                                    log_tp = new_df_['close'].iloc[config.init_set.last_index]
-                                    print("tp :", tp)
+                                if config.tp_set.tp_type == "MARKET":
+                                    if new_df_['close'].iloc[config.init_set.last_index] <= tp:
+                                        market_close_on = True
+                                        log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                        print("tp :", tp)
 
                             if market_close_on:
                                 if config.out_set.hl_out:

@@ -125,6 +125,8 @@ if __name__ == "__main__":
         with open("candlestick_concated/res_df/" + dict_name, 'rb') as f:
             res_df_dict = pickle.load(f)
 
+        # pd.read_feather(date_path6 + key, columns=None, use_threads=True).set_index("index")
+
         print(dict_name, "loaded !")
 
         for key, res_df_ in res_df_dict.items():
