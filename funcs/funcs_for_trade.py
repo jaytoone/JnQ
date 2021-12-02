@@ -7,6 +7,8 @@
 import numpy as np
 import pandas as pd
 import time
+# from funcs.funcs_indicator import ffill
+from datetime import datetime
 
 
 def min_max_scaler(x):
@@ -109,6 +111,44 @@ def intmin(date):
     return min
 
 
+def sharpe_ratio(pr, risk_free_rate=0.0, multiply_frq=False):
+    pr_pct = pr - 1
+
+    mean_pr_ = np.mean(pr_pct)
+    s = np.std(pr_pct)
+
+    sr_ = (mean_pr_ - risk_free_rate) / s
+
+    if multiply_frq:
+        sr_ = len(pr_pct) ** (1 / 2) * sr_
+
+    return sr_
+
+
+def ffill(arr):  # 이전 row 의 데이터로 현 missing_value 를 채움
+    arr = np.array(arr)
+    # mask = np.isnan(arr)
+    mask = pd.isna(arr)
+    # print(mask.shape)
+    # print(type(arr))
+    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+    np.maximum.accumulate(idx, axis=1, out=idx)
+    # print("idx :", idx)
+    out = arr[np.arange(idx.shape[0])[:,None], idx]
+    return out
+
+
+def bfill(arr):
+    arr = np.array(arr)
+    # mask = np.isnan(arr)
+    mask = pd.isna(arr)
+
+    idx = np.where(~mask, np.arange(mask.shape[1]), mask.shape[1] - 1)
+    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
+    out = arr[np.arange(idx.shape[0])[:,None], idx]
+    return out
+
+
 def to_timestamp(datetime_):
     # timestamp = time.mktime(datetime.strptime(str(datetime_), '%Y-%m-%d %H:%M:%S').timetuple())
     timestamp = time.mktime(datetime_.timetuple())
@@ -171,6 +211,69 @@ def convert_df(df, second_df, second_interval_min=3):
     df2 = pd.DataFrame(index=df.index, data=second_df_list, columns=second_df.columns)
 
     return df2
+
+
+def itv_bn2ub(itv):
+    if itv == "1m":
+        return "minute1"
+    elif itv == "3m":
+        return "minute3"
+    elif itv == "5m":
+        return "minute5"
+    elif itv == "15m":
+        return "minute15"
+    elif itv == "30m":
+        return "minute30"
+    elif itv == "1h":
+        return "minute60"
+    elif itv == "4h":
+        return "minute240"
+
+
+def limit_by_itv(interval):
+    if interval == "1m":
+        limit = 1500
+    elif interval == "3m":
+        limit = 500
+    elif interval == "5m":
+        limit = 300
+    else:
+        limit = 100
+
+    return limit
+
+
+def consecutive_df(res_df, itv_num):
+    np_idx_ts = np.array(list(map(lambda x: datetime.timestamp(x), res_df.index)))
+    ts_start = np_idx_ts[0]
+    ts_end = np_idx_ts[-1]
+
+    # print(ts_start)
+    # print(ts_end)
+
+    ts_gap = 60.0 * itv_num
+    new_ts_line = [new_ts for new_ts in np.arange(ts_start, ts_end + ts_gap, ts_gap)]
+    # print(new_ts_line[:10])
+
+    new_res_idx = np.array(list(map(lambda x: pd.to_datetime(datetime.fromtimestamp(x)), new_ts_line)))
+    # print(new_res_idx[:10])
+
+    new_res_idx_df = pd.DataFrame(index=new_res_idx, columns=res_df.columns)
+    # print(new_res_idx_df.tail())
+
+    new_res_idx_df.loc[res_df.index, :] = res_df
+
+    verify = np.sum(pd.isna(new_res_idx_df['open']))
+    print("np.sum(pd.isna(new_res_idx_df['open']) :", verify)
+
+    if verify:
+
+        for col in new_res_idx_df.columns:
+            new_res_idx_df[col] = ffill(new_res_idx_df[col].values.reshape(1, -1)).reshape(-1, 1)
+
+        print("np.sum(pd.isna(new_res_idx_df['open']) :", np.sum(pd.isna(new_res_idx_df['open'])))
+
+    return new_res_idx_df
 
 
 def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backing_i=-2):
@@ -333,8 +436,15 @@ def to_higher_candlestick_v2(first_df, interval):
     return htf_df_copy
 
 
-def interval_to_min(interval):
-    if interval == '15m':
+def to_itvnum(interval):
+
+    if interval == '1m':
+        int_minute = 1
+    elif interval == '3m':
+        int_minute = 3
+    elif interval == '5m':
+        int_minute = 5
+    elif interval == '15m':
         int_minute = 15
     elif interval == '30m':
         int_minute = 30
@@ -342,11 +452,15 @@ def interval_to_min(interval):
         int_minute = 60
     elif interval == '4h':
         int_minute = 240
+    else:
+        print("unacceptable interval :", interval)
+        return None
 
     return int_minute
 
 
 def calc_train_days(interval, use_rows):
+
     if interval == '15m':
         data_amt = 96
     elif interval == '30m':
@@ -356,8 +470,8 @@ def calc_train_days(interval, use_rows):
     elif interval == '4h':
         data_amt = 6
     else:
-        print('interval out of range')
-        quit()
+        print("unacceptable interval :", interval)
+        return None
 
     days = int(use_rows / data_amt) + 1
 

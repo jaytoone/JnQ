@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from funcs.funcs_for_trade import to_lower_tf, intmin
+from funcs.funcs_for_trade import to_lower_tf, intmin, ffill, bfill
+# from funcs_for_trade import to_lower_tf, intmin, ffill, bfill  # --> for colab
 
 
 def nz(x, y=0):
@@ -93,27 +94,6 @@ def tozero(fst, snd):
     return result
 
 
-def ffill(arr):
-    arr = np.array(arr)
-    mask = np.isnan(arr)
-    # print(mask.shape)
-    # print(type(arr))
-    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-    np.maximum.accumulate(idx, axis=1, out=idx)
-    # print("idx :", idx)
-    out = arr[np.arange(idx.shape[0])[:,None], idx]
-    return out
-
-
-def bfill(arr):
-    arr = np.array(arr)
-    mask = np.isnan(arr)
-    idx = np.where(~mask, np.arange(mask.shape[1]), mask.shape[1] - 1)
-    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
-    out = arr[np.arange(idx.shape[0])[:,None], idx]
-    return out
-
-
 def stdev(df, period):
     avg = df['close'].rolling(period).mean()
     std = pd.Series(index=df.index)
@@ -175,13 +155,27 @@ def h_candle(res_df, interval_):
     repeated_df = np.repeat(hclose, interval_)
 
     row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item() + 1
-    res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
+    res_df['hclose_%s' % interval_] = np.nan
+
+    # print(len(repeated_df))
+    # print(len(res_df))
+    # if len(res_df) >= len(repeated_df):
+    #     res_df['hclose_%s' % interval_].iloc[:len(repeated_df)] = repeated_df.shift(row_idx - interval_).values
+    # else:
+    #     res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
+    res_df['hclose_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
+                                                     :len(res_df['hclose_%s' % interval_].iloc[row_idx:])]
+
+    # length unmatch error occurs
+    # res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
 
     hopen = res_df['open'].iloc[np.argwhere(np_timeidx % interval_ == 0).reshape(-1, )]
     repeated_df = np.repeat(hopen, interval_)
     row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item()
     res_df['hopen_%s' % interval_] = np.nan
-    res_df['hopen_%s' % interval_].iloc[row_idx:] = repeated_df.values
+    # res_df['hopen_%s' % interval_].iloc[row_idx:] = repeated_df.values
+    res_df['hopen_%s' % interval_].iloc[row_idx:] = repeated_df.values[
+                                                    :len(res_df['hopen_%s' % interval_].iloc[row_idx:])]
 
     return res_df
 

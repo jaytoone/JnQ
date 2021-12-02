@@ -1,14 +1,14 @@
 import os
-pwd = os.getcwd()
-
-# print(os.path.dirname(pwd))
-# print(pwd)
-switch_path = os.path.dirname(pwd)
-os.chdir(switch_path)
+# pwd = os.getcwd()
+#
+# # print(os.path.dirname(pwd))
+# # print(pwd)
+# switch_path = os.path.dirname(pwd)
+# os.chdir(switch_path)
 
 # from binance_f import RequestClient
 # from binance_f.model import *
-# from binance_f.constant.test import *
+from binance_f.constant.test import *
 # from binance_f.base.printobject import *
 
 from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
@@ -40,11 +40,17 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # print(df.iloc[:, -6:].tail(40))
     # quit()
 
-    # ----- dc ----- #
-    df = dc_line(df, None, '1m')
-    df = dc_level(df, '1m', 1)
-    print(df.iloc[:, -8:].tail(40))
+    # # ----- dc ----- #
+    # df = dc_line(df, None, '1m')
+    # df = dc_level(df, '1m', 1)
+    # print(df.iloc[:, -8:].tail(40))
+    # quit()
+
+    # ----- rsi ----- #
+    df['rsi'] = rsi(df, 14)
+    print(df.rsi.tail(40))
     quit()
+
 
 
     # ----- cloud bline ----- #

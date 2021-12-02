@@ -10,5 +10,6 @@
     <orderEntry type="module" module-name="pybithumb" />
     <orderEntry type="module" module-name="Ultra-Light-Fast-Generic-Face-Detector-1MB" />
     <orderEntry type="module" module-name="Labeler" />
+    <orderEntry type="module" module-name="JnQ_upbit" />
   </component>
 </module>

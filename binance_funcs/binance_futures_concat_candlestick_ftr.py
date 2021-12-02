@@ -60,8 +60,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
                                                      startTime=startTime, endTime=endTime, limit=limit)
 
             # print("endTime :", endTime)
-            # print(df.head())
-            # print("df.index[0] :", df.index[0])
+            # print(df.tail())
             # quit()
 
             assert len(df) != 0, "len(df) == 0"
@@ -95,26 +94,25 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    days = 35
+    # days = 45
 
     end_date = '2021-07-01'
     end_date = '2021-10-10'
-    # end_date = None
+    end_date = None
 
     # intervals = ['5m', '15m', '30m']
     intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
-    concat_path = '../candlestick_concated'
+    concat_path = '../candlestick_concated/database_bn'
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
 
-    for interval in intervals:
-
-        try:
-            os.makedirs(os.path.join(concat_path, interval))
-        except Exception as e:
-            print('Error in makedirs :', e)
+    # for interval in intervals:
+        # try:
+        #     os.makedirs(os.path.join(concat_path, interval))
+        # except Exception as e:
+        #     print('Error in makedirs :', e)
 
     # with open('future_coin.p', 'rb') as f:
     #     coin_list = pickle.load(f)
@@ -124,9 +122,9 @@ if __name__ == '__main__':
         coin_list = pickle.load(f)
 
     #       custom list for yearly survey 0701      #
-    coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
-                 'BCHUSDT']
-    # coin_list = ['ETHUSDT']
+    # coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
+    #              'BCHUSDT']
+    coin_list = ['ZECUSDT', 'BNBUSDT', 'RUNEUSDT']
     # print(coin_list)
     # quit()
 
@@ -146,12 +144,14 @@ if __name__ == '__main__':
             #       check existing file     #
             #       Todo        #
             #        1. this phase require valid end_date       #
-            save_dir = os.path.join(concat_path, '%s' % interval)
-            save_name = '%s %s.xlsx' % (end_date, coin)
+            save_dir = os.path.join(concat_path)
+            # save_dir = os.path.join(concat_path, '%s' % interval)
+            save_name = '%s %s_%s.ftr' % (end_date, coin, interval)
             exist_files = os.listdir(save_dir)
             # print(exist_files)
             # print(save_name)
             # quit()
+
             # if save_name in exist_files:
             #     print(save_name, 'exist !')
             #     continue
@@ -159,12 +159,15 @@ if __name__ == '__main__':
             try:
                 concated_excel, end_date = concat_candlestick(coin, interval, days,
                                                               end_date=end_date, show_process=True, timesleep=0.3)
+                # concated_excel, end_date = concat_candlestick(coin, interval, days, limit=1500, by_limit=False,
+                #                                               end_date=end_date, show_process=True, timesleep=0.2)
 
                 # print("str(concated_excel.index[-1]) :", str(concated_excel.index[-1]))
                 # quit()
 
             # try:
-                concated_excel.to_excel(os.path.join(concat_path, '%s/%s %s.xlsx' % (interval, end_date, coin)))
+                concated_excel.reset_index().to_feather(os.path.join(concat_path, '%s %s_%s.ftr' % (end_date, coin, interval)), compression='lz4')
+                # concated_excel.reset_index().to_feather(os.path.join(concat_path, '%s/%s %s.ftr' % (interval, end_date, coin)), compression='lz4')
                 # concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in save to_excel :', e)
