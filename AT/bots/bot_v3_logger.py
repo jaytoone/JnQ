@@ -4,7 +4,7 @@ if __name__ == '__main__':
 
     trader_name = "AT.traders.AT_v3_1202_logger.py".replace(".py", "")
     utils_name = "AT.utils.utils_v3_logger.py".replace(".py", "")
-    config_name = "config_v3_logger_chk.json"
+    config_name = "config_v3_logger.json"
 
     trader_lib = importlib.import_module(trader_name)
     utils_lib = importlib.import_module(utils_name)

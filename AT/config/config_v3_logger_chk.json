@@ -6,8 +6,8 @@
     "limit_fee": 0.0002,
     "market_fee": 0.0004,
     "initial_asset": 10,
-    "asset_changed" : 1,
-    "symbol": "ETHUSDT",
+    "asset_changed": 0,
+    "symbol": "XRPUSDT",
     "symbol_changed": 0,
     "interval_list": [
       "1m",
@@ -34,7 +34,7 @@
     "stacked_df_exist": 1
   },
   "loc_set": {
-    "zone":{
+    "zone": {
       "dtk_itv": "5m",
       "short_spread": "None",
       "long_spread": "None",
@@ -53,13 +53,13 @@
       "max_eplim_pct": 0.05,
       "min_eplim_pct": 0.013
     },
-    "point":{
-    "exp_itv": "5m",
-    "tpg_itv": "5m",
-    "outg_itv": "5m",
-    "outg_dc_period": "None",
-    "tf_entry": 5,
-    "htf_entry": 15
+    "point": {
+      "exp_itv": "5m",
+      "tpg_itv": "5m",
+      "outg_itv": "5m",
+      "outg_dc_period": "None",
+      "tf_entry": 5,
+      "htf_entry": 15
     }
   },
   "tr_set": {
@@ -95,10 +95,10 @@
     "partial_qty_divider": 1.5
   },
   "lvrg_set": {
-    "leverage": 2,
+    "leverage": 15,
     "static_lvrg": 0,
     "allow_float": 0,
-    "target_pct": 0.05,
+    "target_pct": 0.001,
     "lvrg_rejection": 0
   }
 }

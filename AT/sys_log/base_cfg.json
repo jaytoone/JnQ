@@ -2,7 +2,7 @@
   "version": 1,
   "formatters": {
   "form_name": {
-  "format": "%(asctime)s - [%(levelname)s] - %(name)s - (%(filename)s).%(funcName)s (%(lineno)d line) - %(message)s"
+  "format": "%(asctime)s - [%(levelname)s] - %(name)s.%(funcName)s (%(lineno)d line) - %(message)s"
   }
 },
 

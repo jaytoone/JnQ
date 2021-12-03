@@ -1,34 +1,21 @@
 import os
-import logging.config
-from pathlib import Path
-from easydict import EasyDict
-from datetime import datetime
 
-pkg_path = os.path.abspath('./../')
+pkg_path = os.path.abspath('../')
+print("pkg_path :", pkg_path)
+
 os.chdir(pkg_path)
-
-from binance_funcs.binance_futures_modules import *
-
-exec_file_name = Path(__file__).stem
-sys_log_path = os.path.join(pkg_path, "sys_log", exec_file_name)
-trade_log_name = "/%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
-
-with open(sys_log_path.replace(exec_file_name, "base_cfg.json"), 'rt') as sys_cfg:
-    sys_log_cfg = EasyDict(json.load(sys_cfg))
-
-sys_log_cfg.handlers.file_rot.filename = sys_log_path + trade_log_name.replace("pkl", "log")
-
-logging.config.dictConfig(sys_log_cfg)
-logging.getLogger("apscheduler.executors.default").propagate = False
-sys_log = logging.getLogger(__name__)
-
+# print("os.getcwd() :", os.getcwd())
+# quit()
 
 from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
-from binance_funcs.funcs_order_logger import limit_order, partial_limit_v2, market_close_order
 from funcs.funcs_for_trade import intmin
+from binance_funcs.funcs_order import *
+from easydict import EasyDict
 import numpy as np  # for np.nan
+from datetime import datetime
 import time
 import pickle
+from pathlib import Path
 
 #       Todo        #
 #        1. check upper dir
@@ -55,19 +42,25 @@ class Trader:
 
     def run(self):
 
+        logger_name = "/%s.pkl" % str(datetime.now().timestamp()).split(".")[0]
         trade_log = {}
+
+        exec_file_name = Path(__file__).stem
+
+        print('# ----------- %s ----------- #' % exec_file_name)
 
         trade_log_path = os.path.join(pkg_path, "trade_log", exec_file_name)
         df_log_path = os.path.join(pkg_path, "df_log", exec_file_name)
 
-        os.makedirs(sys_log_path, exist_ok=True)
-        os.makedirs(trade_log_path, exist_ok=True)
-        os.makedirs(df_log_path, exist_ok=True)
+        try:
+            os.makedirs(trade_log_path, exist_ok=True)
+            os.makedirs(df_log_path, exist_ok=True)
 
-        sys_log.info('# ----------- %s ----------- #' % exec_file_name)
-        sys_log.info("pkg_path : {}".format(pkg_path))
+        except Exception as e:
+            print("error in makedirs for logger :", e)
 
         config_path = '/config/' + self.config_name
+
         initial_run = 1
         while 1:
 
@@ -75,11 +68,11 @@ class Trader:
             with open(pkg_path + config_path, 'r') as cfg:
                 config = EasyDict(json.load(cfg))
 
-            if config.trader_set.symbol_changed:
+            if config.init_set.symbol_changed:
                 initial_run = 1
 
                 #       1. rewrite symbol_changed to false
-                config.trader_set.symbol_changed = 0
+                config.init_set.symbol_changed = 0
 
                 with open(pkg_path + config_path, 'w') as cfg:
                     json.dump(config, cfg, indent=2)
@@ -89,37 +82,37 @@ class Trader:
                 while 1:    # for completion
                     # --- 1. leverage type => "isolated" --- #
                     try:
-                        request_client.change_margin_type(symbol=config.trader_set.symbol, marginType=FuturesMarginType.ISOLATED)
+                        request_client.change_margin_type(symbol=config.init_set.symbol, marginType=FuturesMarginType.ISOLATED)
                     except Exception as e:
-                        sys_log.error('error in change_margin_type : {}'.format(e))
+                        print('error in change_margin_type :', e)
                     else:
-                        sys_log.info('leverage type --> isolated')
+                        print('leverage type --> isolated')
 
                     # --- 2. confirm limit leverage --- #
                     try:
-                        limit_leverage = get_limit_leverage(symbol_=config.trader_set.symbol)
+                        limit_leverage = get_limit_leverage(symbol_=config.init_set.symbol)
                     except Exception as e:
-                        sys_log.error('error in get limit_leverage : {}'.format(e))
+                        print('error in get limit_leverage :', e)
                         continue
                     else:
-                        sys_log.info('limit_leverage : {}'.format(limit_leverage))
+                        print('limit_leverage :', limit_leverage)
 
                     # --- 3. sub_client --- #
                     try:
-                        sub_client.subscribe_aggregate_trade_event(config.trader_set.symbol.lower(), callback, error)
+                        sub_client.subscribe_aggregate_trade_event(config.init_set.symbol.lower(), callback, error)
                         self.sub_client = sub_client
                     except Exception as e:
-                        sys_log.error('error in get sub_client : {}'.format(e))
+                        print('error in get sub_client :', e)
                         continue
 
                     break
 
                 initial_run = 0
-                sys_log.info("initial_set done\n")
+                print()
 
             #       check run        #
-            if not config.trader_set.run:
-                time.sleep(config.trader_set.realtime_term)   # give enough time to read config
+            if not config.init_set.run:
+                time.sleep(config.init_set.realtime_term)   # give enough time to read config
                 continue
 
             #       init order side      #
@@ -129,17 +122,62 @@ class Trader:
             start_timestamp = int(time.time() * 1000)
 
             #       init param.      #
-            ep_loc_check = 1
+            ep_loc_check = 0
             load_new_df = 1
 
             while 1:
+
+                try:
+                    init_order_info = remaining_order_info(config.init_set.symbol)
+                    init_pos_info = get_position_info(config.init_set.symbol)
+
+                except Exception as e:
+                    print('error in remaining_order_check :', e)
+                    time.sleep(config.init_set.api_retry_term)
+                    continue
+
+                else:
+                    if init_order_info is not None or init_pos_info.positionAmt != 0.0:
+                        
+                        #       Todo        #
+                        #        정보 가져오기 : price & order_side
+                        if init_order_info is not None:
+                            user_rtc_1 = init_order_info.price
+                            user_side = init_order_info.side
+
+                        else:
+                            user_rtc_1 = init_pos_info.entryPrice
+                            if init_pos_info.positionAmt < 0:
+                                user_side = OrderSide.SELL
+                                user_close_side = OrderSide.BUY
+                            else:
+                                user_side = OrderSide.BUY
+                                user_close_side = OrderSide.SELL
+
+                            #       close_order in tr_rejection     #
+                            #       lvrg change 를 위해선 기존 position 을 비워야함        #
+                            try:
+                                market_close_order(self, True, config, user_close_side, np.nan, np.nan)
+                            except Exception as e:
+                                print('error in market_close_order :', e)
+                                continue
+
+                        try:
+                            request_client.cancel_all_orders(symbol=config.init_set.symbol)
+                            print()
+                        except Exception as e:
+                            print('error in cancel initial open order :', e)
+                            continue
+
+                        ep_loc_check = 1
+                        load_new_df = 1
 
                 if ep_loc_check:
 
                     #       log last trading time     #
                     #       미체결을 고려해, ep_loc_check 마다 log 수행       #
                     trade_log["last_trading_time"] = str(datetime.now())
-                    with open(trade_log_path + trade_log_name, "wb") as dict_f:
+                    with open(trade_log_path + logger_name, "wb") as dict_f:
                         pickle.dump(trade_log, dict_f)
 
                     temp_time = time.time()
@@ -150,20 +188,20 @@ class Trader:
 
                             res_df_list = []
                             old_df = 0
-                            for itv_i, interval_ in enumerate(config.trader_set.interval_list):
+                            for itv_i, interval_ in enumerate(config.init_set.interval_list):
 
                                 if interval_ != "None":
 
-                                    new_df_, _ = concat_candlestick(config.trader_set.symbol, interval_,
+                                    new_df_, _ = concat_candlestick(config.init_set.symbol, interval_,
                                                                     days=1,
-                                                                    limit=config.trader_set.row_list[itv_i],
+                                                                    limit=config.init_set.row_list[itv_i],
                                                                     timesleep=0.2,
                                                                     show_process=False)
                                     if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
                                         old_df = 1
                                         break
                                     else:
-                                        new_df = new_df_.iloc[-config.trader_set.row_list[itv_i]:].copy()
+                                        new_df = new_df_.iloc[-config.init_set.row_list[itv_i]:].copy()
                                 else:
                                     new_df = None
 
@@ -172,65 +210,66 @@ class Trader:
                             if old_df:
                                 continue
 
-                            sys_log.info("complete load_df execution time : {}".format(datetime.now()))
+                            print("complete load_df execution time :", datetime.now())
 
                         except Exception as e:
-                            sys_log.error("error in load new_dfs : {}".format(e))
-                            time.sleep(config.trader_set.api_retry_term)
+                            print("error in load new_dfs :", e)
+                            time.sleep(config.init_set.api_retry_term)
                             continue
 
                         else:
                             load_new_df = 0
 
-                    sys_log.info("~ load_new_df time : %.2f" % (time.time() - temp_time))
+                    print("~ load_new_df time : %.2f" % (time.time() - temp_time))
                     # temp_time = time.time()
 
                     # ------------ get indi.  ------------ #
                     try:
                         res_df = self.utils.sync_check(res_df_list)  # function usage format maintenance
-                        sys_log.info('~ sync_check time : %.5f' % (time.time() - temp_time))
+                        print('~ sync_check time : %.5f' % (time.time() - temp_time))
 
                     except Exception as e:
-                        sys_log.error("error in sync_check : {}".format(e))
+                        print("error in sync_check :", e)
                         continue
 
                     # ------------ enlist_rtc ------------ #
                     try:
-                        res_df = self.utils.enlist_rtc(res_df, config)
-                        sys_log.info('~ enlist_rtc time : %.5f' % (time.time() - temp_time))
+                        res_df = self.utils.enlist_rtc(res_df, config, user_rtc_1)
+                        print('~ enlist_rtc time : %.5f' % (time.time() - temp_time))
 
                     except Exception as e:
-                        sys_log.error("error in enlist_rtc : {}".format(e))
+                        print("error in enlist_rtc :", e)
                         continue
 
                     # ------------ enlist_tr ------------ #
                     try:
                         np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
                         res_df = self.utils.enlist_tr(res_df, config, np_timeidx)
-                        sys_log.info('res_df.index[-1] : {}'.format(res_df.index[-1]))
-                        sys_log.info('~ ep enlist time : %.5f\n' % (time.time() - temp_time))
+                        print('res_df.index[-1] :', res_df.index[-1])
+                        print('~ ep enlist time : %.5f' % (time.time() - temp_time))
+                        print()
 
                     except Exception as e:
-                        sys_log.error('error in enlist_tr : {}'.format(e))
+                        print('error in enlist_tr :', e)
                         continue
 
                     # ---------------- ep_loc ---------------- #
                     try:
 
                         #        save res_df before, entry const check      #
-                        if config.trader_set.df_log:
+                        if config.init_set.df_log:
                             excel_name = str(datetime.now()).replace(":", "").split(".")[0]
                             # res_df.to_excel(df_log_path + "/%s.xlsx" % excel_name)
                             res_df.reset_index().to_feather(df_log_path + "/%s.ftr" % excel_name, compression='lz4')
 
-                        if res_df['entry'][config.trader_set.last_index] == config.ep_set.short_entry_score:
-                            res_df, open_side, _ = self.utils.short_ep_loc(res_df, config, config.trader_set.last_index)
+                        if user_side == OrderSide.SELL:
+                            res_df, open_side, _ = self.utils.short_ep_loc(res_df, config, config.init_set.last_index)
 
-                        if res_df['entry'][config.trader_set.last_index] == -config.ep_set.short_entry_score:
-                            res_df, open_side, _ = self.utils.long_ep_loc(res_df, config, config.trader_set.last_index)
+                        elif user_side == OrderSide.BUY:
+                            res_df, open_side, _ = self.utils.long_ep_loc(res_df, config, config.init_set.last_index)
 
                     except Exception as e:
-                        sys_log.error("error in ep_loc phase : {}".format(e))
+                        print("error in ep_loc phase :", e)
                         continue
 
                     ep_loc_check = 0   # once used, turn it off
@@ -240,16 +279,17 @@ class Trader:
 
                     #        1. const. open market second
                     if config.ep_set.entry_type == "MARKET":
-                        if check_entry_sec > config.trader_set.check_entry_sec:
+                        if check_entry_sec > config.ep_set.check_entry_sec:
                             open_side = None
-                            sys_log.info("check_entry_sec : %s\n" % check_entry_sec)
+                            print("check_entry_sec :", check_entry_sec)
+                            print()
                             continue    # ep_loc_check = False 라서 open_side None phase 로 감
 
                     #        2. init fee        #
                     if config.ep_set.entry_type == "MARKET":
-                        fee = config.trader_set.market_fee
+                        fee = config.init_set.market_fee
                     else:
-                        fee = config.trader_set.limit_fee
+                        fee = config.init_set.limit_fee
 
                     break
 
@@ -261,25 +301,28 @@ class Trader:
 
                     #       check tick change      #
                     #       latest df confirmation       #
-                    if datetime.timestamp(res_df.index[-1]) < datetime.now().timestamp():
-                        ep_loc_check = 1
-                        load_new_df = 1
-                        sys_log.info('res_df[-1] timestamp : %s' % datetime.timestamp(res_df.index[-1]))
-                        sys_log.info('current timestamp : %s' % datetime.now().timestamp() + "\n")
+                    # if datetime.timestamp(res_df.index[-1]) < datetime.now().timestamp():
+                    # if datetime.now().second > 59:
+                    # ep_loc_check = 1
+                    # load_new_df = 1
+                    # print('res_df[-1] timestamp :', datetime.timestamp(res_df.index[-1]))
+                    # print('current timestamp :', datetime.now().timestamp())
+                    # print()
 
-                        #       get configure every minutes      #
-                        with open(pkg_path + config_path, 'r') as cfg:
-                            config = EasyDict(json.load(cfg))
+                    #       get configure every term      #
+                    with open(pkg_path + config_path, 'r') as cfg:
+                        config = EasyDict(json.load(cfg))
 
-                    else:
-                        time.sleep(config.trader_set.realtime_term)  # <-- term for realtime market function
+                    # else:
+                    time.sleep(1)  # <-- term for realtime magnetic program
+                    # time.sleep(config.init_set.realtime_term)  # <-- term for realtime market function
 
-                    # time.sleep(config.trader_set.close_complete_term)   # <-- term for close completion
+                    # time.sleep(config.init_set.close_complete_term)   # <-- term for close completion
 
             first_iter = True  # 포지션 변경하는 경우, 필요함
             while 1:  # <-- loop for 'check order type change condition'
 
-                sys_log.info('open_side : {}'.format(open_side))
+                print('open_side :', open_side)
 
                 # ------------- tr setting ------------- #
                 # if config.ep_set.entry_type == OrderType.MARKET:
@@ -287,76 +330,77 @@ class Trader:
                 #     try:
                 #         ep = get_market_price_v2(self.sub_client)
                 #     except Exception as e:
-                #         sys_log.error('error in get_market_price : {}'.format(e))
+                #         print('error in get_market_price :', e)
                 #         continue
                 # else:
 
                 #             limit & market's ep             #
                 #             inversion adjusted
                 if open_side == OrderSide.BUY:
-                    ep = res_df['long_ep'].iloc[config.trader_set.last_index]
+                    ep = res_df['long_ep'].iloc[config.init_set.last_index]
 
-                    if config.trader_set.long_inversion:
+                    if config.ep_set.long_inversion:
                         open_side = OrderSide.SELL  # side change (inversion)
-                        out = res_df['long_tp'].iloc[config.trader_set.last_index]
-                        tp = res_df['long_out'].iloc[config.trader_set.last_index]
+                        out = res_df['long_tp'].iloc[config.init_set.last_index]
+                        tp = res_df['long_out'].iloc[config.init_set.last_index]
                     else:
-                        out = res_df['long_out'].iloc[config.trader_set.last_index]
-                        tp = res_df['long_tp'].iloc[config.trader_set.last_index]
+                        out = res_df['long_out'].iloc[config.init_set.last_index]
+                        tp = res_df['long_tp'].iloc[config.init_set.last_index]
                 else:
-                    ep = res_df['short_ep'].iloc[config.trader_set.last_index]
+                    ep = res_df['short_ep'].iloc[config.init_set.last_index]
 
-                    if config.trader_set.short_inversion:
+                    if config.ep_set.short_inversion:
                         open_side = OrderSide.BUY
-                        out = res_df['short_tp'].iloc[config.trader_set.last_index]
-                        tp = res_df['short_out'].iloc[config.trader_set.last_index]
+                        out = res_df['short_tp'].iloc[config.init_set.last_index]
+                        tp = res_df['short_out'].iloc[config.init_set.last_index]
                     else:
-                        out = res_df['short_out'].iloc[config.trader_set.last_index]
-                        tp = res_df['short_tp'].iloc[config.trader_set.last_index]
+                        out = res_df['short_out'].iloc[config.init_set.last_index]
+                        tp = res_df['short_tp'].iloc[config.init_set.last_index]
 
                 #         get price, volume precision --> reatlime 가격 변동으로 인한 precision 변동 가능성       #
                 try:
-                    price_precision, quantity_precision = get_precision(config.trader_set.symbol)
+                    price_precision, quantity_precision = get_precision(config.init_set.symbol)
                 except Exception as e:
-                    sys_log.error('error in get price & volume precision : {}'.format(e))
-                    time.sleep(config.trader_set.api_retry_term)
+                    print('error in get price & volume precision :', e)
+                    time.sleep(config.init_set.api_retry_term)
                     continue
                 else:
-                    sys_log.info('price_precision : {}'.format(price_precision))
-                    sys_log.info('quantity_precision : {}'.format(quantity_precision))
+                    print('price_precision :', price_precision)
+                    print('quantity_precision :', quantity_precision)
 
                 ep = calc_with_precision(ep, price_precision)
                 out = calc_with_precision(out, price_precision)  # this means static_out
                 tp = calc_with_precision(tp, price_precision)   # this means static_tp
                 leverage = self.utils.lvrg_set(res_df, config, limit_leverage, open_side, fee)
 
-                sys_log.info('ep : {}'.format(ep))
-                sys_log.info('out : {}'.format(out))
-                sys_log.info('tp : {}'.format(tp))
-                sys_log.info('leverage : {}'.format(leverage))
-                sys_log.info('~ ep out lvrg set time : %.5f' % (time.time() - temp_time))
+                print('user_rtc_1 :', user_rtc_1)
+                print('ep :', ep)
+                print('out :', out)
+                print('tp :', tp)
+                print('leverage :', leverage)
+                print('~ ep out lvrg set time : %.5f' % (time.time() - temp_time))
 
                 try:
-                    request_client.change_initial_leverage(symbol=config.trader_set.symbol, leverage=leverage)
+                    request_client.change_initial_leverage(symbol=config.init_set.symbol, leverage=leverage)
                 except Exception as e:
-                    sys_log.error('error in change_initial_leverage : {}'.format(e))
-                    time.sleep(config.trader_set.api_retry_term)
+                    print('error in change_initial_leverage :', e)
+                    time.sleep(config.init_set.api_retry_term)
                     continue  # -->  ep market 인 경우에 조심해야함
                 else:
-                    sys_log.info('leverage changed --> {}'.format(leverage))
+                    print('leverage changed -->', leverage)
 
                 if first_iter:
                     # ---------- define start asset ---------- #
                     if self.accumulated_income == 0.0:
 
-                        available_balance = config.trader_set.initial_asset  # USDT
+                        available_balance = config.init_set.initial_asset  # USDT
 
                     else:
-                        if config.trader_set.asset_changed:
-                            available_balance = config.trader_set.initial_asset
+                        if config.init_set.asset_changed:
+                            available_balance = config.init_set.initial_asset
 
                             #       asset_changed -> 0      #
-                            config.trader_set.asset_changed = 0
+                            config.init_set.asset_changed = 0
 
                             with open(pkg_path + config_path, 'w') as cfg:
                                 json.dump(config, cfg, indent=2)
@@ -381,35 +425,36 @@ class Trader:
                             available_balance = max_available_balance * 0.9
 
                     if available_balance < self.min_balance:
-                        sys_log.info('available_balance %.3f < min_balance\n' % available_balance)
+                        print('available_balance %.3f < min_balance' % available_balance)
+                        print()
                         break
 
                 except Exception as e:
-                    sys_log.error('error in get_availableBalance : {}\n'.format(e))
-                    time.sleep(config.trader_set.api_retry_term)
+                    print('error in get_availableBalance :', e)
+                    print()
+                    time.sleep(config.init_set.api_retry_term)
                     continue
 
-                sys_log.info('~ get balance time : %.5f' % (time.time() - temp_time))
+                print('~ get balance time : %.5f' % (time.time() - temp_time))
 
                 # ---------- get available open_quantity ---------- #
                 open_quantity = available_balance / ep * leverage
                 open_quantity = calc_with_precision(open_quantity, quantity_precision)
                 if self.over_balance is not None:
-                    sys_log.info('available_balance (temp) : {}'.format(available_balance))
+                    print('available_balance (temp) :', available_balance)
                 else:
-                    sys_log.info('available_balance : {}'.format(available_balance))
+                    print('available_balance :', available_balance)
 
-                sys_log.info("open_quantity : {}".format(open_quantity))
+                print("open_quantity :", open_quantity)
 
                 real_balance = ep * open_quantity
-                sys_log.info("real_balance : {}".format(real_balance))
+                print("real_balance :", real_balance)
 
                 # ---------- open order ---------- #
                 orderside_changed = False
-                order_info = (available_balance, leverage)
-                self.over_balance, res_code = limit_order(self, config.ep_set.entry_type, config, open_side, ep, open_quantity, order_info)
+                self.over_balance, code_1111 = limit_order(self, config.ep_set.entry_type, config, open_side, ep, open_quantity)
 
-                if res_code:  # order deny except res_code = 0
+                if code_1111:
                     break
 
                 # -------- execution wait time -------- #
@@ -421,7 +466,7 @@ class Trader:
                         if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
                             break
                         else:
-                            time.sleep(config.trader_set.realtime_term)  # <-- for realtime price function
+                            time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
 
                 else:
                     #       limit's ep_out const. & check breakout_qty_ratio         #
@@ -437,61 +482,63 @@ class Trader:
                             realtime_price = get_market_price_v2(self.sub_client)
 
                         except Exception as e:
-                            sys_log.error('error in get_market_price_v2 (ep_out phase) : {}'.format(e))
+                            print('error in get_market_price_v2 (ep_out phase) :', e)
                             continue
 
                         #        1. tp_j 를 last_index 로 설정해도 갱신되지 않음 (res_df 가 갱신되지 않는한)
                         #       Todo        #
                         #        2. 추후, dynamic_tp 사용시 res_df 갱신해야할 것
                         #           a. 그에 따른 res_df 종속 변수 check
-                        tp_j = config.trader_set.last_index
+                        tp_j = config.init_set.last_index
 
                         if open_side == OrderSide.SELL:
                             if realtime_price <= res_df['h_short_rtc_1'].iloc[tp_j] - \
-                                    res_df['h_short_rtc_gap'].iloc[tp_j] * config.loc_set.zone.ei_k:
-                                sys_log.info("cancel open_order by ei_k\n")
+                                    res_df['h_short_rtc_gap'].iloc[tp_j] * config.loc_set.ei_k:
+                                print("cancel open_order by ei_k")
                                 break
                         else:
                             if realtime_price >= res_df['h_long_rtc_1'].iloc[tp_j] + \
-                                    res_df['h_long_rtc_gap'].iloc[tp_j] * config.loc_set.zone.ei_k:
-                                sys_log.info("cancel open_order by ei_k\n")
+                                    res_df['h_long_rtc_gap'].iloc[tp_j] * config.loc_set.ei_k:
+                                print("cancel open_order by ei_k")
                                 break
 
-                        time.sleep(config.trader_set.realtime_term)  # <-- for realtime price function
+                        time.sleep(config.init_set.realtime_term)  # <-- for realtime price function
 
                         #       Todo        #
                         #        1. breakout_gty_ratio
                         #           a. exec_open_qty 와 open_quantity 의 ratio 비교
                         #           b. realtime_term 에 delay 주지 않기 위해, term 설정
                         #        2. 이걸 설정 안해주면 체결되도 close_order 진행 안됨
-                        if first_exec_qty_check or time.time() - check_time >= config.trader_set.qty_check_term:
+                        if first_exec_qty_check or time.time() - check_time >= config.ep_set.qty_check_term:
 
                             try:
-                                exec_open_quantity = get_remaining_quantity(config.trader_set.symbol)
+                                exec_open_quantity = get_remaining_quantity(config.init_set.symbol)
                             except Exception as e:
-                                sys_log.error('error in exec_open_quantity check : {}'.format(e))
-                                time.sleep(config.trader_set.api_retry_term)
+                                print('error in exec_open_quantity check :', e)
+                                time.sleep(config.init_set.api_retry_term)
                                 continue
                             else:
                                 first_exec_qty_check = 0
                                 check_time = time.time()
 
-                            if abs(exec_open_quantity / open_quantity) >= config.trader_set.breakout_qty_ratio:
+                            if abs(exec_open_quantity / open_quantity) >= config.ep_set.breakout_qty_ratio:
                                 break
 
                 #           1. when, open order time expired or executed              #
                 #           2. regardless to position exist, cancel all open orders       #
                 while 1:
                     try:
-                        request_client.cancel_all_orders(symbol=config.trader_set.symbol)
+                        request_client.cancel_all_orders(symbol=config.init_set.symbol)
+                        print()
                     except Exception as e:
-                        sys_log.error('error in cancel remaining open order : {}'.format(e))
+                        print('error in cancel remaining open order :', e)
                     else:
                         break
 
                 if orderside_changed:
                     first_iter = False
-                    sys_log.info('orderside_changed : {}\n'.format(orderside_changed))
+                    print('orderside_changed :', orderside_changed)
+                    print()
                     continue
                 else:
                     break
@@ -502,9 +549,9 @@ class Trader:
 
             while 1:  # <-- for complete exec_open_quantity function
                 try:
-                    exec_open_quantity = get_remaining_quantity(config.trader_set.symbol)
+                    exec_open_quantity = get_remaining_quantity(config.init_set.symbol)
                 except Exception as e:
-                    sys_log.error('error in exec_open_quantity check : {}'.format(e))
+                    print('error in exec_open_quantity check :', e)
                     continue
                 break
 
@@ -516,16 +563,18 @@ class Trader:
             #       position / 체결량 이 존재하면 close order 진행      #
             else:
 
-                sys_log.info('open order executed')
+                print('open order executed')
 
                 #        1. save trade_log      #
                 #        2. check str(res_df.index[-2]), back_sync entry on close     #
                 entry_timeindex = str(res_df.index[-2])
                 trade_log[entry_timeindex] = [ep, open_side, "open"]
 
-                with open(trade_log_path + trade_log_name, "wb") as dict_f:
+                with open(trade_log_path + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
-                    sys_log.info("entry trade_log dumped !\n")
+                    print("entry trade_log dumped !")
+
+                print()
 
                 # ----------- close order ----------- #
 
@@ -553,19 +602,19 @@ class Trader:
                             try:
                                 res_df_list = []
                                 old_df = 0
-                                for itv_i, interval_ in enumerate(config.trader_set.interval_list):
+                                for itv_i, interval_ in enumerate(config.init_set.interval_list):
 
                                     if interval_ != "None":
-                                        new_df_, _ = concat_candlestick(config.trader_set.symbol, interval_,
+                                        new_df_, _ = concat_candlestick(config.init_set.symbol, interval_,
                                                                         days=1,
-                                                                        limit=config.trader_set.row_list[itv_i],
+                                                                        limit=config.init_set.row_list[itv_i],
                                                                         timesleep=0.2,
                                                                         show_process=False)
                                         if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
                                             old_df = 1
                                             break
                                         else:
-                                            new_df = new_df_.iloc[-config.trader_set.row_list[itv_i]:].copy()
+                                            new_df = new_df_.iloc[-config.init_set.row_list[itv_i]:].copy()
                                     else:
                                         new_df = None
 
@@ -575,7 +624,7 @@ class Trader:
                                     continue
 
                             except Exception as e:
-                                sys_log.error('error in get new_dfs (load_new_df2 phase) : {}'.format(e))
+                                print('error in get new_dfs (load_new_df2 phase) :', e)
                                 continue
 
                             else:
@@ -585,27 +634,28 @@ class Trader:
                                 res_df = self.utils.sync_check(res_df_list)
 
                             except Exception as e:
-                                sys_log.error("error in sync_check (load_new_df2 phase) : {}".format(e))
+                                print("error in sync_check (load_new_df2 phase) :", e)
                                 continue
 
                             try:
                                 res_df = self.utils.enlist_tr(res_df, config)
-                                sys_log.info("res_df.index[-1] (load_new_df2 phase) : {}\n".format(res_df.index[-1]))
+                                print('res_df.index[-1] (load_new_df2 phase) :', res_df.index[-1])
+                                # print()
 
                             except Exception as e:
-                                sys_log.error('error in enlist_tr : {}'.format(e))
+                                print('error in enlist_tr :', e)
                                 continue
 
                             #        dynamic inversion platform adjusted         #
                             if open_side == OrderSide.BUY:
-                                if config.trader_set.short_inversion:
+                                if config.ep_set.short_inversion:
                                     out_series = res_df['short_tp']
                                     tp_series = res_df['short_out']
                                 else:
                                     out_series = res_df['long_out']
                                     tp_series = res_df['long_tp']
                             else:
-                                if config.trader_set.long_inversion:
+                                if config.ep_set.long_inversion:
                                     out_series = res_df['long_tp']
                                     tp_series = res_df['long_out']
                                 else:
@@ -613,10 +663,10 @@ class Trader:
                                     tp_series = res_df['short_tp']
 
                             if not config.out_set.static_out:
-                                out = out_series.iloc[config.trader_set.last_index]
+                                out = out_series.iloc[config.init_set.last_index]
 
                             if not config.tp_set.static_tp:
-                                tp = tp_series.iloc[config.trader_set.last_index]
+                                tp = tp_series.iloc[config.init_set.last_index]
 
                     # --------- limit tp order 여부 조사 phase --------- #
                     #          1. static_limit 은 reorder 할필요 없음
@@ -625,11 +675,11 @@ class Trader:
                         prev_remained_tp_id = remained_tp_id
 
                         try:
-                            remained_tp_id = remaining_order_check(config.trader_set.symbol)
+                            remained_tp_id = remaining_order_check(config.init_set.symbol)
 
                         except Exception as e:
-                            sys_log.error('error in remaining_order_check : {}'.format(e))
-                            time.sleep(config.trader_set.api_retry_term)
+                            print('error in remaining_order_check :', e)
+                            time.sleep(config.init_set.api_retry_term)
                             continue
 
                         if config.tp_set.static_tp:
@@ -640,17 +690,17 @@ class Trader:
                                 limit_tp = 1
                             else:
                                 #       tp 가 달라진 경우만 진행 = reorder     #
-                                if tp_series.iloc[config.trader_set.last_index] != tp_series.iloc[config.trader_set.last_index - 1]:
+                                if tp_series.iloc[config.init_set.last_index] != tp_series.iloc[config.init_set.last_index - 1]:
                                     limit_tp = 1
 
                                     #           미체결 tp order 모두 cancel               #
                                     #           regardless to position exist, cancel all tp orders       #
                                     while 1:
                                         try:
-                                            request_client.cancel_all_orders(symbol=config.trader_set.symbol)
+                                            request_client.cancel_all_orders(symbol=config.init_set.symbol)
                                         except Exception as e:
-                                            sys_log.error('error in cancel remaining tp order : {}'.format(e))
-                                            time.sleep(config.trader_set.api_retry_term)
+                                            print('error in cancel remaining tp order :', e)
+                                            time.sleep(config.init_set.api_retry_term)
                                             continue
                                         else:
                                             break
@@ -661,13 +711,13 @@ class Trader:
                         while 1:
                             #         get realtime price, volume precision       #
                             try:
-                                price_precision, quantity_precision = get_precision(config.trader_set.symbol)
+                                price_precision, quantity_precision = get_precision(config.init_set.symbol)
                             except Exception as e:
-                                sys_log.error('error in get price & volume precision : {}'.format(e))
+                                print('error in get price & volume precision :', e)
                                 continue
                             else:
-                                sys_log.info('price_precision : {}'.format(price_precision))
-                                sys_log.info('quantity_precision : {}'.format(quantity_precision))
+                                print('price_precision :', price_precision)
+                                print('quantity_precision :', quantity_precision)
                                 break
 
                         #        1. prev_remained_tp_id 생성
@@ -697,35 +747,37 @@ class Trader:
                                     #        log sub_tp        #
                                     executed_sub_tp = tp_series_list[-1].iloc[-2]
                                     executed_sub_prev_tp = tp_series_list[-1].iloc[-3]
-                                    sys_log.info("executed_sub_prev_tp, executed_sub_tp : {}, {}"
-                                                 .format(executed_sub_prev_tp, executed_sub_tp))
+                                    print("executed_sub_prev_tp, executed_sub_tp :",
+                                          executed_sub_prev_tp, executed_sub_tp)
                                     tp_exec_dict[res_df.index[-2]] = [executed_sub_prev_tp, executed_sub_tp]
 
                                     #        pop sub_tp        #
                                     tp_list.pop()
                                     # tp_series_list.pop()
-                                    sys_log.info("tp_list.pop() executed")
+                                    print("tp_list.pop() executed")
 
                         tp_list = list(map(lambda x: calc_with_precision(x, price_precision), tp_list))
-                        sys_log.info('tp_list : {}'.format(tp_list))
+                        print('tp_list :', tp_list)
 
                         while 1:
                             try:
-                                result = partial_limit_v2(self, config, tp_list, close_side,
-                                                          quantity_precision, config.tp_set.partial_qty_divider)
+                                # result = partial_limit(config.init_set.symbol, tp_list, close_side, quantity_precision,
+                                #                        config.tp_set.partial_qty_divider)
+                                partial_limit_v2(self, config, tp_list, close_side, quantity_precision,
+                                                       config.tp_set.partial_qty_divider)
 
                                 if result is not None:
-                                    sys_log.info(result)
-                                    time.sleep(config.trader_set.api_retry_term)
+                                    print(result)
+                                    time.sleep(config.init_set.api_retry_term)
                                     continue
 
                             except Exception as e:
-                                sys_log.error("error in partial_limit : {}".format(e))
-                                time.sleep(config.trader_set.api_retry_term)
+                                print('error in partial_limit :', e)
+                                time.sleep(config.init_set.api_retry_term)
                                 continue
 
                             else:
-                                sys_log.info("limit tp order enlisted : {}".format(datetime.now()))
+                                print("limit tp order enlisted :", datetime.now())
                                 limit_tp = 0
                                 break
 
@@ -741,10 +793,10 @@ class Trader:
                         # --------- limit tp execution check phase --------- #
                         if config.tp_set.tp_type == OrderType.LIMIT:
                             try:
-                                tp_remain_quantity = get_remaining_quantity(config.trader_set.symbol)
+                                tp_remain_quantity = get_remaining_quantity(config.init_set.symbol)
                             except Exception as e:
-                                sys_log.error('error in get_remaining_quantity : {}'.format(e))
-                                time.sleep(config.trader_set.api_retry_term)
+                                print('error in get_remaining_quantity :', e)
+                                time.sleep(config.init_set.api_retry_term)
                                 continue
 
                             #       들고 있는 position quantity 가 0 이면, 이 거래를 끝임        #
@@ -752,15 +804,15 @@ class Trader:
                             # if tp_remain_quantity == 0.0:
                             if tp_remain_quantity <= 1 / (10 ** quantity_precision):
                                 # if tp_remain_quantity < 1 / (10 ** quantity_precision):
-                                sys_log.info('all limit tp order executed')
+                                print('all limit tp order executed')
 
                                 #            1. market tp / out 에 대한 log 방식도 서술
                                 #            2. dict 사용 이유 : partial_tp platform
                                 if not config.tp_set.static_tp:
-                                    tp_exec_dict[res_df.index[-2]] = [tp_series.iloc[config.trader_set.last_index - 1], tp]
+                                    tp_exec_dict[res_df.index[-2]] = [tp_series.iloc[config.init_set.last_index - 1], tp]
                                 else:
                                     tp_exec_dict[res_df.index[-2]] = [tp]
-                                sys_log.info("tp_exec_dict : {}".format(tp_exec_dict))
+                                print("tp_exec_dict :", tp_exec_dict)
 
                                 limit_done = 1
                                 break
@@ -779,16 +831,15 @@ class Trader:
                                 # else:
                                 try:
                                     if load_new_df3:
-                                        new_df_, _ = concat_candlestick(config.trader_set.symbol, config.trader_set.interval_list[0],
-                                                                        days=1, limit=config.trader_set.row_list[0],
+                                        new_df_, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval_list[0], days=1, limit=config.init_set.row_list[0],
                                                                         timesleep=0.2)
                                         if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
                                             continue
 
                                 except Exception as e:
-                                    sys_log.error('error in load_new_df3 : {}'.format(e))
+                                    print('error in load_new_df3 :', e)
                                     #        1. adequate term for retries
-                                    time.sleep(config.trader_set.api_retry_term)
+                                    time.sleep(config.init_set.api_retry_term)
                                     continue
 
                                 else:
@@ -809,21 +860,21 @@ class Trader:
                                         if realtime_price <= out:  # hl_out
                                             market_close_on = True
                                             log_tp = out
-                                            sys_log.info("out : {}".format(out))
+                                            print("out :", out)
 
                                     #       long close_out       #
                                     else:
-                                        if new_df_['close'].iloc[config.trader_set.last_index] <= out:
+                                        if new_df_['close'].iloc[config.init_set.last_index] <= out:
                                             market_close_on = True
-                                            log_tp = new_df_['close'].iloc[config.trader_set.last_index]
-                                            sys_log.info("out : {}".format(out))
+                                            log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                            print("out :", out)
 
                                 #       long market tp       #
                                 if config.tp_set.tp_type == "MARKET":
-                                    if new_df_['close'].iloc[config.trader_set.last_index] >= tp:
+                                    if new_df_['close'].iloc[config.init_set.last_index] >= tp:
                                         market_close_on = True
-                                        log_tp = new_df_['close'].iloc[config.trader_set.last_index]
-                                        sys_log.info("tp : {}".format(tp))
+                                        log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                        print("tp :", tp)
 
                             else:
                                 if config.out_set.use_out:
@@ -832,34 +883,34 @@ class Trader:
                                         if realtime_price >= out:
                                             market_close_on = True
                                             log_tp = out
-                                            sys_log.info("out : {}".format(out))
+                                            print("out :", out)
 
                                     #       short close_out     #
                                     else:
-                                        if new_df_['close'].iloc[config.trader_set.last_index] >= out:
+                                        if new_df_['close'].iloc[config.init_set.last_index] >= out:
                                             market_close_on = True
-                                            log_tp = new_df_['close'].iloc[config.trader_set.last_index]
-                                            sys_log.info("out : {}".format(out))
+                                            log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                            print("out :", out)
 
                                 #       short market tp      #
                                 if config.tp_set.tp_type == "MARKET":
-                                    if new_df_['close'].iloc[config.trader_set.last_index] <= tp:
+                                    if new_df_['close'].iloc[config.init_set.last_index] <= tp:
                                         market_close_on = True
-                                        log_tp = new_df_['close'].iloc[config.trader_set.last_index]
-                                        sys_log.info("tp : {}".format(tp))
+                                        log_tp = new_df_['close'].iloc[config.init_set.last_index]
+                                        print("tp :", tp)
 
                             if market_close_on:
                                 if config.out_set.hl_out:
-                                    sys_log.info("realtime_price : {}".format(realtime_price))
-                                sys_log.info("market_close_on is True")
+                                    print("realtime_price :", realtime_price)
+                                print("market_close_on is True")
 
                                 # --- log tp --- #
                                 tp_exec_dict[new_df_.index[-2]] = [log_tp]
-                                sys_log.info("tp_exec_dict : {}".format(tp_exec_dict))
+                                print("tp_exec_dict :", tp_exec_dict)
                                 break
 
                         except Exception as e:
-                            sys_log.error('error in checking market close signal : {}'.format(e))
+                            print('error in checking market close signal :', e)
                             continue
 
                         # ------ minute end phase ------ #
@@ -875,11 +926,11 @@ class Trader:
                                 load_new_df3 = 1
 
                         else:
-                            time.sleep(config.trader_set.realtime_term)
+                            time.sleep(config.init_set.realtime_term)
 
                     #   all limit close executed     #
                     if limit_done:
-                        fee += config.trader_set.limit_fee
+                        fee += config.init_set.limit_fee
                         break
 
                     # if load_new_df2:    # new_df 와 dynamic limit_tp reorder 가 필요한 경우
@@ -891,7 +942,7 @@ class Trader:
                     #               market close phase - get market signal               #
                     else:   # market_close_on = 1
 
-                        fee += config.trader_set.market_fee
+                        fee += config.init_set.market_fee
 
                         remain_tp_canceled = False  # 미체결 limit tp 존재가능함
                         market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp)
@@ -931,13 +982,13 @@ class Trader:
                             if close_side == OrderSide.BUY:
                                 if tp > res_df['open'].loc[k_ts]:
                                     real_tp = res_df['open'].loc[k_ts]
-                                    sys_log.info("market tp executed !")
+                                    print("market tp executed !")
                                 else:
                                     real_tp = tp
                             else:
                                 if tp < res_df['open'].loc[k_ts]:
                                     real_tp = res_df['open'].loc[k_ts]
-                                    sys_log.info("market tp executed !")
+                                    print("market tp executed !")
                                 else:
                                     real_tp = tp
 
@@ -962,10 +1013,10 @@ class Trader:
                     else:
                         calc_tmp_profit += (real_tp / ep - fee - 1) * temp_qty
 
-                    sys_log.info("real_tp : {}".format(real_tp))
-                    sys_log.info("ep : {}".format(ep))
-                    sys_log.info("fee : {}".format(fee))
-                    sys_log.info("temp_qty : {}".format(temp_qty))
+                    print("real_tp :", real_tp)
+                    print("ep :", ep)
+                    print("fee :", fee)
+                    print("temp_qty :", temp_qty)
 
                     #            save exit data         #
                     #            exit_timeindex use "-1" index           #
@@ -973,21 +1024,21 @@ class Trader:
                     # trade_log[exit_timeindex] = [real_tp, "close"]
                     trade_log[k_ts] = [real_tp, "close"]
 
-                with open(trade_log_path + trade_log_name, "wb") as dict_f:
+                with open(trade_log_path + logger_name, "wb") as dict_f:
                     pickle.dump(trade_log, dict_f)
-                    sys_log.info("exit trade_log dumped !")
+                    print("exit trade_log dumped !")
 
                 end_timestamp = int(time.time() * 1000)
 
                 #           get total income from this trade       #
                 while 1:
                     try:
-                        income = total_income(config.trader_set.symbol, start_timestamp, end_timestamp)
+                        income = total_income(config.init_set.symbol, start_timestamp, end_timestamp)
                         self.accumulated_income += income
-                        sys_log.info("income : {} USDT".format(income))
+                        print("income :", income, "USDT")
 
                     except Exception as e:
-                        sys_log.error('error in total_income : {}'.format(e))
+                        print('error in total_income :', e)
 
                     else:
                         break
@@ -995,7 +1046,8 @@ class Trader:
                 tmp_profit = income / real_balance * leverage
                 self.accumulated_profit *= (1 + tmp_profit)
                 self.calc_accumulated_profit *= 1 + (calc_tmp_profit - 1) * leverage
-                sys_log.info('temporary profit : %.3f (%.3f) %%' % (tmp_profit * 100, (calc_tmp_profit - 1) * leverage * 100))
-                sys_log.info('accumulated profit : %.3f (%.3f) %%' % (
+                print('temporary profit : %.3f (%.3f) %%' % (tmp_profit * 100, (calc_tmp_profit - 1) * leverage * 100))
+                print('accumulated profit : %.3f (%.3f) %%' % (
                     (self.accumulated_profit - 1) * 100, (self.calc_accumulated_profit - 1) * 100))
-                sys_log.info('accumulated income : {} USDT\n'.format(self.accumulated_income))
+                print('accumulated income :', self.accumulated_income, "USDT")
+                print()

@@ -1,10 +1,16 @@
 from binance_funcs.binance_futures_modules import *
 import time
 from datetime import datetime
+import logging
+
+sys_log2 = logging.getLogger(__name__)
 
 
 def limit_order(self, order_type, config, limit_side, limit_price, limit_quantity,
                 order_info=None, reduceonly=False):
+
+    # sys_log2 = logging.getLogger(__name__)
+
     open_retry_cnt = 0
     res_code = 0
     while 1:  # <-- loop for complete open order
@@ -26,7 +32,7 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
                                           quantity=str(limit_quantity), price=str(limit_price),
                                           reduceOnly=reduceonly)
         except Exception as e:
-            print('error in limit open order :', e)
+            sys_log2.error('error in limit open order : {}'.format(e))
 
             #        1. price precision validation      #
             if '-4014' in str(e):
@@ -35,10 +41,10 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
                     realtime_price = get_market_price_v2(self.sub_client)
                     price_precision = calc_precision(realtime_price)
                     limit_price = calc_with_precision(limit_price, price_precision)
-                    print('modified price & precision :', limit_price, price_precision)
+                    sys_log2.info('modified price & precision : {}, {}'.format(limit_price, price_precision))
 
                 except Exception as e:
-                    print('error in get_market_price_v2 (open_order phase):', e)
+                    sys_log2.error('error in get_market_price_v2 (open_order phase): {}'.format(e))
 
                 continue
 
@@ -51,9 +57,8 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
             #         = quantity precision error        #
             if '-1111' in str(e):
                 res_code = -1111
-                print("limit_price :", limit_price)
-                print("limit_quantity :", limit_quantity)
-                print()
+                sys_log2.info("limit_price : {}".format(limit_price))
+                sys_log2.info("limit_quantity : {}\n".format(limit_quantity))
                 # break
                 return self.over_balance, res_code
 
@@ -72,14 +77,14 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
                     #          Get available quantity         #
                     quantity = available_balance / limit_price * leverage
                     quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
-                    print('available_balance (temp) :', available_balance)
-                    print('quantity :', quantity)
+                    sys_log2.info('available_balance (temp) : {}'.format(available_balance))
+                    sys_log2.info('quantity : {}'.format(quantity))
 
                 except Exception as e:
-                    print('error in get_availableBalance() :', e)
+                    sys_log2.error('error in get_availableBalance (-2019 phase) : {}'.format(e))
 
             elif open_retry_cnt > 100:
-                print('open_retry_cnt over 100')
+                sys_log2.error('open_retry_cnt over 100')
                 res_code = -2019
                 return self.over_balance, res_code
                 # quit()
@@ -87,12 +92,15 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
             continue
 
         else:
-            print('open order enlisted :', datetime.now())
+            sys_log2.info('open order enlisted : {}'.format(datetime.now()))
             # break
             return self.over_balance, res_code
 
 
 def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, partial_qty_divider):
+
+    # sys_log2 = logging.getLogger(__name__)
+
     tp_count = 0
     # retry_cnt = 0
     while 1:  # loop for partial tp
@@ -100,9 +108,10 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
         #          get remaining quantity         #
         if tp_count == 0:
             try:
-                remain_qty = get_remaining_quantity(symbol)
+                remain_qty = get_remaining_quantity(config.trader_set.symbol)
             except Exception as e:
-                print('error in get_remaining_quantity :', e)
+                sys_log2.error('error in get_remaining_quantity : {}'.format(e))
+                time.sleep(config.trader_set.api_retry_term)
                 continue
 
         #           partial tp_level        #
@@ -119,7 +128,7 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
         #       1. 남을 qty 가 최소 주분 qty 보다 작고
         #       2. 반올림 주문 가능한 양이라면, remain_qty 로 order 진행    #
         if 9 / (10 ** (quantity_precision + 1)) < remain_qty - quantity < 1 / (10 ** quantity_precision):
-            print('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) :', remain_qty, quantity)
+            sys_log2.info('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) : {}, {}'.format(remain_qty, quantity))
 
             #       Todo        #
             #        1. calc_with_precision 은 내림 상태라 r_qty 를 온전히 반영하지 못함      #
@@ -127,7 +136,7 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
             # quantity = calc_with_precision(remain_qty, quantity_precision)
             quantity = calc_with_precision(remain_qty, quantity_precision, def_type='ceil')
 
-        print('remain_qty, quantity :', remain_qty, quantity)
+        sys_log2.info('remain_qty, quantity : {}, {}'.format(remain_qty, quantity))
 
         #   Todo    #
         #    1. 남은 qty 가 최소 주문 qty_precision 보다 작다면, tp order 하지말고 return       #
@@ -146,7 +155,7 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
             if remain_qty < 1 / (10 ** quantity_precision):  # --> means remain_qty = 0.0
                 break
 
-        elif res_code == -1111:
+        elif res_code == -1111:  # continue 하면, limit_order 내부에서 재정의할 것
             continue
 
         #        1. -4003 : tp_list_[0] & remain_qty 로 close_order 진행       #
@@ -157,9 +166,11 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
             continue
 
         # except Exception as e:
-        #     print('error in partial tp :', e)
+        # sys_log2.error('error in partial tp : {}'.format(e))
 
-        else:   # -2019 or something else
+        else:   # -2019 (Margin is insufficient) or something else
+            # continue 하면, limit_order 내부에서 재정의할 것
+
             # retry_cnt += 1
             # if retry_cnt >= 10:
             #     return "maximum_retry"
@@ -169,6 +180,9 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
 
 
 def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp):
+
+    # sys_log2 = logging.getLogger(__name__)
+
     while 1:  # <--- This loop for out close & complete close
 
         #               cancel all tp order                 #
@@ -178,7 +192,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
                 remained_orderId = remaining_order_check(config.trader_set.symbol)
 
             except Exception as e:
-                print('error in remaining_order_check :', e)
+                sys_log2.error('error in remaining_order_check : {}'.format(e))
                 continue
 
             if remained_orderId is not None:
@@ -187,7 +201,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
                     request_client.cancel_all_orders(symbol=config.trader_set.symbol)
 
                 except Exception as e:
-                    print('error in cancel remaining tp order (out phase) :', e)
+                    sys_log2.error('error in cancel remaining tp order (out phase) : {}'.format(e))
                     continue
 
             remain_tp_canceled = True
@@ -197,7 +211,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
             close_remain_quantity = get_remaining_quantity(config.trader_set.symbol)
 
         except Exception as e:
-            print('error in get_remaining_quantity :', e)
+            sys_log2.error('error in get_remaining_quantity : {}'.format(e))
             continue
 
         #           get price, volume precision             #
@@ -206,14 +220,14 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
             _, quantity_precision = get_precision(config.trader_set.symbol)
 
         except Exception as e:
-            print('error in get price & volume precision :', e)
+            sys_log2.error('error in get price & volume precision : {}'.format(e))
             continue
 
         else:
-            print('quantity_precision :', quantity_precision)
+            sys_log2.info('quantity_precision : {}'.format(quantity_precision))
 
         close_remain_quantity = calc_with_precision(close_remain_quantity, quantity_precision)
-        print('close_remain_quantity :', close_remain_quantity)
+        sys_log2.info('close_remain_quantity : {}'.format(close_remain_quantity))
 
         #           close remaining close_remain_quantity             #
         #           1. order side should be opposite side to the open          #
@@ -234,7 +248,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
                             #   Todo
                             exit_price = get_market_price_v2(self.sub_client)
                         except Exception as e:
-                            print('error in get_market_price_v2 (close_order phase):', e)
+                            sys_log2.error('error in get_market_price_v2 (close_order phase): {}'.format(e))
                             continue
 
                     else:
@@ -255,7 +269,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
                                               reduceOnly=True)
 
             except Exception as e:
-                print('error in close order :', e)
+                sys_log2.error('error in close order : {}'.format(e))
 
                 #       check error codes     #
                 #       Todo        #
@@ -266,7 +280,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
 
                 #        -4003 quantity less than zero
                 if '-4003' in str(e):
-                    print('error code check (-4003) :', str(e))
+                    sys_log2.error('error code check (-4003) : {}'.format(e))
                     break
 
                 #       Todo        #
@@ -285,10 +299,10 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
                         close_remain_quantity = get_remaining_quantity(config.trader_set.symbol)
                         close_remain_quantity = calc_with_precision(close_remain_quantity, quantity_precision,
                                                                     def_type='floor')
-                        print('modified qty & precision :', close_remain_quantity, quantity_precision)
+                        sys_log2.info('modified qty & precision : {} {}'.format(close_remain_quantity, quantity_precision))
 
                     except Exception as e:
-                          print('error in get modified qty_precision :', e)
+                        sys_log2.error('error in get modified qty_precision : {}'.format(e))
 
                     continue
 
@@ -296,7 +310,7 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
                 continue
 
             else:
-                print('market close order enlisted')
+                sys_log2.info('market close order enlisted')
                 break
 
         #       enough time for close_remain_quantity to be consumed      #
@@ -304,9 +318,9 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
 
             #       wait for bar ends      #
             time.sleep(config.trader_set.exit_execution_wait - datetime.now().second)
-            print("config.trader_set.exit_execution_wait - datetime.now().second :",
-                  config.trader_set.exit_execution_wait - datetime.now().second)
-            print("datetime.now().second :", datetime.now().second)
+            sys_log2.info("config.trader_set.exit_execution_wait - datetime.now().second : {}"
+                         .format(config.trader_set.exit_execution_wait - datetime.now().second))
+            sys_log2.info("datetime.now().second : {}".format(datetime.now().second))
 
         else:
             time.sleep(1)  # time for qty consumed
@@ -315,16 +329,16 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
         try:
             close_remain_quantity = get_remaining_quantity(config.trader_set.symbol)
         except Exception as e:
-            print('error in get_remaining_quantity :', e)
+            sys_log2.error('error in get_remaining_quantity : {}'.format(e))
             continue
 
         if close_remain_quantity == 0.0 or code_2022:
-            print('market close order executed')
+            sys_log2.info('market close order executed')
             # break
             return
 
         else:
             #           complete close by market            #
-            print('out_type changed to market')
+            sys_log2.info('out_type changed to market')
             config.out_set.out_type = OrderType.MARKET
             continue
