@@ -20,7 +20,7 @@ print("os.getcwd() :", os.getcwd())
 if __name__ == "__main__":
 
     # ----- below phase considered import location ----- #
-    from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+    from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 
     #        Todo       #
     #         1. set input params
@@ -28,18 +28,18 @@ if __name__ == "__main__":
     show_log = 0
     history = 0     # if you don't want to use trade_log
     # dict_name = "2021-07-01 ETHUSDT_cbline_backi2_res_dfs.pkl"
-    log_name = "1638158183.pkl"
+    log_name = "ETHUSDT_1639709047.pkl"
     save_xlsx = 0
 
     #       trader_name - exist for matching trade_log dir      #
-    trader_name = "AT.traders.AT_v3_1129_orderfunc.py".replace(".py", "")
-    utils_name = "AT.utils.utils_v3_showvalue.py".replace(".py", "")
-    config_name = "config_v3_colabsync.json"
+    trader_name = "AT.traders.AT.traders.AT_v3n5_2_1217_posset.py".replace(".py", "")
+    utils_public_name = "AT.utils.utils_public_1216.py".replace(".py", "")
+    config_name = "config_v3_logger.json"
 
-    strat_name = "AT.back_pr.back_pr_strat.back_v3.py".replace(".py", "")
+    strat_name = "AT.back_pr.back_pr_strat.back_v3_addshort.py".replace(".py", "")
 
     strat_lib = importlib.import_module(strat_name)
-    utils_lib = importlib.import_module(utils_name)
+    utils_lib = importlib.import_module(utils_public_name)
 
     save_path = os.path.join(dir_path, "back_pr", "back_res", trader_name.split(".")[-1])
     trade_log_path = os.path.join(dir_path, "trade_log", trader_name.split(".")[-1])
@@ -75,6 +75,8 @@ if __name__ == "__main__":
 
         start_datetime = pd.to_datetime(str(start_datetime)[:-2] + "59.999000")
         end_datetime = pd.to_datetime(trade_log['last_trading_time'][:17] + "59.999000")
+        # start_datetime = pd.to_datetime(str("2021-12-01 15:49:59.999000"))
+        # end_datetime = pd.to_datetime(str("2021-12-14 19:49:59.999000"))
 
         print("start_datetime :", start_datetime)
         print("end_datetime :", end_datetime)
@@ -94,11 +96,11 @@ if __name__ == "__main__":
         #       1. concat_candle ver.      #
         res_df_list = []
         day_list = [days, days_2, days_2]
-        for itv_i, interval_ in enumerate(config.init_set.interval_list):
+        for itv_i, interval_ in enumerate(config.trader_set.interval_list):
 
             if interval_ != "None":
 
-                new_df_, _ = concat_candlestick(config.init_set.symbol, interval_,
+                new_df_, _ = concat_candlestick(config.trader_set.symbol, interval_,
                                                 days=day_list[itv_i],
                                                 end_date=end_date,
                                                 limit=1500,
@@ -141,7 +143,7 @@ if __name__ == "__main__":
 
         for key, res_df_ in res_df_dict.items():
             # print("key :", key)
-            if config.init_set.symbol in key:
+            if config.trader_set.symbol in key:
                 res_df = res_df_
                 # print(res_df.head())
                 break
@@ -150,7 +152,7 @@ if __name__ == "__main__":
         print("res_df from dict phase done !")
 
     #       Todo        #
-    ep_tp_list, trade_list = strat_lib.back_pr_check(res_df, save_path, config, config.init_set.symbol)
+    ep_tp_list, trade_list = strat_lib.back_pr_check(res_df, save_path, config, config.trader_set.symbol)
 
     if not history and save_xlsx:
 

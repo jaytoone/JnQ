@@ -7,7 +7,7 @@ from datetime import datetime
 pkg_path = os.path.abspath('./../')
 os.chdir(pkg_path)
 
-from binance_funcs.binance_futures_modules import *
+from funcs_binance.binance_futures_modules import *
 
 exec_file_name = Path(__file__).stem
 sys_log_path = os.path.join(pkg_path, "sys_log", exec_file_name)
@@ -22,9 +22,8 @@ logging.config.dictConfig(sys_log_cfg)
 logging.getLogger("apscheduler.executors.default").propagate = False
 sys_log = logging.getLogger(__name__)
 
-
-from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
-from binance_funcs.funcs_order_logger import limit_order, partial_limit_v2, market_close_order
+from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
+from funcs_binance.funcs_order_logger import limit_order, partial_limit_v2, market_close_order
 from funcs.funcs_for_trade import intmin
 import numpy as np  # for np.nan
 import time

@@ -8,8 +8,8 @@ os.chdir("../../../")
 # print("os.getcwd() :", os.getcwd())
 # quit()
 
-from binance_funcs.binance_futures_modules import *
-from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+from funcs_binance.binance_futures_modules import *
+from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 from strat.SE.utils.utilsv15 import *
 import pickle

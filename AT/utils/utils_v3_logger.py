@@ -1,10 +1,17 @@
-from binance_f.model.constant import OrderSide
+# from binance_f.model.constant import OrderSide
 from funcs.funcs_indicator import *
 from funcs.funcs_for_trade import *
 
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', 2500)
 pd.set_option('display.max_columns', 2500)
+
+
+class OrderSide:
+
+    BUY = "BUY"
+    SELL = "SELL"
+    INVALID = None
 
 
 def lvrg_set(res_df, config, limit_leverage, open_side, fee):

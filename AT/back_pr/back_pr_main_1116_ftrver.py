@@ -20,7 +20,7 @@ print("os.getcwd() :", os.getcwd())
 if __name__ == "__main__":
 
     # ----- below phase considered import location ----- #
-    from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+    from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 
     #        Todo       #
     #         1. set input params

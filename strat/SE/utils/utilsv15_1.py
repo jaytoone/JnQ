@@ -96,7 +96,7 @@ if __name__ == '__main__':
     # os.chdir("./..")
     # print()
 
-    from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+    from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 
     days = 1
     symbol = 'ETHUSDT'

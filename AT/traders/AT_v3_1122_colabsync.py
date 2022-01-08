@@ -7,8 +7,8 @@ os.chdir(pkg_path)
 # print("os.getcwd() :", os.getcwd())
 # quit()
 
-from binance_funcs.binance_futures_modules import *
-from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+from funcs_binance.binance_futures_modules import *
+from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 from funcs.funcs_for_trade import intmin
 import numpy as np  # for np.nan

@@ -29,9 +29,17 @@ def on_error(ws, error):
     websocket_connection.on_failure(error)
 
 
-def on_close(ws):
+def on_close(ws, close_status_code, close_msg):
+    """
+    on_close: function
+        Callback object which is called when connection is closed.
+        on_close has 3 arguments.
+        The 1st argument is this class object.
+        The 2nd argument is close_status_code.
+        The 3rd argument is close_msg.
+    """
     websocket_connection = websocket_connection_handler[ws]
-    websocket_connection.on_close()
+    websocket_connection.close()
 
 
 def on_open(ws):

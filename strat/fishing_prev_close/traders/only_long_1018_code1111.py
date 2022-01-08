@@ -3,9 +3,9 @@ import os
 # os.chdir(switch_path)
 os.chdir("../../../")
 
-from binance_funcs.binance_futures_modules import *
+from funcs_binance.binance_futures_modules import *
 from funcs.funcs_for_trade import *
-from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 from easydict import EasyDict
 from strat.fishing_prev_close.utils import arima_profit, calc_train_days
 

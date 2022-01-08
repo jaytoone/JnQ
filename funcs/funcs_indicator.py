@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 from funcs.funcs_for_trade import to_lower_tf, intmin, ffill, bfill
-# from funcs_for_trade import to_lower_tf, intmin, ffill, bfill  # --> for colab
+
+np.seterr(invalid="ignore")
 
 
 def nz(x, y=0):
@@ -21,6 +22,158 @@ def round(x):
             return -0.999
         else:
             return x
+
+
+def iszero(val, eps):
+    return abs(val) <= eps
+
+
+def tozero(fst, snd):
+    eps = 1e-10
+    result = fst + snd
+    if iszero(result, eps):
+        result = 0
+    else:
+        if not iszero(result, 1e-4):
+            pass
+        else:
+            result = 1e-15
+
+    return result
+
+
+def stdev(df, period):
+    avg = df['close'].rolling(period).mean()
+    std = pd.Series(index=df.index)
+    for i in range(len(df)):
+        std.iloc[i] = 0.0
+        for backing_i in range(period):
+            sum = tozero(df['close'].iloc[i - backing_i], -avg.iloc[i])
+            std.iloc[i] += sum ** 2
+        std.iloc[i] = np.sqrt(std.iloc[i] / period)
+
+    return std
+
+
+def dev(data, period):
+
+    mean_ = data.rolling(period).mean()
+    dev_ = pd.Series(index=data.index)
+
+    for i in range(len(data)):
+        sum = 0.0
+        for backing_i in range(period):
+            val_ = data.iloc[i - backing_i]
+            sum += abs(val_ - mean_.iloc[i])
+
+        dev_.iloc[i] = sum / period
+
+    return dev_
+
+
+# # wick_score -> 정수자리, body_score -> 소수점 자리
+# def candle_score(o, h, l, c, updown=None, unsigned=True):
+#
+#     #   check up / downward
+#     up = np.where(c >= o, 1, 0)
+#
+#     total_len = h - l
+#     upper_wick = (h - np.maximum(c, o)) / total_len
+#     lower_wick = (np.minimum(c, o) - l) / total_len
+#     body = abs(c - o) / total_len
+#
+#     up_score = (1 - upper_wick) * 100 + body
+#     dn_score = (1 - lower_wick) * 100 + body
+#
+#     if updown is not None:
+#         if updown == "up":
+#             score = up_score
+#         else:
+#             if unsigned:
+#                 score = dn_score
+#             else:
+#                 score = -dn_score
+#     else:
+#         if unsigned:
+#             score = np.where(up, up_score, dn_score)
+#         else:
+#             score = np.where(up, up_score, -dn_score)
+#
+#     return score, body * 100
+
+
+# def candle_score(o, h, l, c, updown=None, unsigned=True):
+#
+#     #   check up / downward
+#     up = np.where(c >= o, 1, 0)
+#
+#     total_len = h - l
+#     upper_wick = (h - np.maximum(c, o)) / total_len
+#     lower_wick = (np.minimum(c, o) - l) / total_len
+#     body = abs(c - o) / total_len
+#
+#     up_score = ((1 - upper_wick) * 100).astype(np.int64) + body
+#     dn_score = ((1 - lower_wick) * 100).astype(np.int64) + body
+#
+#     if updown is not None:
+#         if updown == "up":
+#             score = up_score
+#         else:
+#             if unsigned:
+#                 score = dn_score
+#             else:
+#                 score = -dn_score
+#     else:
+#         if unsigned:
+#             score = np.where(up, up_score, dn_score)
+#         else:
+#             score = np.where(up, up_score, -dn_score)
+#
+#     return score, body * 100
+
+
+def candle_score(o, h, l, c, updown=None, unsigned=True):
+
+    #   check up / downward
+    up = np.where(c >= o, 1, 0)
+
+    total_len = h - l
+    upper_wick = (h - np.maximum(c, o)) / total_len
+    lower_wick = (np.minimum(c, o) - l) / total_len
+
+    body_score = abs(c - o) / total_len * 100
+
+    up_score = (1 - upper_wick) * 100
+    dn_score = (1 - lower_wick) * 100
+
+    if updown is not None:
+        if updown == "up":
+            wick_score = up_score
+        else:
+            if unsigned:
+                wick_score = dn_score
+            else:
+                wick_score = -dn_score
+    else:
+        if unsigned:
+            wick_score = np.where(up, up_score, dn_score)
+        else:
+            wick_score = np.where(up, up_score, -dn_score)
+
+    return wick_score, body_score
+
+
+def candle_ratio(res_df, ohlc_col=None, updown=None, unsigned=True):
+
+    if ohlc_col is None:
+        ohlc_col = ["open", "high", "low", "close"]
+
+    ohlcs = res_df[ohlc_col]
+    o, h, l, c = np.split(ohlcs.values, 4, axis=1)
+
+    # score = candle_score(o, h, l, c, updown, unsigned)
+
+    return candle_score(o, h, l, c, updown, unsigned)
 
 
 def ema(data, period, adjust=True):
@@ -76,37 +229,6 @@ def trix_hist(df, period, multiplier, signal_period):
     return hist
 
 
-def iszero(val, eps):
-    return abs(val) <= eps
-
-
-def tozero(fst, snd):
-    eps = 1e-10
-    result = fst + snd
-    if iszero(result, eps):
-        result = 0
-    else:
-        if not iszero(result, 1e-4):
-            pass
-        else:
-            result = 1e-15
-
-    return result
-
-
-def stdev(df, period):
-    avg = df['close'].rolling(period).mean()
-    std = pd.Series(index=df.index)
-    for i in range(len(df)):
-        std.iloc[i] = 0.0
-        for backing_i in range(period):
-            sum = tozero(df['close'].iloc[i - backing_i], -avg.iloc[i])
-            std.iloc[i] += sum ** 2
-        std.iloc[i] = np.sqrt(std.iloc[i] / period)
-
-    return std
-
-
 def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line):
 
     np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
@@ -151,9 +273,11 @@ def h_candle(res_df, interval_):
 
     np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
 
+    h_hroll = res_df['high'].rolling(interval_).max()
+    h_lroll = res_df['low'].rolling(interval_).min()
+
     hclose = res_df['close'].iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
     repeated_df = np.repeat(hclose, interval_)
-
     row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item() + 1
     res_df['hclose_%s' % interval_] = np.nan
 
@@ -166,6 +290,17 @@ def h_candle(res_df, interval_):
     res_df['hclose_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
                                                      :len(res_df['hclose_%s' % interval_].iloc[row_idx:])]
 
+    hhigh = h_hroll.iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
+    repeated_df = np.repeat(hhigh, interval_)
+    res_df['hhigh_%s' % interval_] = np.nan
+    res_df['hhigh_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
+                                                     :len(res_df['hhigh_%s' % interval_].iloc[row_idx:])]
+
+    hlow = h_lroll.iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
+    repeated_df = np.repeat(hlow, interval_)
+    res_df['hlow_%s' % interval_] = np.nan
+    res_df['hlow_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
+                                                    :len(res_df['hlow_%s' % interval_].iloc[row_idx:])]
     # length unmatch error occurs
     # res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
 
@@ -205,10 +340,10 @@ def bb_width(df, period, multiple):
     basis = df['close'].rolling(period).mean()
     # print(stdev(df, period))
     # quit()
-    dev = multiple * stdev(df, period)
-    upper = basis + dev
-    lower = basis - dev
-    bbw = 2 * dev / basis
+    dev_ = multiple * stdev(df, period)
+    upper = basis + dev_
+    lower = basis - dev_
+    bbw = 2 * dev_ / basis
 
     return upper, lower, bbw
 
@@ -514,6 +649,7 @@ def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_upt
 
 
 def cmo(df, period=9):
+
     df['closegap_cunsum'] = (df['close'] - df['close'].shift(1)).cumsum()
     df['closegap_abs_cumsum'] = abs(df['close'] - df['close'].shift(1)).cumsum()
     # print(df)
@@ -528,6 +664,7 @@ def cmo(df, period=9):
 
 
 def rma(series, period):
+
     alpha = 1 / period
     rma = pd.Series(index=series.index)
     rma.iloc[0] = 0
@@ -541,6 +678,7 @@ def rma(series, period):
 
 
 def rsi(ohlcv_df, period=14):
+
     ohlcv_df['up'] = np.where(ohlcv_df['close'].diff(1) > 0, ohlcv_df['close'].diff(1), 0)
     ohlcv_df['down'] = np.where(ohlcv_df['close'].diff(1) < 0, ohlcv_df['close'].diff(1) * (-1), 0)
     rs = rma(ohlcv_df['up'], period) / rma(ohlcv_df['down'], period)
@@ -550,6 +688,15 @@ def rsi(ohlcv_df, period=14):
     del ohlcv_df['down']
 
     return rsi_
+
+
+def cci(df, period=20):
+
+    hlc3 = (df['high'] + df['low'] + df['close']) / 3
+    ma_ = hlc3.rolling(period).mean()
+    cci_ = (hlc3 - ma_) / (0.015 * dev(hlc3, period))
+
+    return cci_
 
 
 def stoch(ohlcv_df, period_sto=13, k=3, d=3):
@@ -851,64 +998,3 @@ def support_line(df, sigma=10):
             i += 1
 
     return
-
-
-bind_script = '''
-var graph = document.getElementsByClassName("plotly-graph-div js-plotly-plot")[0];
-var update;
-
-function pan(axis, dx, mode=1) {
-    axis += 'axis';
-    var [min, max] = graph._fullLayout[axis].range;
-    dx *= max - min;
-    update[axis+'.range'] = [min+dx, max+mode*dx];
-}
-
-function panX(dx) {pan('x', dx)}
-function panY(dy) {pan('y', dy)}
-function zoomX(dx) {pan('x', dx, -1)}
-function zoomY(dy) {pan('y', dy, -1)}
-
-document.addEventListener("keydown", function(e){
-    var key = e.key;
-    if (e.ctrlKey) key = 'Ctrl+' + key;
-    console.log(e, key);
-    var fac = 0.1;   // pan and zoom factor
-    update = {};
-    var extremes = graph._fullData[0]._extremes;  // only first data set
-    switch (key) {
-        case 'Ctrl+ArrowRight': zoomX(fac); break;
-        case 'Ctrl+ArrowLeft': zoomX(-fac); break;
-        case 'Ctrl+ArrowUp': zoomY(fac); break;
-        case 'Ctrl+ArrowDown': zoomY(-fac); break;
-        case '+': zoomX(fac); zoomY(fac); break;
-        case '-': zoomX(-fac); zoomY(-fac); break;
-        case 'X': case 'U':
-             update['xaxis.range'] = [extremes.x.min[0].val, extremes.x.max[0].val];
-        case 'Y': case 'U':
-             update['yaxis.range'] = [extremes.y.min[0].val, extremes.y.max[0].val]; break;
-        case 'x': case 'u':
-             update['xaxis.autorange'] = true;
-        case 'y': case 'u':
-             update['yaxis.autorange'] = true; break;
-        case '0': update['yaxis.range[0]'] = 0; break;
-        case 'ArrowRight': panX(fac); break;
-        case 'ArrowLeft': panX(-fac); break;
-        case 'ArrowUp': panY(fac); break;
-        case 'ArrowDown': panY(-fac); break;
-        case 'Home': panX(-1.); break;
-        case 'End': panX(1.); break;
-        case 'PageUp': panY(1.); break;
-        case 'PageDown': panY(-1.); break;
-        default: return;
-    }
-    Plotly.relayout(graph, update);
-});
-'''
-
-
-def script_decorator(func):
-    # append binding script
-    def function_wrapper(*x):
-        return (func(*x) or '') + bind_script
-    return function_wrapper

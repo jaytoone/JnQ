@@ -1,3 +1,4 @@
+pyupbit
 APScheduler==3.6.3
 asq==1.3
 

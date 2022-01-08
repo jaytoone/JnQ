@@ -11,7 +11,7 @@ import os
 from binance_f.constant.test import *
 # from binance_f.base.printobject import *
 
-from binance_funcs.binance_futures_concat_candlestick import concat_candlestick
+from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
 
 import matplotlib.pyplot as plt
 
@@ -47,10 +47,14 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # quit()
 
     # ----- rsi ----- #
-    df['rsi'] = rsi(df, 14)
-    print(df.rsi.tail(40))
-    quit()
+    # df['rsi'] = rsi(df, 14)
+    # print(df.rsi.tail(40))
+    # quit()
 
+    # ----- cci ----- #
+    df['cci'] = cci(df, 20)
+    print(df.cci.tail(40))
+    quit()
 
 
     # ----- cloud bline ----- #
