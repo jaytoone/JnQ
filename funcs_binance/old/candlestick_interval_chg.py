@@ -1,6 +1,6 @@
 from binance_futures_concat_candlestick import concat_candlestick, a_day
 from binance_futures_bot_config import LabelType
-from funcs.funcs_for_trade import intmin
+from funcs.funcs_trader import intmin
 # import numpy as np
 import pandas as pd
 

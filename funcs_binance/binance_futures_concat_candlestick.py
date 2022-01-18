@@ -35,6 +35,9 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
     if show_process:
         print(symbol)
 
+    if days > 1:    # 1일 이상의 data 가 필요한 경우 limit 없이 모두 가져옴
+        limit = 1500
+
     for day_cnt in range(days):
 
         if day_cnt != 0:
@@ -49,7 +52,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
             startTime = int(startTime_)
             endTime = int(endTime)
 
-            #        limit < max_limit, startTime != None --> last_index 이상하게 나옴        #
+            #        limit < max_limit, startTime != None 일 경우, last_index 이상하게 나옴        #
             if limit != 1500:
                 startTime = None
 

@@ -12,5 +12,8 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="pybithumb" />
     <orderEntry type="module" module-name="JnQ_upbit" />
+    <orderEntry type="module" module-name="kiwoom" />
+    <orderEntry type="module" module-name="kiwoom" />
+    <orderEntry type="module" module-name="JnQ_kiwoom" />
   </component>
 </module>

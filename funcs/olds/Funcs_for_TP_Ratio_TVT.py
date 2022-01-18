@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # import mpl_finance as mf
 # import time
 # import math
-from funcs.funcs_for_trade import to_lower_tf
+from funcs.funcs_trader import to_lower_tf
 
 from Funcs_For_Trade import *
 from Funcs_Indicator import *

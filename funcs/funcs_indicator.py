@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-from funcs.funcs_for_trade import to_lower_tf, intmin, ffill, bfill
-
-np.seterr(invalid="ignore")
+from funcs.funcs_trader import to_lower_tf_v2, intmin, ffill, bfill
+# from numba import jit
+# import functools
 
 
 def nz(x, y=0):
@@ -42,17 +42,59 @@ def tozero(fst, snd):
     return result
 
 
-def stdev(df, period):
-    avg = df['close'].rolling(period).mean()
-    std = pd.Series(index=df.index)
-    for i in range(len(df)):
-        std.iloc[i] = 0.0
-        for backing_i in range(period):
-            sum = tozero(df['close'].iloc[i - backing_i], -avg.iloc[i])
-            std.iloc[i] += sum ** 2
-        std.iloc[i] = np.sqrt(std.iloc[i] / period)
+def tozero_v2(result):
 
-    return std
+    eps = 1e-10
+
+    if iszero(result, eps):
+        result = 0
+    else:
+        if not iszero(result, 1e-4):
+            pass
+        else:
+            result = 1e-15
+
+    return result
+
+
+def stdev(df, period):
+
+    avg = df['close'].rolling(period).mean()
+    std = pd.Series(index=df.index, data=np.zeros(len(df)))
+
+    #       Todo        #
+    #        1. rolling - one_line 보류
+    # import time
+    # start_0 = time.time()
+
+    # print(df['close'].rolling(period) - avg)
+
+    for i in range(period - 1, len(df)):
+
+        close_series = df['close'].iloc[i + 1 - period:i + 1]
+        sum_series = close_series - avg.iloc[i]
+
+        sum2_series = [tozero_v2(sum_) ** 2 for sum_ in sum_series]
+        # print(sum2_series)
+
+        #   rolling minus avg
+
+        std.iloc[i] = np.sum(sum2_series)
+        # print("np.sum(sum2_series) :", np.sum(sum2_series))
+
+        #   rolled_sum.rolling(period).sum(sum2_series)
+
+        # for backing_i in range(period):
+        #     sum = tozero(df['close'].iloc[i - backing_i], -avg.iloc[i])  # one_line 하려면, idx series 가 같아야함
+        #     std.iloc[i] += sum ** 2
+        #     # std.iloc[i] = np.sqrt(std.iloc[i] / period)
+        # # print("std.iloc[i] :", std.iloc[i])
+        # # print()
+
+    std = np.sqrt(std / period)
+    # print(time.time() - start_0)
+
+    return std  # 1.9082684516906738 25.619273900985718
 
 
 def dev(data, period):
@@ -67,6 +109,8 @@ def dev(data, period):
             sum += abs(val_ - mean_.iloc[i])
 
         dev_.iloc[i] = sum / period
+
+        # temp_sum = abs(data.iloc[i - backing_i] - mean_.iloc[i])
 
     return dev_
 
@@ -176,8 +220,70 @@ def candle_ratio(res_df, ohlc_col=None, updown=None, unsigned=True):
     return candle_score(o, h, l, c, updown, unsigned)
 
 
-def ema(data, period, adjust=True):
-    return pd.Series(data.ewm(span=period, adjust=adjust).mean())
+def sma(data, period):
+    return data.rolling(period).mean()
+
+
+# def ema(data, period, adjust=False):
+#     return pd.Series(data.ewm(span=period, adjust=adjust).mean())
+
+def ema(data, period):
+
+    alpha = 2 / (period + 1)
+    avg = sma(data, period)
+
+    sum_ = alpha * data + (1 - alpha) * avg
+
+    return sum_
+
+# # @functools.lru_cache(10)
+# @jit(nopython=True)
+# def ema(data, avg, period):
+#
+#     alpha = 2 / (period + 1)
+#
+#     # avg = sma(data, period).values
+#     assert not pd.isnull(avg[-period]), "avg.iloc[-period] should not be nan"
+#     # print(avg.iloc[-period])
+#
+#     sum_ = pd.Series(index=data.index).values
+#     # sum_ = 0
+#     len_data = len(data)
+#     # start_idx = len_data - period
+#
+#     for i in range(period, len_data):    # back_pr 문제로 1 부터 해야할 것
+#
+#         #   i idx 의 ema 를 결정   # - each ema's start_value = avg.iloc[j]
+#         temp_sum = pd.Series(index=data.index).values
+#         for j in range(i + 1 - period, i + 1):
+#             if np.isnan(temp_sum[j - 1]):
+#                 temp_sum[j] = avg[j]
+#             else:
+#                 temp_sum[j] = alpha * data[j] + (1 - alpha) * nz(temp_sum[j - 1])
+#                 # temp_sum[i] = alpha * data[i] + (1 - alpha) * nz(avg[i - 1])
+#         sum_[i] = temp_sum[j]
+#
+#     return sum_
+
+
+# def ema(data, period):    # start_value 인 avg.iloc[i] 가 days 에 따라 변경됨
+#
+#     alpha = 2 / (period + 1)
+#
+#     avg = sma(data, period)
+#     assert not pd.isnull(avg.iloc[-period]), "avg.iloc[-period] should not be nan"
+#     print(avg.iloc[-period])
+#
+#     sum = pd.Series(index=data.index)
+#     # sum = 0
+#     len_data = len(data)
+#     for i in range(1, len_data):
+#         if np.isnan(sum.iloc[i - 1]):
+#             sum.iloc[i] = avg.iloc[i]
+#         else:
+#             sum.iloc[i] = alpha * data.iloc[i] + (1 - alpha) * nz(sum.iloc[i - 1])
+#
+#     return sum
 
 
 def cloud_bline(df, period):
@@ -229,9 +335,10 @@ def trix_hist(df, period, multiplier, signal_period):
     return hist
 
 
-def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line):
+def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line, np_timeidx=None):
 
-    np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
+    if np_timeidx is None:  # temporary adjusted for "utils_v3_1216.py"
+        np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
 
     res_df['short_dtk_plot_1'] = res_df['bb_lower_%s' % dtk_itv2]
     res_df['short_dtk_plot_0'] = res_df['dc_upper_%s' % dtk_itv2]
@@ -269,57 +376,41 @@ def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line):
     return res_df
 
 
-def h_candle(res_df, interval_):
+# def h_candle(res_df, interval_): .
 
-    np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
 
-    h_hroll = res_df['high'].rolling(interval_).max()
-    h_lroll = res_df['low'].rolling(interval_).min()
+def h_candle_v2(res_df_, itv):
 
-    hclose = res_df['close'].iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
-    repeated_df = np.repeat(hclose, interval_)
-    row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item() + 1
-    res_df['hclose_%s' % interval_] = np.nan
+    h_res_df = res_df_.resample(itv).agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last'
+    })
 
-    # print(len(repeated_df))
-    # print(len(res_df))
-    # if len(res_df) >= len(repeated_df):
-    #     res_df['hclose_%s' % interval_].iloc[:len(repeated_df)] = repeated_df.shift(row_idx - interval_).values
-    # else:
-    #     res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
-    res_df['hclose_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
-                                                     :len(res_df['hclose_%s' % interval_].iloc[row_idx:])]
+    h_res_df = pd.concat([h_res_df, res_df_[['open', 'high', 'low', 'close']].iloc[-1:]])
 
-    hhigh = h_hroll.iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
-    repeated_df = np.repeat(hhigh, interval_)
-    res_df['hhigh_%s' % interval_] = np.nan
-    res_df['hhigh_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
-                                                     :len(res_df['hhigh_%s' % interval_].iloc[row_idx:])]
+    h_res_df2 = h_res_df.resample('T').ffill()  # 기본적으로 'T' 단위로만 resampling, ffill 이 맞음
 
-    hlow = h_lroll.iloc[np.argwhere(np_timeidx % interval_ == interval_ - 1).reshape(-1, )]
-    repeated_df = np.repeat(hlow, interval_)
-    res_df['hlow_%s' % interval_] = np.nan
-    res_df['hlow_%s' % interval_].iloc[row_idx:] = repeated_df.shift(1 - interval_).values[
-                                                    :len(res_df['hlow_%s' % interval_].iloc[row_idx:])]
-    # length unmatch error occurs
-    # res_df['hclose_%s' % interval_] = repeated_df.shift(row_idx - interval_).values[:len(res_df)]
+    h_candle_col = ['hopen_{}'.format(itv), 'hhigh_{}'.format(itv), 'hlow_{}'.format(itv), 'hclose_{}'.format(itv)]
 
-    hopen = res_df['open'].iloc[np.argwhere(np_timeidx % interval_ == 0).reshape(-1, )]
-    repeated_df = np.repeat(hopen, interval_)
-    row_idx = np.argwhere(res_df.index == repeated_df.index[0]).item()
-    res_df['hopen_%s' % interval_] = np.nan
-    # res_df['hopen_%s' % interval_].iloc[row_idx:] = repeated_df.values
-    res_df['hopen_%s' % interval_].iloc[row_idx:] = repeated_df.values[
-                                                    :len(res_df['hopen_%s' % interval_].iloc[row_idx:])]
+    #        1. res_df_ & resampled data idx unmatch
+    #           1_1. res_df_ 의 남는 rows 를 채워주어야하는데
+    # print("res_df_.tail(15) :", res_df_[['open', 'high', 'low', 'close']].tail(15))
+    # print("h_res_df.tail(5) :", h_res_df.tail(5))
+    # print("h_res_df2.tail(15) :", h_res_df2.tail(15))
+    res_df_[h_candle_col] = h_res_df2.values[-len(res_df_):]
 
-    return res_df
+    return res_df_
 
 
 def cct_bbo(df, period, smooth):
+
     avg_ = df['close'].rolling(period).mean()
     stdev_ = stdev(df, period)
     # print("len(stdev_) :", len(stdev_))
     # print("len(stdev_.apply(lambda x: 2 * x)) :", len(stdev_.apply(lambda x: 2 * x)))
+
     cctbbo = 100 * (df['close'] + stdev_.apply(lambda x: 2 * x) - avg_) / (stdev_.apply(lambda x: 4 * x))
     ema_cctbbo = ema(cctbbo, smooth)
 
@@ -356,13 +447,12 @@ def dc_line(ltf_df, htf_df, interval, dc_period=20):
 
     if interval != '1m':
         htf_df[dc_upper], htf_df[dc_lower], htf_df[dc_base] = donchian_channel(htf_df, dc_period)
-        ltf_df = ltf_df.join(
-            pd.DataFrame(index=ltf_df.index, data=to_lower_tf(ltf_df, htf_df, [i for i in range(-3, 0, 1)]),
-                         columns=[dc_upper, dc_lower, dc_base]))
+        joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
     else:
-        ltf_df[dc_upper], ltf_df[dc_lower], ltf_df[dc_base] = donchian_channel(ltf_df, dc_period)
+        joined_ltf_df = ltf_df.copy()
+        joined_ltf_df[dc_upper], joined_ltf_df[dc_lower], joined_ltf_df[dc_base] = donchian_channel(ltf_df, dc_period)
 
-    return ltf_df
+    return joined_ltf_df
 
 
 def st_price_line(ltf_df, htf_df, interval):
@@ -381,29 +471,24 @@ def st_price_line(ltf_df, htf_df, interval):
 
     # startTime = time.time()
 
-    ltf_df = ltf_df.join(
-        pd.DataFrame(index=ltf_df.index, data=to_lower_tf(ltf_df, htf_df, [i for i in range(-9, 0, 1)]),
-                     columns=[st1_up, st1_down, st1_trend
-                         , st2_up, st2_down, st2_trend
-                         , st3_up, st3_down, st3_trend]))
+    joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-9, 0, 1)]), how='inner')
 
-    return ltf_df
+    return joined_ltf_df
 
 
-def bb_line(ltf_df, htf_df, interval):
+def bb_line(ltf_df, htf_df, interval, period=20, multi=1):
 
     bb_upper = 'bb_upper_%s' % interval
     bb_lower = 'bb_lower_%s' % interval
 
     if interval != '1m':
-        htf_df[bb_upper], htf_df[bb_lower], _ = bb_width(htf_df, 20, 1)
-        ltf_df = ltf_df.join(
-            pd.DataFrame(index=ltf_df.index, data=to_lower_tf(ltf_df, htf_df, [i for i in range(-2, 0, 1)]),
-                         columns=[bb_upper, bb_lower]))
+        htf_df[bb_upper], htf_df[bb_lower], _ = bb_width(htf_df, period, multi)
+        joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-2, 0, 1)]), how='inner')
     else:
-        ltf_df[bb_upper], ltf_df[bb_lower], _ = bb_width(ltf_df, 20, 1)
+        joined_ltf_df = ltf_df.copy()
+        joined_ltf_df[bb_upper], joined_ltf_df[bb_lower], _ = bb_width(ltf_df, period, multi)
 
-    return ltf_df
+    return joined_ltf_df
 
 
 def fisher(df, period):
@@ -666,21 +751,28 @@ def cmo(df, period=9):
 def rma(series, period):
 
     alpha = 1 / period
-    rma = pd.Series(index=series.index)
-    rma.iloc[0] = 0
+    rma_ = pd.Series(index=series.index)
+    avg_ = series.rolling(period).mean()
+    
+    rma_.iloc[0] = 0
     for i in range(1, len(series)):
-        if np.isnan(rma.iloc[i - 1]):
-            rma.iloc[i] = series.rolling(period).mean().iloc[i]
+        if np.isnan(rma_.iloc[i - 1]):
+            rma_.iloc[i] = avg_.iloc[i]
         else:
-            rma.iloc[i] = series.iloc[i] * alpha + (1 - alpha) * nz(rma.iloc[i - 1])
+            rma_.iloc[i] = series.iloc[i] * alpha + (1 - alpha) * nz(rma_.iloc[i - 1])  # recursive
+            
+    # rma_.iloc[0] = avg_.iloc[0]
+    # rma_ = series * alpha + (1 - alpha) * rma_.shift(1).apply(nz)
 
-    return rma
+    return rma_
 
 
 def rsi(ohlcv_df, period=14):
 
+    #       rma 에 rolling, index 가 필요해서 series 로 남겨두고 del 하는 것임     #
     ohlcv_df['up'] = np.where(ohlcv_df['close'].diff(1) > 0, ohlcv_df['close'].diff(1), 0)
     ohlcv_df['down'] = np.where(ohlcv_df['close'].diff(1) < 0, ohlcv_df['close'].diff(1) * (-1), 0)
+
     rs = rma(ohlcv_df['up'], period) / rma(ohlcv_df['down'], period)
     rsi_ = 100 - 100 / (1 + rs)
 
@@ -739,10 +831,19 @@ def obv(df):
     return obv
 
 
+# def macd(df, short=9, long=19, signal=9):
+#     macd = df['close'].ewm(span=short, min_periods=short - 1, adjust=False).mean() - \
+#                  df['close'].ewm(span=long, min_periods=long - 1, adjust=False).mean()
+#     macd_signal = macd.ewm(span=signal, min_periods=signal - 1, adjust=False).mean()
+#     macd_hist = macd - macd_signal
+#
+#     return macd_hist
+
+
 def macd(df, short=9, long=19, signal=9):
-    macd = df['close'].ewm(span=short, min_periods=short - 1, adjust=False).mean() - \
-                 df['close'].ewm(span=long, min_periods=long - 1, adjust=False).mean()
-    macd_signal = macd.ewm(span=signal, min_periods=signal - 1, adjust=False).mean()
+
+    macd = ema(df['close'], short) - ema(df['close'], long)
+    macd_signal = ema(macd, signal)
     macd_hist = macd - macd_signal
 
     return macd_hist
@@ -750,16 +851,22 @@ def macd(df, short=9, long=19, signal=9):
 
 def ema_ribbon(df, ema_1=5, ema_2=8, ema_3=13):
 
-    ema1 = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
-    ema2 = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
-    ema3 = df['close'].ewm(span=ema_3, min_periods=ema_3 - 1, adjust=False).mean()
+    # ema1 = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
+    # ema2 = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
+    # ema3 = df['close'].ewm(span=ema_3, min_periods=ema_3 - 1, adjust=False).mean()
+    ema1 = ema(df['close'], ema_1)
+    ema2 = ema(df['close'], ema_2)
+    ema3 = ema(df['close'], ema_3)
 
     return ema1, ema2, ema3
 
 
 def ema_cross(df, ema_1=30, ema_2=60):
-    df['EMA_1'] = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
-    df['EMA_2'] = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
+
+    # df['EMA_1'] = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
+    # df['EMA_2'] = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
+    df['EMA_1'] = ema(df['close'], ema_1)
+    df['EMA_2'] = ema(df['close'], ema_2)
 
     return
 
@@ -767,14 +874,18 @@ def ema_cross(df, ema_1=30, ema_2=60):
 def atr(df, period):
     tr = pd.Series(index=df.index)
     tr.iloc[0] = df['high'].iloc[0] - df['low'].iloc[0]
-    for i in range(1, len(df)):
-        if pd.isna(df['high'].iloc[i - 1]):
-            tr.iloc[i] = df['high'].iloc[i] - df['low'].iloc[i]
-        else:
-            tr.iloc[i] = max(
-                max(df['high'].iloc[i] - df['low'].iloc[i], abs(df['high'].iloc[i] - df['close'].iloc[i - 1])),
-                abs(df['low'].iloc[i] - df['close'].iloc[i - 1]))
-    # print(tr)
+
+    # for i in range(1, len(df)):
+    #     if pd.isna(df['high'].iloc[i - 1]):
+    #         tr.iloc[i] = df['high'].iloc[i] - df['low'].iloc[i]
+    #     else:
+    #         tr.iloc[i] = max(
+    #             max(df['high'].iloc[i] - df['low'].iloc[i], abs(df['high'].iloc[i] - df['close'].iloc[i - 1])),
+    #             abs(df['low'].iloc[i] - df['close'].iloc[i - 1]))
+
+    tr = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))),
+        abs(df['low'] - df['close'].shift(1)))
+    # print(tr.tail(10))
     # quit()
     atr = rma(tr, period)
 
@@ -795,7 +906,7 @@ def supertrend(df, period, multiplier, cal_st=False):
     #       오차를 없애기 위해서, for loop 사용함       #
     for i in range(1, len(df)):
         if df['close'].iloc[i - 1] > atr_down[i - 1]:
-            atr_down[i] = max(atr_down[i], atr_down[i - 1])
+            atr_down[i] = max(atr_down[i], atr_down[i - 1])  # --> 여기도 누적형, 만든 atr_down[i] 가 [i + 1] 에 영향을 줌
     # print(atr_down[-20:])
     # print(atr_down[-20:].values == atr_down_v2[-20:])
     # quit()

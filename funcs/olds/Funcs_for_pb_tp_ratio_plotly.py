@@ -16,7 +16,7 @@ import plotly.graph_objs as go
 # import time
 # import math
 
-from funcs.funcs_for_trade import *
+from funcs.funcs_trader import *
 from funcs.funcs_indicator import *
 
 pd.set_option('display.width', 1000)

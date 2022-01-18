@@ -3,9 +3,11 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/JnQ.iml" filepath="$PROJECT_DIR$/.idea/JnQ.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../JnQ_kiwoom/.idea/JnQ_kiwoom.iml" filepath="$PROJECT_DIR$/../JnQ_kiwoom/.idea/JnQ_kiwoom.iml" />
       <module fileurl="file://$PROJECT_DIR$/../JnQ_upbit/.idea/JnQ_upbit.iml" filepath="$PROJECT_DIR$/../JnQ_upbit/.idea/JnQ_upbit.iml" />
       <module fileurl="file://$PROJECT_DIR$/../../Labeler/.idea/Labeler.iml" filepath="$PROJECT_DIR$/../../Labeler/.idea/Labeler.iml" />
       <module fileurl="file://$PROJECT_DIR$/../../Drone/Face/Detection/Ultra-Light-Fast-Generic-Face-Detector-1MB/.idea/Ultra-Light-Fast-Generic-Face-Detector-1MB.iml" filepath="$PROJECT_DIR$/../../Drone/Face/Detection/Ultra-Light-Fast-Generic-Face-Detector-1MB/.idea/Ultra-Light-Fast-Generic-Face-Detector-1MB.iml" />
+      <module fileurl="file://$PROJECT_DIR$/kiwoom/.idea/kiwoom.iml" filepath="$PROJECT_DIR$/kiwoom/.idea/kiwoom.iml" />
       <module fileurl="file://$PROJECT_DIR$/../A.I_Coinbot/venv/Lib/site-packages/pybithumb/.idea/pybithumb.iml" filepath="$PROJECT_DIR$/../A.I_Coinbot/venv/Lib/site-packages/pybithumb/.idea/pybithumb.iml" />
     </modules>
   </component>

@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import pickle
 from datetime import datetime
-from funcs.funcs_for_trade import consecutive_df, to_itvnum, itv_bn2ub, limit_by_itv
+from funcs.funcs_trader import consecutive_df, to_itvnum, itv_bn2ub, limit_by_itv
 
 import pyupbit
 import time

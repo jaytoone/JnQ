@@ -3,7 +3,7 @@ from datetime import datetime
 import numpy as np
 # from binance_futures_concat_candlestick import concat_candlestick
 # from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
-from funcs.funcs_for_trade import intmin
+from funcs.funcs_trader import intmin
 import os
 import pickle
 import math
@@ -16,6 +16,9 @@ import logging.config
 from logging.handlers import RotatingFileHandler
 
 # from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
+
+with open(cfg_full_path1, 'r') as cfg:
+    config1 = EasyDict(json.load(cfg))
 
 sys_log_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\AT\sys_log\test_cfg.json"
 # with open(sys_log_path, 'rt') as sys_cfg:

@@ -3,5 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/Binance_Futures_python" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/kiwoom" vcs="Git" />
   </component>
 </project>

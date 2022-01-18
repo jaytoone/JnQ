@@ -24,9 +24,12 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
         end_date = str(datetime.now()).split(' ')[0]
 
     startTime_ = datetime.timestamp(pd.to_datetime('{} 00:00:00'.format(end_date))) * 1000
+    
+    #       1. trader 에서 자정 지나면 data 부족해지는 문제로 days >= 2 적용    #
+    #           1_1. limit under 1500 으로 cover 가능 - starttime = None 이면, 자정 이전 data load 함
+    #           1_2. 본인이 직접 위에 startTime 을 자정으로 설정했으니.
 
     # if interval != '1m':
-    #       trader 에서 자정 지나면 data 부족해지는 문제로 days >= 2 적용    #
     if interval == '1d':
         startTime_ -= a_day
 
@@ -34,6 +37,9 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 
     if show_process:
         print(symbol)
+        
+    if days > 1:    # 1일 이상의 data 가 필요한 경우 limit 없이 모두 가져옴
+        limit = 1500
 
     for day_cnt in range(days):
 
@@ -49,7 +55,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
             startTime = int(startTime_)
             endTime = int(endTime)
 
-            #        limit < max_limit, startTime != None --> last_index 이상하게 나옴        #
+            #        limit < max_limit, startTime != None 일 경우, last_index 이상하게 나옴        #
             if limit != 1500:
                 startTime = None
 
@@ -96,7 +102,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    # days = 45
+    days = 1
 
     end_date = '2021-07-01'
     end_date = '2021-10-10'
@@ -120,7 +126,7 @@ if __name__ == '__main__':
 
     # coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
     #              'BCHUSDT']
-    coin_list = ['ZECUSDT', 'BNBUSDT', 'RUNEUSDT']
+    coin_list = ['ETHUSDT']
     print(coin_list)
     # quit()
 
@@ -144,7 +150,7 @@ if __name__ == '__main__':
                 continue
 
             try:
-                concated_df, end_date = concat_candlestick(coin, interval, days,
+                concated_df, end_date = concat_candlestick(coin, interval, days, limit=1400,
                                                               end_date=end_date, show_process=True, timesleep=0.3)
                 # quit()
 

@@ -11,11 +11,11 @@ import os
 from binance_f.constant.test import *
 # from binance_f.base.printobject import *
 
-from funcs_binance.binance_futures_concat_candlestick import concat_candlestick
+from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
 
 import matplotlib.pyplot as plt
 
-# from funcs.funcs_for_trade import *
+from funcs.funcs_trader import *
 from funcs.funcs_indicator import *
 import mpl_finance as mf
 
@@ -34,6 +34,44 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # print(df.tail(40))
     # quit()
 
+    # ----- stdev ----- #
+    # df['stdev'] = stdev(df, 20)
+    # print(df.stdev.tail(10))
+    # quit()
+
+    # ----- atr ----- #
+    # df['atr'] = atr(df, 20)
+    # print(df.stdev.tail(10))
+    # quit()
+
+    # df = dc_line(df, None, '1m', dc_period=20)
+    # df = dc_line(df, third_df, '5m')
+    # df = dc_line(df, fourth_df, '15m')
+    #
+    df = bb_line(df, None, '1m')
+    # df = bb_line(df, third_df, '5m')
+    # df = bb_line(df, fourth_df, '15m')
+    # df = bb_line(df, fourth_df, '30m')
+    print(df.tail(5)) # 20:15:59.999  3321.18  3321.98  3320.99  3321.74  580.510  3322.939546  3318.316454
+    quit()
+
+
+    start_0 = time.time()
+
+
+    # third_df['ema_5m'] = ema(third_df['close'], 190)
+    # # third_df['ema_5m'] = ema(third_df['close'].values, sma(third_df['close'], 190).values, 190)
+    # # third_df['ema_5m'] = sma(third_df['close'], 190)
+    # print(third_df['ema_5m'].tail(5))
+    # print(time.time() - start_0)
+    # quit()
+    #
+    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf_v2(df, third_df, [-1]), columns=['ema_5m']))
+    # print(df['ema_5m'].tail(20))
+    # # print(df.tail(5))
+    # # print(df['ema_5m'].loc["2022-01-13 20:19:59.999"])
+    # quit()
+
     # ----- bb ----- #
     # df = bb_line(df, None, '1m')
     # df = bb_level(df, '1m', 1)
@@ -47,9 +85,10 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
     # quit()
 
     # ----- rsi ----- #
+    df['rsi'] = rma(df['close'], 14)
     # df['rsi'] = rsi(df, 14)
-    # print(df.rsi.tail(40))
-    # quit()
+    print(df.rsi.tail(40))
+    quit()
 
     # ----- cci ----- #
     df['cci'] = cci(df, 20)
@@ -197,7 +236,7 @@ def sync_check(df, second_df, third_df, fourth_df, plot_size=45, plotting=False)
 if __name__=="__main__":
 
     interval = "1m"
-    interval2 = "3m"
+    interval2 = "1d"
     # interval2 = "4h"
     # interval2 = "1d"
 
@@ -209,7 +248,7 @@ if __name__=="__main__":
     # initial = True
     # while 1:
 
-    df, _ = concat_candlestick(symbol, interval, days=1)
+    df, _ = concat_candlestick(symbol, interval, days=1) # 15:05:59.999    3294.704479 15:05:59.999    3294.705970
     # print(df.tail())
     # quit()
     second_df, _ = concat_candlestick(symbol, interval2, days=1)
@@ -219,7 +258,7 @@ if __name__=="__main__":
     # print(second_df.tail())
     # quit()
 
-    third_df, _ = concat_candlestick(symbol, interval3, days=3)
+    third_df, _ = concat_candlestick(symbol, interval3, days=1, limit=200) # 12:49:59.999    3283.658577    12:49:59.999    3283.658577    3290.392904  14.77669644355774
     fourth_df, _ = concat_candlestick(symbol, interval4, days=1)
 
     res_df = sync_check(df, second_df, third_df, fourth_df, plotting=True, plot_size=300)
