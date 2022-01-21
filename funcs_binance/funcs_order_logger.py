@@ -37,7 +37,7 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
                 try:
                     #   Todo
                     realtime_price = get_market_price_v2(self.sub_client)
-                    price_precision = calc_precision(realtime_price)
+                    price_precision = get_precision_by_price(realtime_price)
                     limit_price = calc_with_precision(limit_price, price_precision)
                     sys_log2.info('modified price & precision : {}, {}'.format(limit_price, price_precision))
 

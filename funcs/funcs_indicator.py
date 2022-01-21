@@ -224,17 +224,18 @@ def sma(data, period):
     return data.rolling(period).mean()
 
 
-# def ema(data, period, adjust=False):
-#     return pd.Series(data.ewm(span=period, adjust=adjust).mean())
+#       Todo - recursive       #
+def ema(data, period, adjust=False):
+    return pd.Series(data.ewm(span=period, adjust=adjust).mean())
 
-def ema(data, period):
-
-    alpha = 2 / (period + 1)
-    avg = sma(data, period)
-
-    sum_ = alpha * data + (1 - alpha) * avg
-
-    return sum_
+# def ema(data, period):
+#
+#     alpha = 2 / (period + 1)
+#     avg = sma(data, period)
+#
+#     sum_ = alpha * data + (1 - alpha) * avg
+#
+#     return sum_
 
 # # @functools.lru_cache(10)
 # @jit(nopython=True)
@@ -266,24 +267,23 @@ def ema(data, period):
 #     return sum_
 
 
+#       Todo - recursive       #
 # def ema(data, period):    # start_value 인 avg.iloc[i] 가 days 에 따라 변경됨
 #
 #     alpha = 2 / (period + 1)
 #
-#     avg = sma(data, period)
-#     assert not pd.isnull(avg.iloc[-period]), "avg.iloc[-period] should not be nan"
-#     print(avg.iloc[-period])
+#     # avg = sma(data, period)
+#     # assert not np.sum(pd.isnull(avg.iloc[-period])), "assert not np.sum(pd.isnull(avg.iloc[-period]))"
+#     # print(np.sum(pd.isnull(avg.iloc[-period])))
 #
-#     sum = pd.Series(index=data.index)
-#     # sum = 0
+#     sum_ = pd.Series(index=data.index, dtype=np.float64)
+#
 #     len_data = len(data)
+#     sum_.iloc[0] = 0
 #     for i in range(1, len_data):
-#         if np.isnan(sum.iloc[i - 1]):
-#             sum.iloc[i] = avg.iloc[i]
-#         else:
-#             sum.iloc[i] = alpha * data.iloc[i] + (1 - alpha) * nz(sum.iloc[i - 1])
+#         sum_.iloc[i] = alpha * data.iloc[i] + (1 - alpha) * sum_.iloc[i - 1]
 #
-#     return sum
+#     return sum_
 
 
 def cloud_bline(df, period):
@@ -323,6 +323,7 @@ def ema_roc(data, roc_period, period):
     return ema_roc_
 
 
+#       Todo - recursive       #
 def trix_hist(df, period, multiplier, signal_period):
     triple = ema(ema(ema(df['close'], period), period), period)
 
@@ -390,6 +391,7 @@ def h_candle_v2(res_df_, itv):
 
     h_res_df = pd.concat([h_res_df, res_df_[['open', 'high', 'low', 'close']].iloc[-1:]])
 
+    #       downsampled h_res_df 의 offset 기준이 00:00 이라서     #
     h_res_df2 = h_res_df.resample('T').ffill()  # 기본적으로 'T' 단위로만 resampling, ffill 이 맞음
 
     h_candle_col = ['hopen_{}'.format(itv), 'hhigh_{}'.format(itv), 'hlow_{}'.format(itv), 'hclose_{}'.format(itv)]
@@ -491,6 +493,7 @@ def bb_line(ltf_df, htf_df, interval, period=20, multi=1):
     return joined_ltf_df
 
 
+#       Todo - recursive -> not fixed      #
 def fisher(df, period):
     hl2 = (df['high'] + df['low']) / 2
     high_ = hl2.rolling(period).max()
@@ -620,6 +623,7 @@ def bbwp(bb_gap, st_gap, ma_period=10):
     return bbwp_, bbwp_ma
 
 
+#       Todo - recursive ?       #
 def fisher_trend(df, column, tc_upper, tc_lower):
     fisher_cross_series = np.where((df[column].shift(1) < tc_upper) & (tc_upper < df[column]), 'CO', np.nan)
     fisher_cross_series = np.where((df[column].shift(1) > tc_lower) & (tc_lower > df[column]), 'CU',
@@ -655,6 +659,7 @@ def fisher_trend(df, column, tc_upper, tc_lower):
     return fisher_trend_df.values
 
 
+#       Todo - recursive ?       #
 def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_uptrend=True):
 
     uptrend = pd.Series(True, index=df.index)
@@ -748,10 +753,11 @@ def cmo(df, period=9):
     return df['CMO']
 
 
+#       Todo - recursive       #
 def rma(series, period):
 
     alpha = 1 / period
-    rma_ = pd.Series(index=series.index)
+    rma_ = pd.Series(index=series.index, dtype=np.float64)
     avg_ = series.rolling(period).mean()
     
     rma_.iloc[0] = 0
@@ -767,6 +773,7 @@ def rma(series, period):
     return rma_
 
 
+#       Todo - recursive       #
 def rsi(ohlcv_df, period=14):
 
     #       rma 에 rolling, index 가 필요해서 series 로 남겨두고 del 하는 것임     #
@@ -818,6 +825,7 @@ def stochrsi(ohlcv_df, period_rsi=14, period_sto=14, k=3, d=3):
     return ohlcv_df['StochRSI_D']
 
 
+#       Todo - recursive       #
 def obv(df):
     obv = [0] * len(df)
     for m in range(1, len(df)):
@@ -840,6 +848,7 @@ def obv(df):
 #     return macd_hist
 
 
+#       Todo - recursive       #
 def macd(df, short=9, long=19, signal=9):
 
     macd = ema(df['close'], short) - ema(df['close'], long)
@@ -849,6 +858,7 @@ def macd(df, short=9, long=19, signal=9):
     return macd_hist
 
 
+#       Todo - recursive       #
 def ema_ribbon(df, ema_1=5, ema_2=8, ema_3=13):
 
     # ema1 = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
@@ -861,6 +871,7 @@ def ema_ribbon(df, ema_1=5, ema_2=8, ema_3=13):
     return ema1, ema2, ema3
 
 
+#       Todo - recursive       #
 def ema_cross(df, ema_1=30, ema_2=60):
 
     # df['EMA_1'] = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
@@ -871,6 +882,7 @@ def ema_cross(df, ema_1=30, ema_2=60):
     return
 
 
+#       Todo - recursive       #
 def atr(df, period):
     tr = pd.Series(index=df.index)
     tr.iloc[0] = df['high'].iloc[0] - df['low'].iloc[0]
@@ -892,6 +904,7 @@ def atr(df, period):
     return atr
 
 
+#       Todo - recursive       #
 def supertrend(df, period, multiplier, cal_st=False):
 
     hl2 = (df['high'] + df['low']) / 2
@@ -942,6 +955,7 @@ def supertrend(df, period, multiplier, cal_st=False):
 
 
 # def mmh_st(df, mp1, mp2, pd1=10, pd2=10):   # makemoney_hybrid
+#       Todo - recursive       #
 def mmh_st(df, mp1, pd1=10):   # makemoney_hybrid
 
     hlc3 = (df['high'] + df['low'] + df['close']) / 3
@@ -1033,79 +1047,79 @@ def ad(df):
     return ad_
 
 
-def lt_trend(df, lambda_bear=0.06, lambda_bull=0.08):
-    df['LT_Trend'] = np.NaN
-    t_zero = 0
-    trend_state = None
-    for i in range(1, len(df)):
-        pmax = df['close'].iloc[t_zero:i].max()
-        pmin = df['close'].iloc[t_zero:i].min()
-        delta_bear = (pmax - df['close'].iloc[i]) / pmax
-        delta_bull = (df['close'].iloc[i] - pmin) / pmin
-        # print(pmax, pmin, delta_bear, delta_bull)
-
-        if delta_bear > lambda_bear and trend_state != 'Bear':
-            t_peak = df['close'].iloc[t_zero:i].idxmax()
-            t_peak = df.index.to_list().index(t_peak)
-            df['LT_Trend'].iloc[t_zero + 1:t_peak + 1] = 'Bull'
-            t_zero = t_peak
-            trend_state = 'Bear'
-
-        elif delta_bull > lambda_bull and trend_state != 'Bull':
-            t_trough = df['close'].iloc[t_zero:i].idxmin()
-            t_trough = df.index.to_list().index(t_trough)
-            df['LT_Trend'].iloc[t_zero + 1:t_trough + 1] = 'Bear'
-            t_zero = t_trough
-            trend_state = 'Bull'
-
-        if i == len(df) - 1:
-            if pd.isnull(df['LT_Trend'].iloc[i]):
-                back_i = i
-                while True:
-                    back_i -= 1
-                    if not pd.isnull(df['LT_Trend'].iloc[back_i]):
-                        if df['LT_Trend'].iloc[back_i] == 'Bull':
-                            df['LT_Trend'].iloc[back_i + 1:] = 'Bear'
-                        else:
-                            df['LT_Trend'].iloc[back_i + 1:] = 'Bull'
-                        break
-
-            df['LT_Trend'].iloc[0] = df['LT_Trend'].iloc[1]
-
-
-from scipy.ndimage.filters import gaussian_filter1d
-
-
-def support_line(df, sigma=10):
-    #           Gaussian Curve          #
-    df['Gaussian_close'] = gaussian_filter1d(df['close'], sigma=sigma)
-    df['Gaussian_close_Trend'] = np.where(df['Gaussian_close'] > df['Gaussian_close'].shift(1), 1, 0)
-
-    df['Support_Line'] = np.NaN
-    i = 0
-    while i < len(df):
-        # print('i :', i)
-        #           Find Red           #
-        if not df['Gaussian_close_Trend'].iloc[i]:
-            #     Find end of the Red       #
-            for j in range(i + 1, len(df)):
-                if df['Gaussian_close_Trend'].iloc[j]:
-                    min_price = df['low'].iloc[i:j].min()
-                    # print('i, j, min_price :', i, j, min_price)
-                    #       Find Red to Green          #
-                    for k in range(j + 1, len(df)):
-                        if df['Gaussian_close_Trend'].iloc[k] == 1 and df['Gaussian_close_Trend'].iloc[k - 1] == 0:
-                            df['Support_Line'].iloc[j:k] = min_price
-                            # print('One S.P Drawing Done!')
-                            i = j
-                            break
-                        else:
-                            if k == len(df) - 1:
-                                df['Support_Line'].iloc[j:] = min_price
-                                i = len(df)
-                                break
-                    break
-        else:
-            i += 1
-
-    return
+# def lt_trend(df, lambda_bear=0.06, lambda_bull=0.08):
+#     df['LT_Trend'] = np.NaN
+#     t_zero = 0
+#     trend_state = None
+#     for i in range(1, len(df)):
+#         pmax = df['close'].iloc[t_zero:i].max()
+#         pmin = df['close'].iloc[t_zero:i].min()
+#         delta_bear = (pmax - df['close'].iloc[i]) / pmax
+#         delta_bull = (df['close'].iloc[i] - pmin) / pmin
+#         # print(pmax, pmin, delta_bear, delta_bull)
+#
+#         if delta_bear > lambda_bear and trend_state != 'Bear':
+#             t_peak = df['close'].iloc[t_zero:i].idxmax()
+#             t_peak = df.index.to_list().index(t_peak)
+#             df['LT_Trend'].iloc[t_zero + 1:t_peak + 1] = 'Bull'
+#             t_zero = t_peak
+#             trend_state = 'Bear'
+#
+#         elif delta_bull > lambda_bull and trend_state != 'Bull':
+#             t_trough = df['close'].iloc[t_zero:i].idxmin()
+#             t_trough = df.index.to_list().index(t_trough)
+#             df['LT_Trend'].iloc[t_zero + 1:t_trough + 1] = 'Bear'
+#             t_zero = t_trough
+#             trend_state = 'Bull'
+#
+#         if i == len(df) - 1:
+#             if pd.isnull(df['LT_Trend'].iloc[i]):
+#                 back_i = i
+#                 while True:
+#                     back_i -= 1
+#                     if not pd.isnull(df['LT_Trend'].iloc[back_i]):
+#                         if df['LT_Trend'].iloc[back_i] == 'Bull':
+#                             df['LT_Trend'].iloc[back_i + 1:] = 'Bear'
+#                         else:
+#                             df['LT_Trend'].iloc[back_i + 1:] = 'Bull'
+#                         break
+#
+#             df['LT_Trend'].iloc[0] = df['LT_Trend'].iloc[1]
+#
+#
+# from scipy.ndimage.filters import gaussian_filter1d
+#
+#
+# def support_line(df, sigma=10):
+#     #           Gaussian Curve          #
+#     df['Gaussian_close'] = gaussian_filter1d(df['close'], sigma=sigma)
+#     df['Gaussian_close_Trend'] = np.where(df['Gaussian_close'] > df['Gaussian_close'].shift(1), 1, 0)
+#
+#     df['Support_Line'] = np.NaN
+#     i = 0
+#     while i < len(df):
+#         # print('i :', i)
+#         #           Find Red           #
+#         if not df['Gaussian_close_Trend'].iloc[i]:
+#             #     Find end of the Red       #
+#             for j in range(i + 1, len(df)):
+#                 if df['Gaussian_close_Trend'].iloc[j]:
+#                     min_price = df['low'].iloc[i:j].min()
+#                     # print('i, j, min_price :', i, j, min_price)
+#                     #       Find Red to Green          #
+#                     for k in range(j + 1, len(df)):
+#                         if df['Gaussian_close_Trend'].iloc[k] == 1 and df['Gaussian_close_Trend'].iloc[k - 1] == 0:
+#                             df['Support_Line'].iloc[j:k] = min_price
+#                             # print('One S.P Drawing Done!')
+#                             i = j
+#                             break
+#                         else:
+#                             if k == len(df) - 1:
+#                                 df['Support_Line'].iloc[j:] = min_price
+#                                 i = len(df)
+#                                 break
+#                     break
+#         else:
+#             i += 1
+#
+#     return

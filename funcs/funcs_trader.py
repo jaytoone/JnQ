@@ -391,9 +391,13 @@ def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
     #        2. htf 가 downsampled 된 df 를 default 로 사용하기에, slicing 불필요해짐
     #        3. Shape of passed values is (799, 3), indices imply (3000, 3) -> len(ltf_df) > len(resampled_df) 란 의미
     #        4. solution => reindexing for inner join   #
-    #         4_1. len(resampled_df) > len(ltf_df) 경우 slicing 진행
-    #           4_1_1. to_htf 를 upsampling 하면서 발생하는 length 오차 교정 위함임 -> 애초에 input_rows 차이 개념이 아님
-    #           4_1_2. sliced_ltf_df & sliced_htf_df 의 경우,
+    #         a. len(resampled_df) > len(ltf_df) 경우 slicing 진행
+    #           -> ltf_index 를 다가져와도 resampled_indx 를 채울 수 없음 => error
+    #           i. resampled length 를 ltf length 로 줄임
+    #               1. 이미 htf_indi. 는 계산된 상태이고, 
+    #                   a. trader - 마지막 index 만 사용, 전혀 무리없음
+    #                   b. idep - resampled_df.head(itv) 만큼만 소실된 것 -> 큰 무리없음
+    #         b. len(resampled_df) < len(ltf_df)-> 상관없음 (ltf_index 에서 resampled_df length 만큼만 때가면 되니까)
     if len(resampled_df) > len(ltf_df):
         resampled_df = resampled_df.iloc[-len(ltf_df):]
     # print("len(ltf_df) :", len(ltf_df))
@@ -465,10 +469,10 @@ def to_itvnum(interval):
     return int_minute
 
 
-def calc_rows_and_days(itv_list, row_list, min_days=1440):
+def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
 
     itv_arr = np.array([to_itvnum(itv_) for itv_ in itv_list])
-    row_arr = np.array(row_list)
+    row_arr = np.maximum(np.array(row_list), np.array(rec_row_list))
 
     max_rows = np.max(itv_arr * row_arr)
     days = int(max_rows / min_days) + 1

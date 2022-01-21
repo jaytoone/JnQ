@@ -148,16 +148,27 @@ def get_precision(symbol_):
     return None
 
 
-def calc_precision(number):
+def get_precision_by_price(price):
 
-    precision_ = 0
-    while 1:
-        if number * (10 ** precision_) == int(number * (10 ** precision_)):
-            break
-        else:
-            precision_ += 1
+    try:
+        precision = len(str(price).split('.')[1])
 
-    return precision_
+    except Exception as e:
+        precision = 0
+
+    return precision
+
+
+# def calc_precision(number):
+#
+#     precision_ = 0
+#     while 1:
+#         if number * (10 ** precision_) == int(number * (10 ** precision_)):
+#             break
+#         else:
+#             precision_ += 1
+#
+#     return precision_
 
 
 def calc_with_precision(data, data_precision, def_type='floor'):
@@ -366,6 +377,9 @@ if __name__ == '__main__':
     # print(get_limit_leverage(symbol))
     # print(total_income(symbol))
     # print(get_precision(symbol))
+
+    print(get_precision_by_price(91.823))
+    quit()
 
 
     # result = request_client.get_open_orders(symbol)

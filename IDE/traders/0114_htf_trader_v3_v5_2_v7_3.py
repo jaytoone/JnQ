@@ -210,7 +210,8 @@ class Trader:
                     temp_time = time.time()
 
                     try:
-                        use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list)
+                        use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list,
+                                                            self.config.trader_set.rec_row_list)
 
                         new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
                                                         days=days,
@@ -756,8 +757,8 @@ class Trader:
                         if load_new_df2:  # dynamic_out & tp phase
 
                             try:
-                                use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list,
-                                                                    self.config.trader_set.row_list)
+                                use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list,
+                                                            self.config.trader_set.rec_row_list)
 
                                 new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
                                                                 days=days,
@@ -983,8 +984,8 @@ class Trader:
                                 try:
                                     #   '1m' 의 dataframe 이 필요한 것 - 사용 의도 : close, time logging
                                     if load_new_df3:
-                                        # use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list,
-                                        #                                     self.config.trader_set.row_list)
+                                        # use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list,
+                                        #                                                             self.config.trader_set.rec_row_list)
 
                                         new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
                                                                         days=1,

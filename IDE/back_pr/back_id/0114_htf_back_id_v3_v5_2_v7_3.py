@@ -1,7 +1,3 @@
-#       Todo        #
-#        1. back_id ajustment
-#        2. title_position & tight_layout
-
 import numpy as np
 from funcs.funcs_trader import intmin, sharpe_ratio, calc_tp_out_fee
 from funcs.funcs_indicator import *
@@ -16,10 +12,12 @@ pd.set_option('display.max_columns', 500)
 pd.set_option('display.width', 1000)
 
 
-def back_pr_check(ftr_path, ftr_list, png_save_path, utils_public, utils_list, cfg_list, show_plot=0, title_pos_y=0.5):
+def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_y=0.5):
 
-    multi_mode = 0
-    strat_switch_idx = 1    # 0, 1, 2...
+    utils_public, utils_list = bot_lib.utils_public_lib, bot_lib.utils_list  # --> local env.'s definition
+
+    multi_mode = 1
+    strat_switch_idx = 0    # 0, 1, 2...
     override = 0
     public_override = 0
 
@@ -2141,22 +2139,21 @@ def back_pr_check(ftr_path, ftr_list, png_save_path, utils_public, utils_list, c
             except Exception as e:
                 print("error in 236 :", e)
 
+            try:
+                frq_dev, s_frq_dev, l_frq_dev = frq_dev_plot(res_df, trade_list, side_list, plot=False)
+                plt.subplot(gs[6])
+                plt.plot(frq_dev)
+
+                plt.subplot(gs[7])
+                plt.plot(s_frq_dev)
+
+                plt.subplot(gs[8])
+                plt.plot(l_frq_dev)
+
+            except Exception as e:
+                print("error in frq_dev_plot :", e)
+
             if show_plot:
-
-                try:
-                    frq_dev, s_frq_dev, l_frq_dev = frq_dev_plot(res_df, trade_list, side_list, plot=False)
-                    plt.subplot(gs[6])
-                    plt.plot(frq_dev)
-
-                    plt.subplot(gs[7])
-                    plt.plot(s_frq_dev)
-
-                    plt.subplot(gs[8])
-                    plt.plot(l_frq_dev)
-
-                except Exception as e:
-                    print("error in frq_dev_plot :", e)
-
                 plt.show()
 
             try:
@@ -2251,9 +2248,12 @@ def back_pr_check(ftr_path, ftr_list, png_save_path, utils_public, utils_list, c
 
             print()
 
-    # ------ below phase is just for local env. ------ #
-    if not show_plot:
-        plt.savefig(png_save_path)
-        print("back_pr.png saved !")
+            # ------ below phase is just for local env. ------ #
+            if not show_plot:
+                png_save_path = os.path.join(bot_lib.trader_lib.pkg_path, "back_pr", "back_res", bot_lib.trader_name.split(".")[-1],
+                                             "{} back_pr.png".format(key))
+
+                plt.savefig(png_save_path)
+                print("back_pr.png saved !")
 
     return res_df, open_list, ep_tp_list, trade_list, side_list, strat_ver_list

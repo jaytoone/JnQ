@@ -58,10 +58,11 @@ def lvrg_set(res_df, config, open_side, ep_, out_, fee, limit_leverage=50):
     return config.lvrg_set.leverage
 
 
-def sync_check(df_, config, order_side="OPEN", skip_row=False):
+def sync_check(df_, config, order_side="OPEN", row_slice=True):
 
     make_itv_list = [m_itv.replace('m', 'T') for m_itv in config.trader_set.itv_list]
     row_list = config.trader_set.row_list
+    rec_row_list = config.trader_set.rec_row_list
     offset_list = config.trader_set.offset_list
 
     assert len(make_itv_list) == len(offset_list), "length of itv & offset_list should be equal"
@@ -84,10 +85,13 @@ def sync_check(df_, config, order_side="OPEN", skip_row=False):
     #                           zone_dc_period 135
 
     # --------- slicing (in trader phase only) --------- #
-    if not skip_row:
+    #               --> latency 영향도가 높은 곳은 이곳
+    if row_slice:   # recursive 가 아닌 indi. 의 latency 를 고려한 slicing
         df, df_5T, df_15T, df_30T, df_4H = [df_s.iloc[-row_list[row_idx]:].copy() for row_idx, df_s in enumerate(htf_df_list)]
+        rec_df, rec_df_5T, rec_df_15T, rec_df_30T, rec_df_4H = [df_s.iloc[-rec_row_list[row_idx]:].copy() for row_idx, df_s in enumerate(htf_df_list)]
     else:
-        df, df_5T, df_15T, df_30T, df_4H = [df_s for row_idx, df_s in enumerate(htf_df_list)]
+        df, df_5T, df_15T, df_30T, df_4H = htf_df_list
+        rec_df, rec_df_5T, rec_df_15T, rec_df_30T, rec_df_4H = htf_df_list
 
     # --------- add indi. --------- #
 
@@ -113,12 +117,13 @@ def sync_check(df_, config, order_side="OPEN", skip_row=False):
     df = bb_line(df, df_4H, '4h')
     # print(time.time() - start_0)
 
-    df['rsi_1m'] = rsi(df, 14)
-    # print(df.rsi_1m.tail())  # 00:45:59.999    75.303255
+    rec_df['rsi_1m'] = rsi(rec_df, 14)  # Todo - recursive, 250 period
+    df = df.join(to_lower_tf_v2(df, rec_df.iloc[:, [-1]], [-1], backing_i=0), how='inner')  # <-- join same_tf manual
+    # print(df.rsi_1m.tail())
 
     if order_side in ["OPEN"]:
-        df_5T['ema_5m'] = ema(df_5T['close'], 155)
-        df = df.join(to_lower_tf_v2(df, df_5T, [-1]), how='inner')
+        rec_df_5T['ema_5m'] = ema(rec_df_5T['close'], 195)  # Todo - recursive, 1100 period (5T)
+        df = df.join(to_lower_tf_v2(df, rec_df_5T, [-1]), how='inner')
 
     return df
 
@@ -245,6 +250,10 @@ def mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail
 
 
 def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
+
+    #       Todo : const warning msg manual        #
+    #        1. just copy & paste const as string
+    #           a. ex) const_ = a < b -> "a < b"
     strat_version = config.strat_version
 
     # ------- param init ------- #
@@ -288,12 +297,12 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
         # -------------- candle_ratio_v1 (previous)  -------------- #
         if strat_version in ['v7_3', '2_2', 'v3']:
 
-            prev_hcloseidx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
+            prev_hclose_idx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
 
-            if i < 0 or (i >= 0 and prev_hcloseidx >= 0):   # trader or colab env.
+            if i < 0 or (i >= 0 and prev_hclose_idx >= 0):   # trader or colab env.
 
-                h_candle_ratio = res_df['h_candle_ratio'].iloc[prev_hcloseidx]
-                h_body_ratio = res_df['h_body_ratio'].iloc[prev_hcloseidx]
+                h_candle_ratio = res_df['h_candle_ratio'].iloc[prev_hclose_idx]
+                h_body_ratio = res_df['h_body_ratio'].iloc[prev_hclose_idx]
 
                 if strat_version in ['v7_3']:
 
@@ -412,7 +421,7 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             dt_k = res_df['short_dtk_1_{}'.format(strat_version)].iloc[i] - \
                    res_df['short_dtk_gap_{}'.format(strat_version)].iloc[i] * config.loc_set.zone.dt_k
 
-            const_ = dc >= dt_k
+            const_ = dc >= dt_k  # short 이라, tp_line 이 dc 보다 작아야하는게 맞음 (dc 가 이미 tp_line 에 다녀오면 안되니까)
             if show_detail:
                 sys_log3.warning("dc >= dt_k : {:.5f} >= {:.5f} ({})".format(dc, dt_k, const_))
 
@@ -465,7 +474,7 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             # const_ = close > bb_base_4h
             const_ = close < bb_base_4h
             if show_detail:
-                sys_log3.warning("close > bb_base_4h : {:.5f} < {:.5f} ({})".format(close, bb_base_4h, const_))
+                sys_log3.warning("close < bb_base_4h : {:.5f} < {:.5f} ({})".format(close, bb_base_4h, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -567,12 +576,12 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
         # --------- by candle --------- #
         # if strat_version in ['2_2']:
 
-        #   prev_hcloseidx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
-        #   if prev_hcloseidx >= 0:
+        #   prev_hclose_idx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
+        #   if prev_hclose_idx >= 0:
 
         #     mr_const_cnt += 1
-        #     # if res_df['short_ep_{}'.format(strat_version)].iloc[i] <= res_df['hclose60'].iloc[prev_hcloseidx)]:
-        #     if res_df['close'].iloc[i] <= res_df['hclose60'].iloc[prev_hcloseidx]:
+        #     # if res_df['short_ep_{}'.format(strat_version)].iloc[i] <= res_df['hclose60'].iloc[prev_hclose_idx)]:
+        #     if res_df['close'].iloc[i] <= res_df['hclose60'].iloc[prev_hclose_idx]:
         #         mr_score += 1
 
         #     else:
@@ -695,12 +704,12 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             # -------------- candle_ratio_v1 (previous)  -------------- #
         if strat_version in ['v7_3', '2_2', 'v3']:
 
-            prev_hcloseidx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
+            prev_hclose_idx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
 
-            if i < 0 or (i >= 0 and prev_hcloseidx >= 0):
+            if i < 0 or (i >= 0 and prev_hclose_idx >= 0):
 
-                h_candle_ratio = res_df['h_candle_ratio'].iloc[prev_hcloseidx]
-                h_body_ratio = res_df['h_body_ratio'].iloc[prev_hcloseidx]
+                h_candle_ratio = res_df['h_candle_ratio'].iloc[prev_hclose_idx]
+                h_body_ratio = res_df['h_body_ratio'].iloc[prev_hclose_idx]
 
                 if strat_version in ['v7_3']:
 
@@ -815,7 +824,7 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
 
             const_ = dc <= dt_k
             if show_detail:
-                sys_log3.warning("dc : {:.5f} <= {:.5f} ({})".format(dc, dt_k, const_))
+                sys_log3.warning("dc <= dt_k : {:.5f} <= {:.5f} ({})".format(dc, dt_k, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -827,7 +836,7 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
 
             const_ = dc <= dt_k
             if show_detail:
-                sys_log3.warning("dc : {:.5f} <= {:.5f} ({})".format(dc, dt_k, const_))
+                sys_log3.warning("dc <= dt_k : {:.5f} <= {:.5f} ({})".format(dc, dt_k, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -855,7 +864,7 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
 
             const_ = bb_lower2_ > close
             if show_detail:
-                sys_log3.warning("bb_lower2_ & close : {:.5f} > {:.5f} ({})".format(bb_lower2_, close, const_))
+                sys_log3.warning("bb_lower2_ > close : {:.5f} > {:.5f} ({})".format(bb_lower2_, close, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -864,7 +873,7 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             # const_ = close < bb_base_4h
             const_ = close > bb_base_4h
             if show_detail:
-                sys_log3.warning("close < bb_base_4h : {:.5f} < {:.5f} ({})".format(close, bb_base_4h, const_))
+                sys_log3.warning("close > bb_base_4h : {:.5f} > {:.5f} ({})".format(close, bb_base_4h, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -974,10 +983,10 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
         # --------- by candle --------- #
         # if strat_version in ['2_2']:
 
-        #   prev_hcloseidx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
-        #   if prev_hcloseidx >= 0:
+        #   prev_hclose_idx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
+        #   if prev_hclose_idx >= 0:
         #     mr_const_cnt += 1
-        #     if res_df['close'].iloc[i] >= res_df['hclose60'].iloc[prev_hcloseidx]:
+        #     if res_df['close'].iloc[i] >= res_df['hclose60'].iloc[prev_hclose_idx]:
         #         mr_score += 1
         #     else:
         #       if show_detail:

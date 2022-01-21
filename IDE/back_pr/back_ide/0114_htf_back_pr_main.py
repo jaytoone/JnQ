@@ -17,9 +17,29 @@ if __name__ == "__main__":
     ID_list = ['v3', 'v5_2', 'v7_3']
 
     show_log = 0
-    save_ftr = 0  # default 1, save sync_checked res_df when history=0
-    history = 1  # if you don't want to use trade_log   # Todo - save_ftr 로 통일가능해봄임
+    edit_datetime = 1
+    history = 1  # if you don't want to use trade_log
     save_xlsx = 0  # save back ep & tp, saved_ftr should be exist
+
+    #        1. ftr_list 로 작업할 수 있도록 - idep 와 동기화
+    #       history variables       #
+    # date = "2022-01-10"
+    date = "2022-01-21"
+    ticker_list = ["ETHUSDT"]
+    ftr_dir = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated/res_df/concat/cum"  # write abspath
+    ftr_path = os.path.join(ftr_dir, date)
+    ftr_list = ["{} {}.ftr".format(date, ticker) for ticker in ticker_list]
+
+    # ----------- trade log ver. - data slicing & back_ep_tp ----------- #
+    log_name = "ETHUSDT_1642649883.pkl"
+
+    #       Todo        #
+    #        1. 이곳에서 multi_mode, switch 지원가능 하도록 구성 - 필요성 의문 제기
+
+    #        edit datetime     #
+    edited_start_datetime = pd.to_datetime(str("2022-01-17 00:49:59.999000"))
+    edited_end_datetime = pd.to_datetime(str("2022-01-21 06:00:59.999000"))
+    edited_start_timestamp = datetime.timestamp(edited_start_datetime)
 
     # ------------- link module ------------- #
     bot_name = "{}.bots.{}_bot_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)
@@ -30,37 +50,20 @@ if __name__ == "__main__":
     strat_name = "{}.back_pr.back_id.{}_back_id_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)
     # strat_name = "{}.back_pr.back_id.{}_back_id_{}_{}_{}_bkfor_independ".format(strat_pkg, frame_ver, *ID_list)
     strat_lib = importlib.import_module(strat_name)
-    
-    #       Todo        #
-    #        1. 이곳에서 multi_mode, switch 지원가능 하도록 구성
-
-    #        edit datetime     #
-    edit_datetime = 0
-    edited_start_datetime = pd.to_datetime(str("2022-01-10 00:49:59.999000"))
-    edited_end_datetime = pd.to_datetime(str("2022-01-10 14:30:59.999000"))
-    edited_start_timestamp = datetime.timestamp(edited_start_datetime)
 
     #       save xlsx var.      #
     new_cols = ['open', 'high', 'low', 'close']
-
-    #       Todo        #
-    #        1. ftr_list 로 작업할 수 있도록 - idep 와 동기화
-    #       history variables       #
-    date = "2022-01-10"
-    # date = "2022-01-17"
-    ticker_list = ["ETHUSDT"]
-    ftr_dir = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated/res_df/concat/cum"  # write abspath
-    ftr_path = os.path.join(ftr_dir, date)
-    ftr_list = ["{} {}.ftr".format(date, ticker) for ticker in ticker_list]
-
-    # ----------- trade log ver. ----------- #
-    log_name = "ETHUSDT_1642388726.pkl"
 
     # ----- below phase considered import location ----- # -> 위에서 cwd 가 변경되는 이유로 바로 import 가능해짐
     from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
 
     #   history=1, 에서도 save_xlsx 을 위해 public 으로 선언
-    trade_log_path = os.path.join(pkg_path, "trade_log", bot_lib.trader_name.split(".")[-1])
+    with open(os.path.join(pkg_path, "trade_log", bot_lib.trader_name.split(".")[-1], log_name), "rb") as dict_f:
+        trade_log = pickle.load(dict_f)
+        if edit_datetime:
+            end_datetime = edited_end_datetime
+        else:
+            end_datetime = pd.to_datetime(trade_log['last_trading_time'][:17] + "59.999000")
 
     cfg_path_list = [os.path.join(pkg_path, "config", name_) for name_ in bot_lib.config_list]
     cfg_list = bot_lib.trader_lib.read_write_cfg_list(cfg_path_list)
@@ -81,18 +84,11 @@ if __name__ == "__main__":
 
         if edit_datetime:
             start_datetime = edited_start_datetime
-            end_datetime = edited_end_datetime
             start_timestamp = edited_start_timestamp
         else:
-            with open(os.path.join(trade_log_path, log_name), "rb") as dict_f:
-                trade_log = pickle.load(dict_f)
-
             start_timestamp = int(log_name.split("_")[-1].split(".")[0])
             start_datetime = datetime.fromtimestamp(start_timestamp)
-            # quit()
-
             start_datetime = pd.to_datetime(str(start_datetime)[:-2] + "59.999000")
-            end_datetime = pd.to_datetime(trade_log['last_trading_time'][:17] + "59.999000")
 
         print("start_datetime :", start_datetime)
         print("end_datetime :", end_datetime)
@@ -119,33 +115,27 @@ if __name__ == "__main__":
                                         timesleep=0.2,
                                         show_process=1)
 
-        res_df_ = bot_lib.utils_public_lib.sync_check(res_df_, config, skip_row=True)
+        res_df_ = bot_lib.utils_public_lib.sync_check(res_df_, config, row_slice=False)
         # print(res_df_.index[0])
 
         #        back_pr index range 를 선택       #
         res_df = res_df_.loc[start_datetime:end_datetime].copy()
         print("sync_check phase done !")
 
-        if save_ftr:
-            try:
-                os.makedirs(save_ftr_dir, exist_ok=True)
-            except Exception as e:
-                print("error in makedirs for logger :", e)
+        try:
+            os.makedirs(save_ftr_dir, exist_ok=True)
+        except Exception as e:
+            print("error in makedirs for logger :", e)
 
-            res_df.reset_index().to_feather(os.path.join(save_ftr_dir, save_ftr_name), compression='lz4')
-            print("{} saved !".format(save_ftr_name))
+        res_df.reset_index().to_feather(os.path.join(save_ftr_dir, save_ftr_name), compression='lz4')
+        print("{} saved !".format(save_ftr_name))
 
         # print(res_df.index[0])
         # quit()
 
     #       3. directly load res_df     #
     else:
-
-        png_name = "{} {} back_pr.png".format(date, ticker_list[0])     # Todo --> back_pr_check 내부에서 ftr_path 받아서 선언하는게 좋을 듯
-
-        png_save_path = os.path.join(save_path, png_name)
-        res_df, open_list, ep_tp_list, trade_list, side_list, strat_ver_list = \
-            strat_lib.back_pr_check(ftr_path, ftr_list, png_save_path, bot_lib.utils_public_lib, bot_lib.utils_list, cfg_list)
+        res_df, open_list, ep_tp_list, trade_list, side_list, strat_ver_list = strat_lib.back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list)
 
         # if not history and save_xlsx:
         if save_xlsx:
@@ -178,25 +168,29 @@ if __name__ == "__main__":
             # quit()
 
             #       insert real-trade data      #
-            res_df_save['real_ep_init'] = np.nan
-            res_df_save['real_ep'] = np.nan
-            res_df_save['real_tp'] = np.nan
-            for t_k, t_v in list(trade_log.items())[1:]:
+            print(date, str(end_datetime))
+            if date in str(end_datetime):
+                res_df_save['real_ep_init'] = np.nan
+                res_df_save['real_ep'] = np.nan
+                res_df_save['real_tp'] = np.nan
+                for t_k, t_v in list(trade_log.items())[1:]:
 
-                if t_v[-1] == "init_open":
-                    res_df_save['real_ep_init'].loc[pd.to_datetime(t_k)] = t_v[0]
-                elif t_v[-1] == "open":
-                    res_df_save['real_ep'].loc[pd.to_datetime(t_k)] = t_v[0]
-                else:
-                    res_df_save['real_tp'].loc[pd.to_datetime(t_k)] = t_v[0]
+                    if t_v[-1] == "init_open":
+                        res_df_save['real_ep_init'].loc[pd.to_datetime(t_k)] = t_v[0]
+                    elif t_v[-1] == "open":
+                        res_df_save['real_ep'].loc[pd.to_datetime(t_k)] = t_v[0]
+                    else:
+                        res_df_save['real_tp'].loc[pd.to_datetime(t_k)] = t_v[0]
 
-            #       span 이 길면 xlsx 저장이 어려울 수 있음 (오래걸림)      #
-            #       log_name
-            res_df_save.to_excel(save_path + "/{} {} back_pr.xlsx".format(date, ticker), index=True)
+                #       span 이 길면 xlsx 저장이 어려울 수 있음 (오래걸림)      #
+                #       log_name
+                #       Todo - currently support one ticker
+                res_df_save.to_excel(os.path.join(save_path, "{} back_pr.xlsx".format(ftr_list[0])), index=True)
+                print("back_pr.xlsx saved !")
+            else:
+                print("we don't have matched trader_log for real_ep, tp - date not in str(end_datetime)")
 
-            print("back_pr.xlsx saved !")
-
-    print("system proc. done")
+    print("system proc. done : you can stop the machine")
     quit()
 
 
