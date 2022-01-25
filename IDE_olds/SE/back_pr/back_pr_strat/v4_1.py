@@ -7,7 +7,7 @@
 #        5. title_position & tight_layout
 
 import numpy as np
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 import matplotlib.pyplot as plt
 
 fee = 0

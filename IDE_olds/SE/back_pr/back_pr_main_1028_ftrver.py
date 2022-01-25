@@ -4,7 +4,7 @@ import pickle
 import importlib
 from datetime import datetime
 from easydict import EasyDict
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 import json
 
 #       본, logic 은 partial_tp 를 지원하는 것으로 알고있음       #

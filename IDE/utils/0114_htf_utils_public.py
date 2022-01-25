@@ -158,9 +158,9 @@ def public_indi(res_df, config, np_timeidx, order_side="OPEN"):
     if order_side in ["OPEN"]:
         start_0 = time.time()
 
-        res_df["candle_ratio"], res_df['body_ratio'] = candle_ratio(res_df, unsigned=False)
+        res_df["wick_score"], res_df['body_score'] = candle_score(res_df, unsigned=False)
 
-        # print("~ candle_ratio() elapsed time : {}".format(time.time() - start_0))
+        # print("~ wick_score() elapsed time : {}".format(time.time() - start_0))
 
         start_0 = time.time()
 
@@ -169,13 +169,13 @@ def public_indi(res_df, config, np_timeidx, order_side="OPEN"):
         res_df = h_candle_v2(res_df, h_c_intv1)
         res_df = h_candle_v2(res_df, h_c_intv2)
 
-        # sys_log3.warning("~ h_candle_ratio elapsed time : {}".format(time.time() - start_0))
-        # print("candle_ratio() ~ h_candle() elapsed time : {}".format(time.time() - start_0))
+        # sys_log3.warning("~ h_wick_score elapsed time : {}".format(time.time() - start_0))
+        # print("wick_score() ~ h_candle() elapsed time : {}".format(time.time() - start_0))
 
         h_candle_col = ['hopen_{}'.format(h_c_intv2), 'hhigh_{}'.format(h_c_intv2), 'hlow_{}'.format(h_c_intv2),
                         'hclose_{}'.format(h_c_intv2)]
 
-        res_df['h_candle_ratio'], res_df['h_body_ratio'] = candle_ratio(res_df, ohlc_col=h_candle_col, unsigned=False)
+        res_df['h_wick_score'], res_df['h_body_score'] = candle_score(res_df, ohlc_col=h_candle_col, unsigned=False)
 
     #     temp indi.    #
     # res_df["ma30_1m"] = res_df['close'].rolling(30).mean()
@@ -276,44 +276,44 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             tp_fee = config.trader_set.limit_fee + config.trader_set.market_fee
         out_fee = config.trader_set.limit_fee + config.trader_set.market_fee
 
-    # -------------- candle_ratio -------------- #
-    if config.loc_set.point.candle_ratio != "None":
+    # -------------- candle_score -------------- #
+    if config.loc_set.point.wick_score != "None":
 
-        # -------------- candle_ratio_v0 (1m initial tick 기준임)  -------------- #
+        # -------------- candle_score_v0 (1m initial tick 기준임)  -------------- #
         if strat_version in ['v5_2', '1_1']:
 
-            candle_ratio = res_df['candle_ratio'].iloc[i]
-            # body_ratio_ = res_df['body_ratio'].iloc[i]
+            wick_score = res_df['wick_score'].iloc[i]
+            # body_score_ = res_df['body_score'].iloc[i]
 
-            const_ = candle_ratio <= -config.loc_set.point.candle_ratio
+            const_ = wick_score <= -config.loc_set.point.wick_score
             if show_detail:
                 sys_log3.warning(
-                    "candle_ratio <= -config.loc_set.point.candle_ratio : {:.5f} <= {:.5f} ({})".format(candle_ratio,
-                                                                                                        -config.loc_set.point.candle_ratio,
+                    "wick_score <= -config.loc_set.point.wick_score : {:.5f} <= {:.5f} ({})".format(wick_score,
+                                                                                                        -config.loc_set.point.wick_score,
                                                                                                         const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
-        # -------------- candle_ratio_v1 (previous)  -------------- #
+        # -------------- candle_score_v1 (previous)  -------------- #
         if strat_version in ['v7_3', '2_2', 'v3']:
 
             prev_hclose_idx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
 
             if i < 0 or (i >= 0 and prev_hclose_idx >= 0):   # trader or colab env.
 
-                h_candle_ratio = res_df['h_candle_ratio'].iloc[prev_hclose_idx]
-                h_body_ratio = res_df['h_body_ratio'].iloc[prev_hclose_idx]
+                h_wick_score = res_df['h_wick_score'].iloc[prev_hclose_idx]
+                h_body_score = res_df['h_body_score'].iloc[prev_hclose_idx]
 
                 if strat_version in ['v7_3']:
 
-                    total_ratio = h_candle_ratio + h_body_ratio / 100
+                    total_ratio = h_wick_score + h_body_score / 100
 
-                    const_ = total_ratio <= -config.loc_set.point.candle_ratio
+                    const_ = total_ratio <= -config.loc_set.point.wick_score
                     if show_detail:
                         sys_log3.warning(
-                            "total_ratio <= -config.loc_set.point.candle_ratio : {:.5f} <= {:.5f} ({})".format(
+                            "total_ratio <= -config.loc_set.point.wick_score : {:.5f} <= {:.5f} ({})".format(
                                 total_ratio,
-                                -config.loc_set.point.candle_ratio,
+                                -config.loc_set.point.wick_score,
                                 const_))
 
                     mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone,
@@ -321,54 +321,54 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
 
                 elif strat_version in ['2_2', 'v3', '1_1']:
 
-                    const_ = h_candle_ratio <= -config.loc_set.point.candle_ratio
+                    const_ = h_wick_score <= -config.loc_set.point.wick_score
                     if show_detail:
                         sys_log3.warning(
-                            "h_candle_ratio <= -config.loc_set.point.candle_ratio : {:.5f} <= {:.5f} ({})".format(
-                                h_candle_ratio,
-                                -config.loc_set.point.candle_ratio,
+                            "h_wick_score <= -config.loc_set.point.wick_score : {:.5f} <= {:.5f} ({})".format(
+                                h_wick_score,
+                                -config.loc_set.point.wick_score,
                                 const_))
 
                     mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone,
                                                      show_detail)
 
-                    if config.loc_set.point.body_ratio != "None":
+                    if config.loc_set.point.body_score != "None":
 
-                        const_ = h_body_ratio >= config.loc_set.point.body_ratio
+                        const_ = h_body_score >= config.loc_set.point.body_score
                         if show_detail:
                             sys_log3.warning(
-                                "h_body_ratio >= config.loc_set.point.body_ratio : {:.5f} >= {:.5f} ({})".format(
-                                    h_body_ratio,
-                                    config.loc_set.point.body_ratio,
+                                "h_body_score >= config.loc_set.point.body_score : {:.5f} >= {:.5f} ({})".format(
+                                    h_body_score,
+                                    config.loc_set.point.body_score,
                                     const_))
 
                         mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone,
                                                          show_detail)
 
-    if config.loc_set.point.candle_ratio2 != "None":  # candle_ratio1 과 동시적용 기능을 위해 병렬 구성
+    # ------------------ candle_score_v2 (current) ------------------ #
+    if config.loc_set.point.wick_score2 != "None":  # wick_score1 과 동시적용 기능을 위해 병렬 구성
 
-        #     candle_ratio_v2 (current)     #
-        h_candle_ratio = res_df['h_candle_ratio'].iloc[i]
-        h_body_ratio = res_df['h_body_ratio'].iloc[i]
-        ho = res_df['hopen_H']
-        hc = res_df['hclose_H']
+        h_wick_score = res_df['h_wick_score'].iloc[i]
+        h_body_score = res_df['h_body_score'].iloc[i]
+        ho = res_df['hopen_H'].iloc[i]
+        hc = res_df['hclose_H'].iloc[i]
 
-        const_ = h_candle_ratio <= -config.loc_set.point.candle_ratio2
+        const_ = h_wick_score <= -config.loc_set.point.wick_score2
         if show_detail:
             sys_log3.warning(
-                "h_candle_ratio <= -config.loc_set.point.candle_ratio2 : {:.5f} <= {:.5f} ({})".format(h_candle_ratio,
-                                                                                                       -config.loc_set.point.candle_ratio2,
+                "h_wick_score <= -config.loc_set.point.wick_score2 : {:.5f} <= {:.5f} ({})".format(h_wick_score,
+                                                                                                       -config.loc_set.point.wick_score2,
                                                                                                        const_))
 
         mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
-        if config.loc_set.point.body_ratio2 != "None":
+        if config.loc_set.point.body_score2 != "None":
 
-            const_ = ho > hc and h_body_ratio >= config.loc_set.point.body_ratio2
+            const_ = ho > hc and h_body_score >= config.loc_set.point.body_score2
             if show_detail:
                 sys_log3.warning(
-                    "ho > hc and h_body_ratio >= config.loc_set.point.body_ratio2 : {:.5f} > {:.5f} and {:.5f} >= {:.5f} ({})"
-                        .format(ho, hc, h_body_ratio, config.loc_set.point.body_ratio2, const_))
+                    "ho > hc and h_body_score >= config.loc_set.point.body_score2 : {:.5f} > {:.5f} and {:.5f} >= {:.5f} ({})"
+                        .format(ho, hc, h_body_score, config.loc_set.point.body_score2, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -469,14 +469,14 @@ def short_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
-            bb_base_4h = res_df['bb_base_4h'].iloc[i]
-
-            # const_ = close > bb_base_4h
-            const_ = close < bb_base_4h
-            if show_detail:
-                sys_log3.warning("close < bb_base_4h : {:.5f} < {:.5f} ({})".format(close, bb_base_4h, const_))
-
-            mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
+            # bb_base_4h = res_df['bb_base_4h'].iloc[i]
+            #
+            # # const_ = close > bb_base_4h
+            # const_ = close < bb_base_4h
+            # if show_detail:
+            #     sys_log3.warning("close < bb_base_4h : {:.5f} < {:.5f} ({})".format(close, bb_base_4h, const_))
+            #
+            # mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
             #     bb & bb   #
         if strat_version in ['v7_3', '1_1']:
@@ -683,44 +683,44 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             tp_fee = config.trader_set.limit_fee + config.trader_set.market_fee
         out_fee = config.trader_set.limit_fee + config.trader_set.market_fee
 
-    # -------------- candle_ratio -------------- #
-    if config.loc_set.point.candle_ratio != "None":
+    # -------------- candle_score -------------- #
+    if config.loc_set.point.wick_score != "None":
 
-        # -------------- candle_ratio_v0 (1m initial tick 기준임)  -------------- #
+        # -------------- candle_score_v0 (1m initial tick 기준임)  -------------- #
         if strat_version in ['v5_2', '1_1']:
 
-            candle_ratio = res_df['candle_ratio'].iloc[i]
-            # body_ratio_ = res_df['body_ratio'].iloc[i]
+            wick_score = res_df['wick_score'].iloc[i]
+            # body_score_ = res_df['body_score'].iloc[i]
 
-            const_ = candle_ratio >= config.loc_set.point.candle_ratio
+            const_ = wick_score >= config.loc_set.point.wick_score
             if show_detail:
                 sys_log3.warning(
-                    "candle_ratio >= config.loc_set.point.candle_ratio : {:.5f} >= {:.5f} ({})".format(candle_ratio,
-                                                                                                       config.loc_set.point.candle_ratio,
+                    "wick_score >= config.loc_set.point.wick_score : {:.5f} >= {:.5f} ({})".format(wick_score,
+                                                                                                       config.loc_set.point.wick_score,
                                                                                                        const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
-            # -------------- candle_ratio_v1 (previous)  -------------- #
+            # -------------- candle_score_v1 (previous)  -------------- #
         if strat_version in ['v7_3', '2_2', 'v3']:
 
             prev_hclose_idx = i - (np_timeidx[i] % config.loc_set.zone.c_itv_ticks + 1)
 
             if i < 0 or (i >= 0 and prev_hclose_idx >= 0):
 
-                h_candle_ratio = res_df['h_candle_ratio'].iloc[prev_hclose_idx]
-                h_body_ratio = res_df['h_body_ratio'].iloc[prev_hclose_idx]
+                h_wick_score = res_df['h_wick_score'].iloc[prev_hclose_idx]
+                h_body_score = res_df['h_body_score'].iloc[prev_hclose_idx]
 
                 if strat_version in ['v7_3']:
 
-                    total_ratio = h_candle_ratio + h_body_ratio / 100
+                    total_ratio = h_wick_score + h_body_score / 100
 
-                    const_ = total_ratio >= config.loc_set.point.candle_ratio
+                    const_ = total_ratio >= config.loc_set.point.wick_score
                     if show_detail:
                         sys_log3.warning(
-                            "total_ratio >= config.loc_set.point.candle_ratio : {:.5f} >= {:.5f} ({})".format(
+                            "total_ratio >= config.loc_set.point.wick_score : {:.5f} >= {:.5f} ({})".format(
                                 total_ratio,
-                                config.loc_set.point.candle_ratio,
+                                config.loc_set.point.wick_score,
                                 const_))
 
                     mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone,
@@ -728,54 +728,54 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
 
                 elif strat_version in ['2_2', 'v3', '1_1']:
 
-                    const_ = h_candle_ratio >= config.loc_set.point.candle_ratio
+                    const_ = h_wick_score >= config.loc_set.point.wick_score
                     if show_detail:
                         sys_log3.warning(
-                            "h_candle_ratio >= config.loc_set.point.candle_ratio : {:.5f} >= {:.5f} ({})".format(
-                                h_candle_ratio,
-                                config.loc_set.point.candle_ratio,
+                            "h_wick_score >= config.loc_set.point.wick_score : {:.5f} >= {:.5f} ({})".format(
+                                h_wick_score,
+                                config.loc_set.point.wick_score,
                                 const_))
 
                     mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone,
                                                      show_detail)
 
-                    if config.loc_set.point.body_ratio != "None":
+                    if config.loc_set.point.body_score != "None":
 
-                        const_ = h_body_ratio >= config.loc_set.point.body_ratio
+                        const_ = h_body_score >= config.loc_set.point.body_score
                         if show_detail:
                             sys_log3.warning(
-                                "h_body_ratio >= config.loc_set.point.body_ratio : {:.5f} >= {:.5f} ({})".format(
-                                    h_body_ratio,
-                                    config.loc_set.point.candle_ratio,
+                                "h_body_score >= config.loc_set.point.body_score : {:.5f} >= {:.5f} ({})".format(
+                                    h_body_score,
+                                    config.loc_set.point.wick_score,
                                     const_))
 
                         mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone,
                                                          show_detail)
 
-    if config.loc_set.point.candle_ratio2 != "None":
+    # ------------------ candle_score_v2 (current) ------------------ #
+    if config.loc_set.point.wick_score2 != "None":
 
-        #     candle_ratio_v2 (current)     #
-        h_candle_ratio = res_df['h_candle_ratio'].iloc[i]
-        h_body_ratio = res_df['h_body_ratio'].iloc[i]
-        ho = res_df['hopen_H']
-        hc = res_df['hclose_H']
+        h_wick_score = res_df['h_wick_score'].iloc[i]
+        h_body_score = res_df['h_body_score'].iloc[i]
+        ho = res_df['hopen_H'].iloc[i]
+        hc = res_df['hclose_H'].iloc[i]
 
-        const_ = h_candle_ratio >= config.loc_set.point.candle_ratio2
+        const_ = h_wick_score >= config.loc_set.point.wick_score2
         if show_detail:
             sys_log3.warning(
-                "h_candle_ratio >= config.loc_set.point.candle_ratio2 : {:.5f} >= {:.5f} ({})".format(h_candle_ratio,
-                                                                                                      config.loc_set.point.candle_ratio2,
+                "h_wick_score >= config.loc_set.point.wick_score2 : {:.5f} >= {:.5f} ({})".format(h_wick_score,
+                                                                                                      config.loc_set.point.wick_score2,
                                                                                                       const_))
 
         mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
-        if config.loc_set.point.body_ratio2 != "None":
+        if config.loc_set.point.body_score2 != "None":
 
-            const_ = ho < hc and h_body_ratio >= config.loc_set.point.body_ratio2
+            const_ = ho < hc and h_body_score >= config.loc_set.point.body_score2
             if show_detail:
                 sys_log3.warning(
-                    "ho < hc and h_body_ratio >= config.loc_set.point.body_ratio2 : {:.5f} >= {:.5f} and {:.5f} >= {:.5f} ({})"
-                        .format(ho, hc, h_body_ratio, config.loc_set.point.body_ratio2, const_))
+                    "ho < hc and h_body_score >= config.loc_set.point.body_score2 : {:.5f} >= {:.5f} and {:.5f} >= {:.5f} ({})"
+                        .format(ho, hc, h_body_score, config.loc_set.point.body_score2, const_))
 
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
@@ -865,17 +865,15 @@ def long_ep_loc(res_df, config, i, np_timeidx, show_detail=True):
             const_ = bb_lower2_ > close
             if show_detail:
                 sys_log3.warning("bb_lower2_ > close : {:.5f} > {:.5f} ({})".format(bb_lower2_, close, const_))
-
             mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
-            bb_base_4h = res_df['bb_base_4h'].iloc[i]
-
-            # const_ = close < bb_base_4h
-            const_ = close > bb_base_4h
-            if show_detail:
-                sys_log3.warning("close > bb_base_4h : {:.5f} > {:.5f} ({})".format(close, bb_base_4h, const_))
-
-            mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
+            # bb_base_4h = res_df['bb_base_4h'].iloc[i]
+            #
+            # # const_ = close < bb_base_4h
+            # const_ = close > bb_base_4h
+            # if show_detail:
+            #     sys_log3.warning("close > bb_base_4h : {:.5f} > {:.5f} ({})".format(close, bb_base_4h, const_))
+            # mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, res_df, open_side, zone, show_detail)
 
             #     bb & bb   #
         if strat_version in ['v7_3', '1_1']:

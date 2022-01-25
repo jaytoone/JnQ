@@ -93,10 +93,10 @@
       "outg_dc_period": "None",
       "tf_entry": 1,
       "htf_entry": 15,
-      "candle_ratio": 80,
-      "body_ratio": "None",
-      "candle_ratio2": "None",
-      "body_ratio2": "None",
+      "wick_score": 80,
+      "body_score": "None",
+      "wick_score2": "None",
+      "body_score2": "None",
       "osc_band": 20
     },
     "point2": {

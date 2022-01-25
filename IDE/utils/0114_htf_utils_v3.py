@@ -1,4 +1,4 @@
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 import numpy as np
 
 
@@ -56,8 +56,6 @@ def enlist_rtc(res_df, config, np_timeidx):
         res_df['short_dtk_0_{}'.format(strat_version)] - res_df['short_dtk_1_{}'.format(strat_version)])
     res_df['long_dtk_gap_{}'.format(strat_version)] = abs(
         res_df['long_dtk_1_{}'.format(strat_version)] - res_df['long_dtk_0_{}'.format(strat_version)])
-
-    res_df = dtk_plot(res_df, dtk_itv2='15m', hhtf_entry=15, use_dtk_line=config.loc_set.zone.use_dtk_line)
 
     return res_df
 
@@ -185,12 +183,6 @@ def enlist_tr(res_df, config, np_timeidx):
       res_df['long_dtk_1_{}'.format(strat_version)] = ffill(res_df['long_dtk_1_{}'.format(strat_version)].values.reshape(1, -1)).reshape(-1, 1)
       res_df['long_dtk_gap_{}'.format(strat_version)] = np.where(res_df['h_entry_{}'.format(strat_version)] == 1, res_df['long_dtk_gap_{}'.format(strat_version)], np.nan)
       res_df['long_dtk_gap_{}'.format(strat_version)] = ffill(res_df['long_dtk_gap_{}'.format(strat_version)].values.reshape(1, -1)).reshape(-1, 1)
-
-    res_df['dc_upper_v2_{}'.format(strat_version)] = res_df['high'].rolling(config.loc_set.zone.dc_period).max()
-    res_df['dc_lower_v2_{}'.format(strat_version)] = res_df['low'].rolling(config.loc_set.zone.dc_period).min()
-    
-    res_df['zone_dc_upper_v2_{}'.format(strat_version)] = res_df['high'].rolling(config.loc_set.zone.zone_dc_period).max()
-    res_df['zone_dc_lower_v2_{}'.format(strat_version)] = res_df['low'].rolling(config.loc_set.zone.zone_dc_period).min()
 
     return res_df
 

@@ -4,7 +4,7 @@
 
 import numpy as np
 from funcs.funcs_trader import intmin, sharpe_ratio
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 import matplotlib.pyplot as plt
 import time
 

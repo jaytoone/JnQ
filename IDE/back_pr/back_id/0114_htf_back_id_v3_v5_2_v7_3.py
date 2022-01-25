@@ -1,7 +1,7 @@
 import numpy as np
 from funcs.funcs_trader import intmin, sharpe_ratio, calc_tp_out_fee
-from funcs.funcs_indicator import *
-from funcs.funcs_ide import *
+from funcs.funcs_indicator_candlescore import *
+from funcs.funcs_idep import *
 import matplotlib.pyplot as plt
 import time
 from matplotlib import gridspec
@@ -17,17 +17,21 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
     utils_public, utils_list = bot_lib.utils_public_lib, bot_lib.utils_list  # --> local env.'s definition
 
     multi_mode = 1
-    strat_switch_idx = 0    # 0, 1, 2...
-    override = 0
+    strat_switch_idx = 0  # 0, 1, 2... multi_mode 가 아닌 경우 필히 작성
     public_override = 0
+    utils_override = 0
+    config_override = 0  # utils_public /utils / config 으로 세분화하는게 좋을 것으로 봄
 
     if not multi_mode:  # override 하지않는 경우에 config[0] 만을 사용하니, config[0] 에 어떤 version 을 배치할지 선택
         utils_list[0] = utils_list[strat_switch_idx]
         cfg_list[0] = cfg_list[strat_switch_idx]
 
+    if config_override:
+        cfg_list[0] = config
+
     config = cfg_list[0]  # custom base config, if use override -> set to config[0]
-    
-    tp_fee, out_fee = calc_tp_out_fee(config)   # Todo -> rev_pr 때문에 일단 이곳에도 선언함
+
+    tp_fee, out_fee = calc_tp_out_fee(config)  # Todo -> rev_pr 때문에 일단 이곳에도 선언함
 
     # ------- inversion set ------- #
     inversion = 0
@@ -56,7 +60,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
     # x_val_list = np.arange(-0.695, -0.75, -0.005)    # prcn 3
     # x_val_list = np.arange(0.944, 0.945, 0.0001)    # prcn 4
     # x_val_list = np.arange(1, 10, 1)   # prcn -1
-    # x_val_list = np.arange(210, 130, -5)   # prcn -2
+    x_val_list = np.arange(200, 180, -5)  # prcn -2
 
     y_val_cols = ["wr", "sr", "frq", "dpf", "acc_pr", "sum_pr", "acc_mdd", "sum_mdd", "liqd", "min_pr", "tr", "dr"]
     y_rev_val_cols = ["wr", "sr", "acc_pr", "sum_pr", "acc_mdd", "sum_mdd", "min_pr"]
@@ -73,10 +77,8 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
 
         res_df = pd.read_feather(os.path.join(ftr_path, key), columns=None, use_threads=True).set_index(
             "index")  # .loc[pd.to_datetime("2021-07-10 04:59:59.999000"):]
-        # res_df = sliced_df1
-        # res_df = edited_sliced_df2
-        # res_df = sliced_df2
-        # res_df = res_df2[cols].loc[:pd.to_datetime("2022-01-09 08:59:59.999")] sliced_df1
+        # res_df = inter_df1
+        # res_df = edited_inter_df2
         print(key, "loaded !")
         # break
 
@@ -86,19 +88,16 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
 
         np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))  # 이곳에 latency '3s'
 
-        if override:
+        if public_override:
             res_df = public_indi(res_df, config, np_timeidx)
         else:
-            if public_override:
-                res_df = public_indi(res_df, config, np_timeidx)
-            else:
-                res_df = utils_public.public_indi(res_df, config, np_timeidx)
+            res_df = utils_public.public_indi(res_df, config, np_timeidx)
 
         # -------------------- entlist rtc & tr 은 중복되는 여부에 따라 user 가 flexible coding 해야할 것 -------------------- #
-        if override:
+        if utils_override:
             res_df = enlist_rtc(res_df, config, np_timeidx)
         else:
-            for utils_, cfg_ in zip(utils_list, cfg_list):   # recursively
+            for utils_, cfg_ in zip(utils_list, cfg_list):  # recursively
                 res_df = utils_.enlist_rtc(res_df, cfg_, np_timeidx)
                 if not multi_mode:
                     break
@@ -124,10 +123,10 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
             # for survey_i, config.loc_set.zone.gap_mply in enumerate(x_val_list):
             # for survey_i, config.loc_set.zone.ad_idx in enumerate(x_val_list):
             # for survey_i, config.loc_set.point.tf_entry in enumerate(x_val_list):
-            # for survey_i, config.loc_set.point.candle_ratio in enumerate(x_val_list):
-            # for survey_i, config.loc_set.point.body_ratio in enumerate(x_val_list):
-            # for survey_i, config.loc_set.point.candle_ratio2 in enumerate(x_val_list):
-            # for survey_i, config.loc_set.point.body_ratio2 in enumerate(x_val_list):
+            # for survey_i, config.loc_set.point.wick_score in enumerate(x_val_list):
+            # for survey_i, config.loc_set.point.body_score in enumerate(x_val_list):
+            # for survey_i, config.loc_set.point.wick_score2 in enumerate(x_val_list):
+            # for survey_i, config.loc_set.point.body_score2 in enumerate(x_val_list):
             # for survey_i, config.loc_set.point.osc_band in enumerate(x_val_list):
             # for survey_i, config.loc_set.point2.ce_gap in enumerate(x_val_list):
             # for survey_i, config.tr_set.ep_gap in enumerate(x_val_list):
@@ -179,10 +178,10 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                 # print("config.ep_set.dr_error :", config.ep_set.dr_error)
                 print("config.loc_set.point.tf_entry :", config.loc_set.point.tf_entry)
                 print("config.loc_set.point.htf_entry :", config.loc_set.point.htf_entry)
-                print("config.loc_set.point.candle_ratio :", config.loc_set.point.candle_ratio)
-                print("config.loc_set.point.body_ratio :", config.loc_set.point.body_ratio)
-                print("config.loc_set.point.candle_ratio2 :", config.loc_set.point.candle_ratio2)
-                print("config.loc_set.point.body_ratio2 :", config.loc_set.point.body_ratio2)
+                print("config.loc_set.point.wick_score :", config.loc_set.point.wick_score)
+                print("config.loc_set.point.body_score :", config.loc_set.point.body_score)
+                print("config.loc_set.point.wick_score2 :", config.loc_set.point.wick_score2)
+                print("config.loc_set.point.body_score2 :", config.loc_set.point.body_score2)
                 print("config.loc_set.point.osc_band :", config.loc_set.point.osc_band)
                 print("config.loc_set.point2.ce_gap :", config.loc_set.point2.ce_gap)
                 print("config.tr_set.ep_gap :", config.tr_set.ep_gap)
@@ -212,21 +211,18 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
             #   res_df.drop(['bb_upper_15m', 'bb_lower_15m'], axis=1, inplace=True)
             # res_df = bb_level(res_df, '15m', config.loc_set.zone.gap_mply)
 
-            # ema_period = 155
+            # ema_period = 195
             # print("ema_period :", ema_period)
 
-            # df_5T = to_htf(sliced_df1, '5T', offset='1h')
+            # df_5T = to_htf(res_df, '5T', offset='1h')
             # df_5T['ema_5m'] = ema(df_5T['close'], ema_period)   # ema formula issue
             # res_df.drop(['ema_5m'], axis=1, inplace=True, errors='ignore')
             # res_df = res_df.join(to_lower_tf_v2(res_df, df_5T, [-1]), how='inner')
 
-            # rsi_upper = 50 + config.loc_set.point.osc_band
-            # rsi_lower = 50 - config.loc_set.point.osc_band
-
-            if override:
+            if utils_override:
                 res_df = enlist_tr(res_df, config, np_timeidx)
             else:
-                for utils_, cfg_ in zip(utils_list, cfg_list):   # recursively
+                for utils_, cfg_ in zip(utils_list, cfg_list):  # recursively
                     res_df = utils_.enlist_tr(res_df, cfg_, np_timeidx)
                     if not multi_mode:
                         break
@@ -294,37 +290,39 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
 
                     #       entry_score     #
                     if res_df['entry_{}'.format(cfg_.strat_version)][i] == cfg_.ep_set.short_entry_score:
-
-                        #       ep_loc      #
-                        if override or public_override:
-                            res_df, open_side, zone = short_ep_loc(res_df, cfg_,
-                                                                i,
-                                                                np_timeidx, show_detail)
-                        else:
-                            res_df, open_side, zone = utils_public.short_ep_loc(res_df, cfg_,
-                                                                              i,
-                                                                              np_timeidx, show_detail)
-                        if open_side is not None:   # 조건 만족시 바로 break
-                            #       assign      #
-                            config = cfg_
-                            break
+                        #       ban      #
+                        if not cfg_.pos_set.short_ban:
+                            #       ep_loc      #
+                            if public_override:
+                                res_df, open_side, zone = short_ep_loc(res_df, cfg_,
+                                                                       i,
+                                                                       np_timeidx, show_detail)
+                            else:
+                                res_df, open_side, zone = utils_public.short_ep_loc(res_df, cfg_,
+                                                                                    i,
+                                                                                    np_timeidx, show_detail)
+                            if open_side is not None:  # 조건 만족시 바로 break
+                                #       assign      #
+                                config = cfg_
+                                break
 
                     #       entry_score     #
                     elif res_df['entry_{}'.format(cfg_.strat_version)][i] == -cfg_.ep_set.short_entry_score:
-
-                        #       ep_loc      #
-                        if override or public_override:
-                            res_df, open_side, zone = long_ep_loc(res_df, cfg_,
-                                                                   i,
-                                                                   np_timeidx, show_detail)
-                        else:
-                            res_df, open_side, zone = utils_public.long_ep_loc(res_df, cfg_,
-                                                                                i,
-                                                                                np_timeidx, show_detail)
-                        if open_side is not None:
-                            #       assign      #
-                            config = cfg_
-                            break
+                        #       ban      #
+                        if not cfg_.pos_set.long_ban:
+                            #       ep_loc      #
+                            if public_override:
+                                res_df, open_side, zone = long_ep_loc(res_df, cfg_,
+                                                                      i,
+                                                                      np_timeidx, show_detail)
+                            else:
+                                res_df, open_side, zone = utils_public.long_ep_loc(res_df, cfg_,
+                                                                                   i,
+                                                                                   np_timeidx, show_detail)
+                            if open_side is not None:
+                                #       assign      #
+                                config = cfg_
+                                break
 
                     if not multi_mode:
                         break
@@ -419,7 +417,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                             #     break
 
                             #     2. ep_loc.point2
-                            if override:
+                            if public_override:
                                 allow_ep_in, out_j = short_point2(res_df, config, e_j, out_j, allow_ep_in)
                             else:
                                 allow_ep_in, out_j = utils_public.short_point2(res_df, config, e_j, out_j,
@@ -483,7 +481,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
 
                         ep_ = ep_list[0]
                         out_ = res_df['short_out_{}'.format(strat_version)].iloc[out_j]
-                        if override:
+                        if public_override:
                             config.lvrg_set.leverage = lvrg_set(res_df, config, "SELL", ep_, out_, fee)
                         else:
                             config.lvrg_set.leverage = utils_public.lvrg_set(res_df, config, "SELL", ep_, out_, fee)
@@ -592,8 +590,8 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                                             decay_remain = (j - initial_i) % config.tp_set.decay_term
                                             if j != initial_i and decay_remain == 0:
                                                 short_tp_.iloc[tp_j] += \
-                                                res_df['h_short_rtc_gap_{}'.format(strat_version)].iloc[
-                                                    initial_i] * config.tr_set.decay_gap * decay_share
+                                                    res_df['h_short_rtc_gap_{}'.format(strat_version)].iloc[
+                                                        initial_i] * config.tr_set.decay_gap * decay_share
 
                                     except:
                                         pass
@@ -938,7 +936,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                                     else:
                                         dr = ((ep_list[0] - done_tp) / (done_out - ep_list[0]))
                                         tp_ratio = ((ep_list[0] - done_tp - tp_fee * ep_list[0]) / (
-                                                    done_out - ep_list[0] + out_fee * ep_list[0]))
+                                                done_out - ep_list[0] + out_fee * ep_list[0]))
 
                                 else:
                                     dr = np.nan
@@ -1139,7 +1137,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                             #     break
 
                             #     2. ep_loc.point2
-                            if override:
+                            if public_override:
                                 allow_ep_in, out_j = long_point2(res_df, config, e_j, out_j, allow_ep_in)
                             else:
                                 allow_ep_in, out_j = utils_public.long_point2(res_df, config, e_j, out_j,
@@ -1201,7 +1199,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
 
                         ep_ = ep_list[0]
                         out_ = res_df['long_out_{}'.format(strat_version)].iloc[out_j]
-                        if override:
+                        if public_override:
                             config.lvrg_set.leverage = lvrg_set(res_df, config, "BUY", ep_, out_, fee)
                         else:
                             config.lvrg_set.leverage = utils_public.lvrg_set(res_df, config, "BUY", ep_, out_, fee)
@@ -1301,8 +1299,8 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                                             decay_remain = (j - initial_i) % config.tp_set.decay_term
                                             if j != initial_i and decay_remain == 0:
                                                 long_tp_.iloc[tp_j] -= \
-                                                res_df['h_long_rtc_gap_{}'.format(strat_version)].iloc[
-                                                    initial_i] * config.tr_set.decay_gap * decay_share
+                                                    res_df['h_long_rtc_gap_{}'.format(strat_version)].iloc[
+                                                        initial_i] * config.tr_set.decay_gap * decay_share
 
                                     except:
                                         pass
@@ -1644,7 +1642,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                                         # print("loss >= 1")
                                     else:
                                         tp_ratio = ((done_tp - ep_list[0] - tp_fee * ep_list[0]) / (
-                                                    ep_list[0] - done_out + out_fee * ep_list[0]))
+                                                ep_list[0] - done_out + out_fee * ep_list[0]))
                                         dr = ((done_tp - ep_list[0]) / (ep_list[0] - done_out))
 
                                 else:
@@ -1999,8 +1997,8 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                            mean_long_dr) + \
                         "\n nontp_liqd_cnt : %s\n nontp_liqd : %.3f\n nontp_liqd_pr : %.3f\n max_nontp_term : %s\n tw cw tls cls : %s %s %s %s"
                         % (
-                        len(nontp_long_liqd_list), min(nontp_long_liqd_list), min(nontp_long_pr_list), max_nontp_long_term,
-                        t_w_l, c_w_l, t_ls_l, c_ls_l),
+                            len(nontp_long_liqd_list), min(nontp_long_liqd_list), min(nontp_long_pr_list), max_nontp_long_term,
+                            t_w_l, c_w_l, t_ls_l, c_ls_l),
                         position=title_position, fontsize=fontsize)
                 else:
                     plt.title(
@@ -2161,7 +2159,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                 h_np_pr = np.array(h_pr_list)
                 # h_rev_np_pr = 1 / (np.array(h_pr_list) + fee) - fee    # define, for plot_check below cell
                 h_rev_np_pr = (1 / (
-                            (np.array(h_pr_list) - 1) / config.lvrg_set.leverage + np.array(fee_list) + 1) - np.array(
+                        (np.array(h_pr_list) - 1) / config.lvrg_set.leverage + np.array(fee_list) + 1) - np.array(
                     fee_list) - 1) * config.lvrg_set.leverage + 1
 
                 # --------------------- h pr plot --------------------- #
@@ -2177,7 +2175,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
 
                     plt.plot(h_total_pr)
                     plt.title("wr : %.3f\n min_pr : %.3f\n acc_pr : %.3f\n leverage %s" % (
-                    h_wr, np.min(h_np_pr), h_total_pr[-1], config.lvrg_set.leverage))
+                        h_wr, np.min(h_np_pr), h_total_pr[-1], config.lvrg_set.leverage))
                     # plt.show()
 
                     #         short only      #
@@ -2189,7 +2187,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                     plt.subplot(gs[1])
                     plt.plot(short_h_total_pr)
                     plt.title("wr : %.3f\n min_pr : %.3f\n acc_pr : %.3f\n leverage %s" % (
-                    h_short_wr, np.min(h_short_np_pr), short_h_total_pr[-1], config.lvrg_set.leverage))
+                        h_short_wr, np.min(h_short_np_pr), short_h_total_pr[-1], config.lvrg_set.leverage))
 
                     #         long only      #
                     h_long_np_pr = np.array(h_long_list)
@@ -2200,7 +2198,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                     plt.subplot(gs[2])
                     plt.plot(long_h_total_pr)
                     plt.title("wr : %.3f\n min_pr : %.3f\n acc_pr : %.3f\n leverage %s" % (
-                    h_long_wr, np.min(h_long_np_pr), long_h_total_pr[-1], config.lvrg_set.leverage))
+                        h_long_wr, np.min(h_long_np_pr), long_h_total_pr[-1], config.lvrg_set.leverage))
 
                     #     reversion adjustment      #
 
@@ -2210,7 +2208,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                     plt.subplot(gs[3])
                     plt.plot(h_rev_total_pr)
                     plt.title("wr : %.3f\n min_pr : %.3f\n acc_pr : %.3f\n leverage %s" % (
-                    h_rev_wr, np.min(h_rev_np_pr), h_rev_total_pr[-1], config.lvrg_set.leverage))
+                        h_rev_wr, np.min(h_rev_np_pr), h_rev_total_pr[-1], config.lvrg_set.leverage))
 
                     #         short       #
                     # h_rev_short_np_pr = 1 / (np.array(h_short_list) + fee) - fee
@@ -2224,7 +2222,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                     plt.subplot(gs[4])
                     plt.plot(short_h_rev_total_pr)
                     plt.title("wr : %.3f\n min_pr : %.3f\n acc_pr : %.3f\n leverage %s" % (
-                    h_rev_short_wr, np.min(h_rev_short_np_pr), short_h_rev_total_pr[-1], config.lvrg_set.leverage))
+                        h_rev_short_wr, np.min(h_rev_short_np_pr), short_h_rev_total_pr[-1], config.lvrg_set.leverage))
 
                     #         long       #
                     # h_rev_long_np_pr = 1 / (np.array(h_long_list) + fee) - fee
@@ -2238,7 +2236,7 @@ def back_pr_check(ftr_path, ftr_list, bot_lib, cfg_list, show_plot=0, title_pos_
                     plt.subplot(gs[5])
                     plt.plot(long_h_rev_total_pr)
                     plt.title("wr : %.3f\n min_pr : %.3f\n acc_pr : %.3f\n leverage %s" % (
-                    h_rev_long_wr, np.min(h_rev_long_np_pr), long_h_rev_total_pr[-1], config.lvrg_set.leverage))
+                        h_rev_long_wr, np.min(h_rev_long_np_pr), long_h_rev_total_pr[-1], config.lvrg_set.leverage))
 
                     if show_plot:
                         plt.show()

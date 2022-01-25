@@ -4,7 +4,7 @@ import pickle
 import importlib
 from datetime import datetime
 from easydict import EasyDict
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 import json
 
 

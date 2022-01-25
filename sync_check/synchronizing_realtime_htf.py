@@ -16,7 +16,7 @@ from binance_futures_concat_candlestick import concat_candlestick
 import matplotlib.pyplot as plt
 
 from funcs.funcs_trader import *
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 import mpl_finance as mf
 
 # from tqdm.notebook import tqdm

@@ -17,7 +17,7 @@ import plotly.graph_objs as go
 # import math
 
 from funcs.funcs_trader import *
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', 2500)

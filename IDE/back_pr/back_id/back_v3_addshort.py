@@ -4,7 +4,7 @@
 
 import numpy as np
 from funcs.funcs_trader import intmin
-from funcs.funcs_indicator import *
+from funcs.funcs_indicator_candlescore import *
 from IDE.utils.utils_v3_logger import *
 import matplotlib.pyplot as plt
 import time

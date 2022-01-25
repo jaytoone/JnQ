@@ -176,7 +176,8 @@ def dev(data, period):
 #     return score, body * 100
 
 
-def candle_score(o, h, l, c, updown=None, unsigned=True):
+#    개별 candle_score 조회를 위해 _ratio 와 분리함        #
+def get_candle_score(o, h, l, c, updown=None, unsigned=True):
 
     #   check up / downward
     up = np.where(c >= o, 1, 0)
@@ -207,7 +208,7 @@ def candle_score(o, h, l, c, updown=None, unsigned=True):
     return wick_score, body_score
 
 
-def candle_ratio(res_df, ohlc_col=None, updown=None, unsigned=True):
+def candle_score(res_df, ohlc_col=None, updown=None, unsigned=True):
 
     if ohlc_col is None:
         ohlc_col = ["open", "high", "low", "close"]
@@ -217,7 +218,7 @@ def candle_ratio(res_df, ohlc_col=None, updown=None, unsigned=True):
 
     # score = candle_score(o, h, l, c, updown, unsigned)
 
-    return candle_score(o, h, l, c, updown, unsigned)
+    return get_candle_score(o, h, l, c, updown, unsigned)
 
 
 def sma(data, period):

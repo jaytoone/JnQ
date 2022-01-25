@@ -1,6 +1,6 @@
 import os
 
-#        1. relative path should be static '/IDE' 를 가리켜야함, 기준은 script 실행 dir 기준 (bots, back_ide)
+#        1. relative path should be static '/IDE' 를 가리켜야함, 기준은 script 실행 dir 기준 (bots, back_idep)
 #        2. 깊이가 다르면, './../' 이런식의 표현으로는 동일 pkg_path 에 접근할 수 없음
 # print(os.getcwd())
 # pkg_path = os.path.abspath('./../')
@@ -639,6 +639,7 @@ class Trader:
                             #       Todo        #
                             #        2. 추후, dynamic_tp 사용시 res_df 갱신해야할 것
                             #           a. 그에 따른 res_df 종속 변수 check
+                            #        3. ei_k - ep_out 변수 달아주고, close bar waiting 추가할지 고민 중
                             tp_j = self.config.trader_set.last_index
 
                             if open_side == OrderSide.SELL:
@@ -737,6 +738,7 @@ class Trader:
 
                 #       Todo        #
                 #        1. use_new_df2 -> load_new_df2 로 병합 가능해보임
+                #           a. 아래의 조건문을 담을 변수가 필요함 - 병합 어려울 것 (latest)
                 use_new_df2 = 0
                 if not self.config.tp_set.static_tp or not self.config.out_set.static_out or strat_version in ['v5_2', 'v7_3']:
                     use_new_df2 = 1  # level close_tp / out 이 dynamic 한 경우 사용
