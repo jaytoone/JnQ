@@ -4,13 +4,13 @@ import os
 #        2. 깊이가 다르면, './../' 이런식의 표현으로는 동일 pkg_path 에 접근할 수 없음
 # print(os.getcwd())
 # pkg_path = os.path.abspath('./../')
-pkg_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE"  # system env. 에 따라 가변적
+pkg_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE"    # system env. 에 따라 가변적
 os.chdir(pkg_path)
 
 from funcs_binance.binance_futures_modules import *
 from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
 from funcs_binance.funcs_order_logger import limit_order, partial_limit_v2, market_close_order
-from funcs.funcs_trader import intmin, calc_rows_and_days
+from funcs.funcs_trader import intmin_np, calc_rows_and_days
 import numpy as np  # for np.nan
 import time
 import pickle
@@ -42,11 +42,12 @@ def read_write_cfg_list(cfg_path_list, mode='r', edited_cfg_list=None):
 
 class Trader:
 
-    def __init__(self, utils_public, utils_list, config_name_list):
-        # ------ static platform variables ------ #
+    def __init__(self, utils_public, utils_list, config_list):
+
+        #           static platform variables        #
         self.utils_public = utils_public
         self.utils_list = utils_list
-        self.config_name_list = config_name_list
+        self.config_list = config_list
         self.config = None
         self.utils = None
 
@@ -61,6 +62,7 @@ class Trader:
         self.sub_client = None
 
     def run(self):
+
         exec_file_name = Path(__file__).stem
 
         #       path definition     #
@@ -70,7 +72,7 @@ class Trader:
         for path_ in [sys_log_path, trade_log_path, df_log_path]:
             os.makedirs(path_, exist_ok=True)
 
-        cfg_path_list = [os.path.join(pkg_path, "config", name_) for name_ in self.config_name_list]
+        cfg_path_list = [os.path.join(pkg_path, "config", name_) for name_ in self.config_list]
 
         initial_run = 1
         while 1:
@@ -196,9 +198,7 @@ class Trader:
             ep_out = 0
 
             while 1:
-
                 if load_new_df:
-
                     #       log last trading time     #
                     #       미체결을 고려해, load_new_df 마다 log 수행       #
                     trade_log["last_trading_time"] = str(datetime.now())
@@ -206,11 +206,9 @@ class Trader:
                         pickle.dump(trade_log, dict_f)
 
                     temp_time = time.time()
-
                     try:
                         use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list,
                                                             self.config.trader_set.rec_row_list)
-
                         new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
                                                         days=days,
                                                         limit=use_rows,
@@ -220,14 +218,12 @@ class Trader:
                             continue
                         else:
                             res_df = new_df_
-
                         sys_log.info("complete load_df execution time : {}".format(datetime.now()))
 
                     except Exception as e:
                         sys_log.error("error in load new_dfs : {}".format(e))
                         time.sleep(self.config.trader_set.api_retry_term)
                         continue
-
                     else:
                         load_new_df = 0
 
@@ -239,7 +235,8 @@ class Trader:
                         res_df = self.utils_public.sync_check(res_df, self.config)  # function usage format maintenance
                         sys_log.info('~ sync_check time : %.5f' % (time.time() - temp_time))
 
-                        np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
+                        #   Todo - np_timeidx 의 위치는 sync_check 의 div_rec_row after
+                        np_timeidx = np.array([intmin_np(date_) for date_ in res_df.index.to_numpy()])
 
                         res_df = self.utils_public.public_indi(res_df, self.config, np_timeidx)
                         sys_log.info('~ public_indi time : %.5f' % (time.time() - temp_time))
@@ -248,7 +245,7 @@ class Trader:
                         sys_log.error("error in sync_check : {}".format(e))
                         continue
 
-                    # ----- enlist_rtc & enlist_tr (form 만큼 utils 사용, config type 만큼 설정 필요함) ----- #
+                    # ----- enlist_rtc for tr (form 만큼 utils 사용, config type 만큼 설정 필요함) ----- #
                     try:
                         #        ep_loc_point2 -> 해당 ID 로 수행        #
                         if ep_loc_point2:
@@ -277,42 +274,42 @@ class Trader:
                                 res_df.reset_index().to_feather(df_log_path + "/%s.ftr" % excel_name, compression='lz4')
 
                             # ------ point matching ------ #
-                            #        1. for loop 으로 일련의 과정 (entry_score -> ban -> ep_loc)
+                            #        1. for loop 으로 일련의 과정 (open_score -> ban -> ep_loc)
                             #           a. 거친후 , representative config & utils 할당)
                             #               i. self.config -> cfg_
+                            #        Todo : list comprehension 가능할 것        #
                             for utils_, cfg_ in zip(self.utils_list, cfg_list):
-                                #       entry_score     #
-                                if res_df['entry_{}'.format(cfg_.strat_version)][cfg_.trader_set.last_index] == cfg_.ep_set.short_entry_score:
+                                #       open_score     #
+                                if res_df['short_open_{}'.format(cfg_.strat_version)][cfg_.trader_set.open_index] == cfg_.ep_set.short_entry_score:
                                     sys_log.warning("[ short ] ep_loc.point executed strat_ver : {}".format(cfg_.strat_version))
                                     #       ban      #
                                     if not cfg_.pos_set.short_ban:
                                         #       ep_loc      #
-                                        res_df, open_side, _ = self.utils_public.short_ep_loc(res_df, cfg_,
-                                                                                              cfg_.trader_set.last_index,
-                                                                                              np_timeidx)
+                                        res_df, open_side, _ = self.utils_public.ep_loc(res_df, cfg_,
+                                                                                              cfg_.trader_set.complete_index,
+                                                                                              np_timeidx, ep_loc_side=OrderSide.SELL)
+                                        sys_log.warning("open_side : {}".format(open_side))
                                         #       assign      #
-                                        if open_side is not None:
-                                            self.config = cfg_
-                                            self.utils = utils_
-                                            break
+                                        self.config = cfg_
+                                        self.utils = utils_
                                     else:
                                         sys_log.warning("cfg_.pos_set.short_ban : {}".format(cfg_.pos_set.short_ban))
 
-                                #       entry_score     #
-                                elif res_df['entry_{}'.format(cfg_.strat_version)][cfg_.trader_set.last_index] == \
+                                #       open_score     #
+                                #       'if' for nested ep_loc.point        #
+                                if res_df['long_open_{}'.format(cfg_.strat_version)][cfg_.trader_set.open_index] == \
                                         -cfg_.ep_set.short_entry_score:
                                     sys_log.warning("[ long ] ep_loc.point executed strat_ver : {}".format(cfg_.strat_version))
                                     #       ban      #
                                     if not cfg_.pos_set.long_ban:  # additional const. on trader
                                         #       ep_loc      #
-                                        res_df, open_side, _ = self.utils_public.long_ep_loc(res_df, cfg_,
-                                                                                             cfg_.trader_set.last_index,
-                                                                                             np_timeidx)
+                                        res_df, open_side, _ = self.utils_public.ep_loc(res_df, cfg_,
+                                                                                             cfg_.trader_set.complete_index,
+                                                                                             np_timeidx, ep_loc_side=OrderSide.BUY)
+                                        sys_log.warning("open_side : {}".format(open_side))
                                         #       assign      #
-                                        if open_side is not None:
-                                            self.config = cfg_
-                                            self.utils = utils_
-                                            break
+                                        self.config = cfg_
+                                        self.utils = utils_
                                     else:
                                         sys_log.warning("cfg_.pos_set.long_ban : {}".format(cfg_.pos_set.long_ban))
 
@@ -320,9 +317,9 @@ class Trader:
                             sys_log.error("error in ep_loc phase : {}".format(e))
                             continue
 
-                        #       self.utils 이 채워졌다는 이야기는 1st_point 조건 성립을 의미함 -> 이제는 아님
-                        #       단, ep_loc.duration 여부와는 무관함
-                        if self.utils is not None:
+                        if self.utils is not None:  # self.utils 이 채워졌다는 이야기는 1st_point 조건 성립을 의미함 
+                            #      단, ep_loc.duration 여부와는 무관함
+                            #        1. initial_ep 를 만들지말고, res_df_initial 을 이곳에서 저장
                             res_df_init = res_df.copy()
 
                 check_entry_sec = datetime.now().second
@@ -351,6 +348,7 @@ class Trader:
                     #        3. set strat_version        #
                     strat_version = self.config.strat_version
 
+                    # ------ 4. point2 (+ ei_k) phase ------ #
                     if strat_version == "v5_2":
                         ep_loc_point2 = 1
                         sys_log.warning("v5_2 ep_loc_point2 = 1 passed")
@@ -360,11 +358,10 @@ class Trader:
                         #           a. e_j 에 관한 고찰 필요함, backtest 에는 i + 1 부터 시작하니 +1 하는게 맞을 것으로 봄
                         #               -> 좀더 명확하게, dc_lower_1m.iloc[i - 1] 에 last_index 가 할당되는게 맞아서
                         #        3. tp_j 도 고정 시켜야함 (현재 new res_df 에 의해 갱신되는 중)
-                        tp_j = self.config.trader_set.last_index  # = initial_i
-                        e_j = self.config.trader_set.last_index + 1
+                        tp_j = self.config.trader_set.complete_index  # = initial_i
+                        e_j = self.config.trader_set.complete_index + 1
 
                         if open_side == OrderSide.SELL:
-
                             if res_df['low'].iloc[e_j] <= res_df_init['h_short_rtc_1_{}'.format(strat_version)].iloc[
                                 tp_j] - \
                                     res_df_init['h_short_rtc_gap_{}'.format(strat_version)].iloc[
@@ -372,10 +369,9 @@ class Trader:
                                 sys_log.info("cancel open_order by ei_k\n")
                                 ep_out = 1
 
-                            allow_ep_in, _ = self.utils_public.short_point2(res_df, self.config, e_j, out_j=None, allow_ep_in=0)
+                            allow_ep_in, _ = self.utils_public.ep_loc_point2(res_df, self.config, e_j, out_j=None, allow_ep_in=0, side=OrderSide.SELL)
                             if allow_ep_in:
                                 break
-
                         else:
                             if res_df['high'].iloc[e_j] >= res_df_init['h_long_rtc_1_{}'.format(strat_version)].iloc[
                                 tp_j] + \
@@ -384,10 +380,9 @@ class Trader:
                                 sys_log.info("cancel open_order by ei_k\n")
                                 ep_out = 1
 
-                            allow_ep_in, _ = self.utils_public.long_point2(res_df, self.config, e_j, out_j=None, allow_ep_in=0)
+                            allow_ep_in, _ = self.utils_public.ep_loc_point2(res_df, self.config, e_j, out_j=None, allow_ep_in=0, side=OrderSide.BUY)
                             if allow_ep_in:
                                 break
-
                     else:
                         break
 
@@ -416,9 +411,8 @@ class Trader:
                         try:
                             cfg_list = read_write_cfg_list(cfg_path_list)
 
-                            # if self.utils is None:  # config 가 수정되지 않은 경우만 config1 을 base 로 반영
-                            #     self.config = cfg_list[0]
-                            # Todo - 윗줄 실효성 있는지 의문 (open_side != None 일 경우만 self.config 변경되서 실효성 상실함)
+                            if self.utils is None:  # config 가 수정되지 않은 경우만 config1 을 base 로 반영
+                                self.config = cfg_list[0]  # Todo <-- 이거 실효성 있는지 의문
 
                         except Exception as e:
                             print("error in load config (waiting zone phase):", e)
@@ -469,14 +463,14 @@ class Trader:
                     out_j = e_j
                     # ep_j = e_j
                 else:
-                    out_j = self.config.trader_set.last_index
-                ep_j = self.config.trader_set.last_index
-                tp_j = self.config.trader_set.last_index
+                    out_j = self.config.trader_set.complete_index
+                ep_j = self.config.trader_set.complete_index
+                tp_j = self.config.trader_set.complete_index
 
                 #        1. 추후 other strat. 적용시 res_df_init recheck
-                #           a. 중요한건, ep_loc_point2 를 사용하지 않는 이상 res_df = res_df_init
                 #       Todo        #
                 #           b. --> res_df 사용시, dynamic (pre, whole) 을 허용하겠다는 의미
+                #               i. ep_loc_point2 를 사용하지 않는 이상 res_df = res_df_init
                 if open_side == OrderSide.BUY:
                     ep = res_df_init['long_ep_{}'.format(strat_version)].iloc[ep_j]
 
@@ -538,7 +532,7 @@ class Trader:
                     sys_log.info('leverage changed --> {}'.format(leverage))
 
                 if first_iter:
-                    # ---------- define start asset ---------- #
+                    # ---------- define initial asset ---------- #
                     #       self.config 의 setting 을 기준으로함       #
                     if self.accumulated_income == 0.0:
                         available_balance = self.config.trader_set.initial_asset  # USDT
@@ -549,7 +543,6 @@ class Trader:
                     if self.config.trader_set.asset_changed:
                         available_balance = self.config.trader_set.initial_asset
                         #        1. 이런식으로, cfg 의 값을 변경(dump)하는 경우를 조심해야함 - cfg_list[0] 에 입력해야한다는 의미
-                        #       asset_changed -> 0      #
                         cfg_list[0].trader_set.asset_changed = 0
                         with open(cfg_path_list[0], 'w') as cfg:
                             json.dump(cfg_list[0], cfg, indent=2)
@@ -623,7 +616,7 @@ class Trader:
                         #       temporary - wait bar close       #
                         # if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
 
-                        if self.config.loc_set.zone.ei_k != "None":
+                        if self.config.loc_set.zone.ei_k != "None":  # Todo -> 이거 None 이면 "무한 대기" 발생 가능함
 
                             #       check tp_done by hl with realtime_price     #
                             try:
@@ -639,7 +632,7 @@ class Trader:
                             #        2. 추후, dynamic_tp 사용시 res_df 갱신해야할 것
                             #           a. 그에 따른 res_df 종속 변수 check
                             #        3. ei_k - ep_out 변수 달아주고, close bar waiting 추가할지 고민 중
-                            tp_j = self.config.trader_set.last_index
+                            tp_j = self.config.trader_set.complete_index
 
                             if open_side == OrderSide.SELL:
                                 if realtime_price <= res_df_init['h_short_rtc_1_{}'.format(strat_version)].iloc[tp_j] - \
@@ -735,16 +728,16 @@ class Trader:
                 else:
                     close_side = OrderSide.BUY
 
-                #       Todo        #
-                #        1. use_new_df2 -> load_new_df2 로 병합 가능해보임
-                #           a. 아래의 조건문을 담을 변수가 필요함 - 병합 어려울 것 (latest)
+                #   a. 아래의 조건문을 담을 변수가 필요함 - 병합 불가 (latest)
+                #       i. => load_new_df2 는 1 -> 0 으로 변경됨
                 use_new_df2 = 0
-                if not self.config.tp_set.static_tp or not self.config.out_set.static_out or strat_version in ['v5_2', 'v7_3']:
+                if not self.config.tp_set.static_tp or not self.config.out_set.static_out or \
+                        strat_version in ['v5_2', 'v7_3'] or self.config.tp_set.time_tp:
                     use_new_df2 = 1  # level close_tp / out 이 dynamic 한 경우 사용
                 load_new_df2 = 1
                 limit_tp = 0
                 remained_tp_id = None
-                prev_remained_tp_id = None
+                prev_remained_tp_id = None  # partial_tp reorder & logging 을 위한 vars.
                 tp_exec_dict = {}
                 cross_on = 0  # exist for early_out
 
@@ -759,7 +752,7 @@ class Trader:
 
                             try:
                                 use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list,
-                                                                    self.config.trader_set.rec_row_list)
+                                                            self.config.trader_set.rec_row_list)
 
                                 new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
                                                                 days=days,
@@ -780,9 +773,7 @@ class Trader:
 
                             try:
                                 res_df = self.utils_public.sync_check(res_df, self.config, order_side="CLOSE")
-
-                                np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
-
+                                np_timeidx = np.array([intmin_np(date_) for date_ in res_df.index.to_numpy()])
                                 res_df = self.utils_public.public_indi(res_df, self.config, np_timeidx, order_side="CLOSE")
 
                             except Exception as e:
@@ -791,7 +782,7 @@ class Trader:
 
                             try:
                                 res_df = self.utils.enlist_rtc(res_df, self.config, np_timeidx)
-                                res_df = self.utils.enlist_tr(res_df, self.config, np_timeidx)
+                                res_df = self.utils.enlist_tr(res_df, self.config, np_timeidx, mode="CLOSE")
 
                             except Exception as e:
                                 sys_log.error('error in enlist_rtc & enlist_tr (close phase) : {}'.format(e))
@@ -814,12 +805,12 @@ class Trader:
                                     tp_series = res_df['short_tp_{}'.format(strat_version)]
 
                             if not self.config.out_set.static_out:
-                                out = out_series.iloc[self.config.trader_set.last_index]
+                                out = out_series.iloc[self.config.trader_set.complete_index]
 
                             if not self.config.tp_set.static_tp:
-                                tp = tp_series.iloc[self.config.trader_set.last_index]
+                                tp = tp_series.iloc[self.config.trader_set.complete_index]
 
-                    # --------- limit tp order 여부 조사 phase --------- #
+                    # --------- limit_tp check for order --------- #
                     #          1. static_limit 은 reorder 할필요 없음
                     if self.config.tp_set.tp_type == OrderType.LIMIT or self.config.tp_set.tp_type == "BOTH":
 
@@ -841,8 +832,8 @@ class Trader:
                                 limit_tp = 1
                             else:
                                 #       tp 가 달라진 경우만 진행 = reorder     #
-                                if tp_series.iloc[self.config.trader_set.last_index] != \
-                                        tp_series.iloc[self.config.trader_set.last_index - 1]:
+                                if tp_series.iloc[self.config.trader_set.complete_index] != \
+                                        tp_series.iloc[self.config.trader_set.complete_index - 1]:
                                     limit_tp = 1
 
                                     #           미체결 tp order 모두 cancel               #
@@ -898,7 +889,7 @@ class Trader:
                                 #        sub_tp execution        #
                                 if remained_tp_id != prev_remained_tp_id:
                                     #        log sub_tp        #
-                                    executed_sub_tp = tp_series_list[-1].iloc[-2]
+                                    executed_sub_tp = tp_series_list[-1].iloc[-2]   # complete_idx
                                     executed_sub_prev_tp = tp_series_list[-1].iloc[-3]
                                     sys_log.info("executed_sub_prev_tp, executed_sub_tp : {}, {}"
                                                  .format(executed_sub_prev_tp, executed_sub_tp))
@@ -916,17 +907,14 @@ class Trader:
                             try:
                                 result = partial_limit_v2(self, self.config, tp_list, close_side,
                                                           quantity_precision, self.config.tp_set.partial_qty_divider)
-
-                                if result is not None:
-                                    sys_log.info(result)
-                                    time.sleep(self.config.trader_set.api_retry_term)
-                                    continue
-
+                                # if res_obj is not None:
+                                #     sys_log.info(res_obj)
+                                #     time.sleep(self.config.trader_set.api_retry_term)
+                                #     continue
                             except Exception as e:
                                 sys_log.error("error in partial_limit : {}".format(e))
                                 time.sleep(self.config.trader_set.api_retry_term)
                                 continue
-
                             else:
                                 sys_log.info("limit tp order enlisted : {}".format(datetime.now()))
                                 limit_tp = 0
@@ -960,7 +948,7 @@ class Trader:
                                 #            1. market tp / out 에 대한 log 방식도 서술
                                 #            2. dict 사용 이유 : partial_tp platform
                                 if not self.config.tp_set.static_tp:
-                                    tp_exec_dict[res_df.index[-2]] = [tp_series.iloc[self.config.trader_set.last_index - 1], tp]
+                                    tp_exec_dict[res_df.index[-2]] = [tp_series.iloc[self.config.trader_set.complete_index - 1], tp]
                                 else:
                                     tp_exec_dict[res_df.index[-2]] = [tp]
                                 sys_log.info("tp_exec_dict : {}".format(tp_exec_dict))
@@ -968,26 +956,19 @@ class Trader:
                                 limit_done = 1
                                 break
 
-                        # --------- market close signal check phase (out | tp) --------- #
+                        # --------- market close signal check phase (out & market_tp) --------- #
                         try:
-
                             #        1. 1m df 는 분당 1번만 진행
-                            #         a. 그렇지 않을 경우 realtime_price latency 에 영향 줌
-
-                            #        back_pr wait_time 과 every minute end loop 의 new_df_ 를 위해 필요함
-                            #        1.  load_new_df3 상시 개방해야하는 거 아닌가
+                            #           a. 그렇지 않을 경우 realtime_price latency 에 영향 줌
+                            #        2. back_pr wait_time 과 every minute end loop 의 new_df_ 를 위해 필요함
                             if use_new_df2:
-                                new_df_ = res_df
+                                pass    # new_df_ = res_df
                             else:
-                                # if self.config.tp_set.static_tp and self.config.out_set.static_out:
-                                # if self.config.tp_set.tp_type == 'LIMIT' and self.config.out_set.hl_out:
-
                                 try:
                                     #   '1m' 의 dataframe 이 필요한 것 - 사용 의도 : close, time logging
                                     if load_new_df3:
                                         # use_rows, days = calc_rows_and_days(self.config.trader_set.itv_list, self.config.trader_set.row_list,
                                         #                                                             self.config.trader_set.rec_row_list)
-
                                         new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
                                                                         days=1,
                                                                         limit=self.config.trader_set.row_list[0],
@@ -995,13 +976,13 @@ class Trader:
                                                                         show_process=0)
                                         if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
                                             continue
-
+                                        else:
+                                            res_df = new_df_
                                 except Exception as e:
                                     sys_log.error('error in load_new_df3 : {}'.format(e))
                                     #        1. adequate term for retries
                                     time.sleep(self.config.trader_set.api_retry_term)
                                     continue
-
                                 else:
                                     load_new_df3 = 0
 
@@ -1009,32 +990,30 @@ class Trader:
                             if self.config.out_set.hl_out:
                                 realtime_price = get_market_price_v2(self.sub_client)
 
-                            # ---------- out & tp check ---------- #
+                            # ---------------- out & tp check ---------------- #
                             if open_side == OrderSide.SELL:
-
+                                # ------------ out ------------ #
                                 if self.config.out_set.use_out:
-
-                                    #       short hl_out      #
+                                    # ------ short - hl_out ------ #
                                     if self.config.out_set.hl_out:
                                         if realtime_price >= out:
                                             market_close_on = True
                                             log_tp = out
                                             sys_log.info("out : {}".format(out))
 
-                                    #       short close_out     #
+                                    # ------ short - close_out ------ #
                                     else:
-                                        j = self.config.trader_set.last_index
-                                        if new_df_['close'].iloc[j] >= out:
+                                        j = self.config.trader_set.complete_index
+                                        if res_df['close'].iloc[j] >= out:
                                             market_close_on = True
-                                            log_tp = new_df_['close'].iloc[j]
+                                            log_tp = res_df['close'].iloc[j]
                                             sys_log.info("out : {}".format(out))
 
-                                #       short market tp      #
+                                # ------------ market_close ------------ #
+                                # ------ short ------ #
                                 if self.config.tp_set.tp_type == "MARKET" or self.config.tp_set.tp_type == "BOTH":
-
-                                    j = self.config.trader_set.last_index
-
-                                    #        1. rsi market_close        #
+                                    j = self.config.trader_set.complete_index
+                                    # ------ rsi market_close ------ #
                                     # if strat_version in ['v7_3']:
                                     if strat_version in self.config.trader_set.rsi_out_stratver:
                                         if (res_df['rsi_%s' % self.config.loc_set.point.exp_itv].iloc[
@@ -1043,8 +1022,7 @@ class Trader:
                                                      j] < 50 - self.config.loc_set.point.osc_band):
                                             market_close_on = True
 
-                                    #       2. early_out       #
-                                    #           a. strat_version essential
+                                    # ------ early_out ------ #
                                     if strat_version in ['v5_2']:
                                         if res_df['close'].iloc[j] < res_df['bb_lower_5m'].iloc[j] < \
                                                 res_df['close'].iloc[j - 1]:
@@ -1053,35 +1031,37 @@ class Trader:
                                                 res_df['close'].iloc[j - 1]:
                                             market_close_on = True
 
+                                    # ------ time_tp ------ # - income() waiting issue 로 complete_index 사용함
+                                    if res_df['short_close_{}'.format(self.config.strat_version)][j] == self.config.ep_set.short_entry_score:
+                                        market_close_on = True
+
                                     if market_close_on:
-                                        log_tp = new_df_['close'].iloc[j]
+                                        log_tp = res_df['close'].iloc[j]
                                         sys_log.info("tp : {}".format(tp))
 
                             else:
-
                                 if self.config.out_set.use_out:
-
-                                    #       long hl_out       #
+                                    # ------------ out ------------ #
+                                    # ------ long - hl_out ------ #
                                     if self.config.out_set.hl_out:
                                         if realtime_price <= out:  # hl_out
                                             market_close_on = True
                                             log_tp = out
                                             sys_log.info("out : {}".format(out))
 
-                                    #       long close_out       #
+                                    # ------ long - close_out ------ #
                                     else:
-                                        j = self.config.trader_set.last_index
-                                        if new_df_['close'].iloc[j] <= out:
+                                        j = self.config.trader_set.complete_index
+                                        if res_df['close'].iloc[j] <= out:
                                             market_close_on = True
-                                            log_tp = new_df_['close'].iloc[j]
+                                            log_tp = res_df['close'].iloc[j]
                                             sys_log.info("out : {}".format(out))
 
-                                #       long market tp        #
+                                # ------------ market_close ------------ #
+                                # ------ long ------ #
                                 if self.config.tp_set.tp_type == "MARKET" or self.config.tp_set.tp_type == "BOTH":
-
-                                    j = self.config.trader_set.last_index
-
-                                    #        1. rsi market_close        #
+                                    j = self.config.trader_set.complete_index
+                                    # ------ rsi market_close ------ #
                                     if strat_version in self.config.trader_set.rsi_out_stratver:
                                         if (res_df['rsi_%s' % self.config.loc_set.point.exp_itv].iloc[
                                                 j - 1] <= 50 + self.config.loc_set.point.osc_band) & \
@@ -1089,8 +1069,7 @@ class Trader:
                                                      j] > 50 + self.config.loc_set.point.osc_band):
                                             market_close_on = True
 
-                                    #       2. early_out       #
-                                    #           a. strat_version essential
+                                    # ------ early_out ------ #
                                     if strat_version in ['v5_2']:
                                         if res_df['close'].iloc[j] > res_df['bb_upper_5m'].iloc[j] > \
                                                 res_df['close'].iloc[j - 1]:
@@ -1099,15 +1078,13 @@ class Trader:
                                                 res_df['close'].iloc[j - 1]:
                                             market_close_on = True
 
-                                    if market_close_on:
-                                        log_tp = new_df_['close'].iloc[j]
-                                        sys_log.info("tp : {}".format(tp))
+                                    # ------ time_tp ------ # - income() waiting issue 로 complete_index 사용함
+                                    if res_df['long_close_{}'.format(self.config.strat_version)][j] == -self.config.ep_set.short_entry_score:
+                                        market_close_on = True
 
-                                    #       unknown strat.'s market tp logic       #
-                                    # if new_df_['close'].iloc[self.config.trader_set.last_index] >= tp:
-                                    #     market_close_on = True
-                                    #     log_tp = new_df_['close'].iloc[self.config.trader_set.last_index]
-                                    #     sys_log.info("tp : {}".format(tp))
+                                    if market_close_on:
+                                        log_tp = res_df['close'].iloc[j]
+                                        sys_log.info("tp : {}".format(tp))
 
                             if market_close_on:
                                 if self.config.out_set.hl_out:
@@ -1115,7 +1092,7 @@ class Trader:
                                 sys_log.info("market_close_on is True")
 
                                 # --- log tp --- #
-                                tp_exec_dict[new_df_.index[-2]] = [log_tp]
+                                tp_exec_dict[res_df.index[-2]] = [log_tp]
                                 sys_log.info("tp_exec_dict : {}".format(tp_exec_dict))
                                 break
 
@@ -1124,17 +1101,12 @@ class Trader:
                             continue
 
                         # ------ minute end phase ------ #
-                        if datetime.now().timestamp() > datetime.timestamp(new_df_.index[-1]):
-
+                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
                             if use_new_df2:
-                                load_new_df2 = 1
+                                load_new_df2 = 1    # return to outer loop - get df2's data
                                 break
                             else:
-                                # if self.config.tp_set.tp_type == 'LIMIT' and self.config.out_set.hl_out:
-                                #     pass
-                                # else:
-                                load_new_df3 = 1
-
+                                load_new_df3 = 1    # return to current loop
                         else:
                             time.sleep(self.config.trader_set.realtime_term)
 
@@ -1142,33 +1114,26 @@ class Trader:
                     if limit_done:
                         fee += self.config.trader_set.limit_fee
                         break
-
                     # if load_new_df2:    # new_df 와 dynamic limit_tp reorder 가 필요한 경우
                     #     continue
 
                     if not market_close_on:  # = load_new_df2
                         continue
-
-                    #               market close phase - get market signal               #
-                    else:  # market_close_on = 1
-
+                    else:
+                        # ------------ market close phase ------------ #
                         fee += self.config.trader_set.market_fee
-
                         remain_tp_canceled = False  # 미체결 limit tp 존재가능함
-                        market_close_order(self, remain_tp_canceled, self.config, close_side, out, log_tp)
-
+                        market_close_order(self, remain_tp_canceled, self.config, close_side, out, log_tp)  # market 시 out var. 미사용
                         break  # <--- break for all close order loop, break partial tp loop
 
-                # ----------------------- check back_pr ----------------------- #
+                # ------------ check back_pr ------------ #
                 #       total_income() function confirming -> wait close confirm       #
                 while 1:
-
-                    lastest_close_timeindex = new_df_.index[-1]
-
+                    lastest_close_timeindex = res_df.index[-1]
                     if datetime.now().timestamp() > datetime.timestamp(lastest_close_timeindex):
                         break
 
-                # ---------- back_pr calculation ---------- #
+                # ------------ back_pr calculation ------------ #
                 #            1. adjust partial tp             #
                 #            2. -1 이 아니라, timestamp index 로 접근해야할듯      #
                 #            2-1. len(tp_list) 가 2 -> 1 로 변한 순간을 catch, time_idx 를 기록
@@ -1180,14 +1145,11 @@ class Trader:
                 r_qty = 1  # base asset ratio
                 # ---------- calc in for loop ---------- #
                 for q_i, (k_ts, v_tp) in enumerate(sorted(tp_exec_dict.items(), key=lambda x: x[0], reverse=True)):
-
                     # ---------- get real_tp phase ---------- #
                     if len(v_tp) > 1:
                         prev_tp, tp = v_tp
-
                         if prev_tp == tp:
                             real_tp = tp
-
                         else:  # dynamic_tp 로 인한 open tp case
                             if close_side == OrderSide.BUY:
                                 if tp > res_df['open'].loc[k_ts]:

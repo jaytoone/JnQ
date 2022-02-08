@@ -1,8 +1,10 @@
-from funcs.funcs_indicator_candlescore_addnb import *
+from funcs.funcs_indicator_candlescore import *
 from funcs.funcs_trader import *
 import logging
+from numba import jit, njit, float64, float32, int8, int64, vectorize, guvectorize, prange
+import torch     # this file deprecated
 
-sys_log = logging.getLogger()
+sys_log3 = logging.getLogger()
 
 
 class OrderSide:
@@ -11,13 +13,63 @@ class OrderSide:
     INVALID = None
 
 
+def candle_ratio_torch(hrel, habs, hrel_v, habs_v, hrel_gap=10, habs_gap=10):
+    hrel_mr = (hrel_v < hrel) & (hrel < hrel_v + hrel_gap) if hrel_v >= 0 else torch.ones_like(hrel).bool()
+    habs_mr = (habs_v < habs) & (habs < habs_v + habs_gap) if habs_v >= 0 else torch.ones_like(hrel).bool()
+
+    return hrel_mr & habs_mr
+
+
+def fast_candle_game_torch(fws, bs, fws_v, bs_v, fws_gap=10, bs_gap=10):
+    fws_mr = (fws_v < fws) & (fws < fws_v + fws_gap) if fws_v >= -100 else torch.ones_like(fws).bool()
+    bs_mr = (bs_v < bs) & (bs < bs_v + bs_gap) if bs_v >= 0 else torch.ones_like(fws).bool()
+
+    return fws_mr & bs_mr
+
+
+# @vectorize([int8(float64, float64, float64, float64, float64, float64)])
+@vectorize([int8(float64, float64, int8, int8, int8, int8)])
+def candle_ratio_nbvec(hrel, habs, hrel_v, habs_v, hrel_gap=10, habs_gap=10):
+  hrel_mr = (hrel_v < hrel) & (hrel < hrel_v + hrel_gap) if hrel_v >= 0 else 1
+  habs_mr = (habs_v < habs) & (habs < habs_v + habs_gap) if habs_v >= 0 else 1
+
+  return hrel_mr & habs_mr
+
+
+@jit
+def candle_ratio_nb(input_data, hrel_v, habs_v, hrel_gap=10, habs_gap=10):
+  hrel, habs = np.split(input_data, input_data.shape[-1], axis=1)
+  hrel_mr = (hrel_v < hrel) & (hrel < hrel_v + hrel_gap) if hrel_v >= 0 else np.ones_like(hrel).astype(np.int8)
+  habs_mr = (habs_v < habs) & (habs < habs_v + habs_gap) if habs_v >= 0 else np.ones_like(habs).astype(np.int8)
+
+  return (hrel_mr & habs_mr).reshape(-1,)
+
+
+# @vectorize([int8(float64, float64, int8, int8, int8, int8)])
+@vectorize([int8(float64, float64, float64, float64, float64, float64)])
+def fast_candle_game_nbvec(fws, bs, fws_v, bs_v, fws_gap=10, bs_gap=10):
+  fws_mr = (fws_v < fws) & (fws < fws_v + fws_gap) if fws_v >= -100 else 1
+  bs_mr = (bs_v < bs) & (bs < bs_v + bs_gap) if bs_v >= 0 else 1
+
+  return fws_mr & bs_mr
+
+
+@jit
+def fast_candle_game_nb(input_data, fws_v, bs_v, fws_gap=10, bs_gap=10):
+  fws, bs, bws = np.split(input_data, input_data.shape[-1], axis=1)
+  fws_mr = (fws_v < fws) & (fws < fws_v + fws_gap) if fws_v >= -100 else np.ones_like(fws).astype(np.int8)
+  bs_mr = (bs_v < bs) & (bs < bs_v + bs_gap) if bs_v >= 0 else np.ones_like(bs).astype(np.int8)
+
+  return (fws_mr & bs_mr).reshape(-1,)
+
+
 def mr_calc(mr_const_cnt, mr_score, const_str, const_bool, var_left, var_right, show_detail):
     # splited_const_str = const_str.split(' ')
     # assert len(splited_const_str) == 3, "assert len(splited_const_str) == 3"
 
     # const_bool = eval(const_str)
     if show_detail:
-        sys_log.warning("{} : {:.5f} {:.5f} ({})".format(const_str, var_left, var_right, const_bool))
+        sys_log3.warning("{} : {:.5f} {:.5f} ({})".format(const_str, var_left, var_right, const_bool))
 
     mr_const_cnt += 1
     if const_bool:
@@ -156,7 +208,7 @@ def candle_game2(order_side, res_df, config, i, shared_ticks, mr_const_cnt, mr_s
         # const_ = "ho > hc"
         # const_bool_ = eval(const_)
         # if show_detail:
-        #     sys_log.warning("ho > hc : {:.5f} {:.5f} ({})".format(ho, hc, const_))
+        #     sys_log3.warning("ho > hc : {:.5f} {:.5f} ({})".format(ho, hc, const_))
         # mr_const_cnt, mr_score = mr_calc(mr_const_cnt, mr_score, const_, const_bool_, res_df, open_side, show_detail)
 
         if config.loc_set.zone.front_wick_score2 != "None":
@@ -499,7 +551,7 @@ def zoned_tr_set(open_side, res_df, config, i, zone, show_detail):
         const_ = "zone_dc_upper_v2_ > long_dtk_plot_"
         const_bool_ = eval(const_)
         if show_detail:
-            sys_log.warning("{} : {:.5f} {:.5f} ({})".format(const_, zone_dc_upper_v2_, long_dtk_plot_, const_bool_))
+            sys_log3.warning("{} : {:.5f} {:.5f} ({})".format(const_, zone_dc_upper_v2_, long_dtk_plot_, const_bool_))
 
         if const_bool_:  # c_zone
             if config.ep_set.static_ep:
@@ -532,7 +584,7 @@ def zoned_tr_set(open_side, res_df, config, i, zone, show_detail):
         const_ = "zone_dc_lower_v2_ < short_dtk_plot_"
         const_bool_ = eval(const_)
         if show_detail:
-            sys_log.warning("{} : {:.5f} {:.5f} ({})".format(const_, zone_dc_lower_v2_, short_dtk_plot_, const_bool_))
+            sys_log3.warning("{} : {:.5f} {:.5f} ({})".format(const_, zone_dc_lower_v2_, short_dtk_plot_, const_bool_))
 
         if const_bool_:
             if config.ep_set.static_ep:

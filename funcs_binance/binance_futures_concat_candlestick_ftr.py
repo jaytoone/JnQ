@@ -54,7 +54,6 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
         try:
             startTime = int(startTime_)
             endTime = int(endTime)
-
             #        limit < max_limit, startTime != None 일 경우, last_index 이상하게 나옴        #
             if limit != 1500:
                 startTime = None
@@ -62,11 +61,9 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
             df = request_client.get_candlestick_data(symbol=symbol,
                                                      interval=interval,
                                                      startTime=startTime, endTime=endTime, limit=limit)
-
             if show_process:
                 print(df.index[0], end=" --> ")
                 print(df.index[-1])
-
             # print("endTime :", endTime)
             # print(df.tail())
             # quit()
@@ -102,14 +99,14 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    days = 1
+    # days = 1
 
-    end_date = '2021-07-01'
-    end_date = '2021-10-10'
-    end_date = None
+    # end_date = '2021-07-01'
+    # end_date = '2021-10-10'
+    end_date = "2021-04-12"
 
-    # intervals = ['5m', '15m', '30m']
-    intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+    # intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+    intervals = ['1m']
 
     concat_path = '../candlestick_concated/database_bn'
 
@@ -126,34 +123,24 @@ if __name__ == '__main__':
 
     # coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
     #              'BCHUSDT']
-    coin_list = ['ETHUSDT']
+    coin_list = ['SOLUSDT']
     print(coin_list)
     # quit()
 
     for coin in coin_list:
-
         for interval in intervals:
-
-            # print(coin)
-
             #       check existing file     #
             #       Todo        #
             #        1. this phase require valid end_date       #
-
             save_name = '%s %s_%s.ftr' % (end_date, coin, interval)
-            # print(exist_files)
-            # print(save_name)
-            # quit()
-
             if save_name in exist_files:
                 print(save_name, 'exist !')
                 continue
 
             try:
-                concated_df, end_date = concat_candlestick(coin, interval, days, limit=1400,
-                                                              end_date=end_date, show_process=True, timesleep=0.3)
+                concated_df, end_date = concat_candlestick(coin, interval, days, limit=1500,
+                                                              end_date=end_date, show_process=True, timesleep=0.2)
                 # quit()
-
             # try:
                 concated_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')
             except Exception as e:

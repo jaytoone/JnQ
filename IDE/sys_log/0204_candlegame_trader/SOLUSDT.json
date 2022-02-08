@@ -16,7 +16,7 @@
          "class": "logging.handlers.RotatingFileHandler",
          "level": "DEBUG",
          "formatter": "form_name",
-         "filename": "C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\IDE\\sys_log\\0114_htf_trader_v3_v5_2_v7_3\\ETHUSDT_1643330365.log",
+         "filename": "C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\IDE\\sys_log\\0204_candlegame_trader\\SOLUSDT_1644134548.log",
          "maxBytes": 1048576,
          "backupCount": 10
       }

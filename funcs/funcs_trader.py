@@ -12,6 +12,17 @@ warnings.simplefilter("ignore", category=RuntimeWarning)
 np.seterr(invalid="ignore")
 
 
+def save_bin(bin_path_, data):
+  with open(bin_path_, 'wb') as f:
+    np.save(f, data)
+    print(bin_path_, 'saved !')
+
+
+def load_bin(bin_path_):
+  with open(bin_path_, 'rb') as f:
+    return np.load(f, allow_pickle=True)
+
+
 def min_max_scaler(x):
     scaled_x = (x - x.min()) / (x.max() - x.min())
     return scaled_x
@@ -112,18 +123,11 @@ def intmin(date):
     return min
 
 
-def sharpe_ratio(pr, risk_free_rate=0.0, multiply_frq=False):
-    pr_pct = pr - 1
-
-    mean_pr_ = np.mean(pr_pct)
-    s = np.std(pr_pct)
-
-    sr_ = (mean_pr_ - risk_free_rate) / s
-
-    if multiply_frq:
-        sr_ = len(pr_pct) ** (1 / 2) * sr_
-
-    return sr_
+def intmin_np(date):
+    date = str(date)
+    date = date.split('T')
+    min = int(date[1].split(':')[1])  # 분
+    return min
 
 
 def ffill(arr):  # 이전 row 의 데이터로 현 missing_value 를 채움
@@ -448,19 +452,19 @@ def to_htf(df, itv_, offset):
 
 def to_itvnum(interval):
 
-    if interval == '1m':
+    if interval in ['1m', 'T']:
         int_minute = 1
-    elif interval == '3m':
+    elif interval in ['3m', '3T']:
         int_minute = 3
-    elif interval == '5m':
+    elif interval in ['5m', '5T']:
         int_minute = 5
-    elif interval == '15m':
+    elif interval in ['15m', '15T']:
         int_minute = 15
-    elif interval == '30m':
+    elif interval in ['30m', '30T']:
         int_minute = 30
-    elif interval == '1h':
+    elif interval in ['1h', 'H']:
         int_minute = 60
-    elif interval == '4h':
+    elif interval in ['4h', '4H']:
         int_minute = 240
     else:
         print("unacceptable interval :", interval)
@@ -526,12 +530,3 @@ def get_precision_by_price(price):
         precision = 0
 
     return precision
-
-
-def calc_win_ratio(win_cnt, lose_cnt):
-    if win_cnt + lose_cnt == 0:
-        win_ratio = 0
-    else:
-        win_ratio = win_cnt / (win_cnt + lose_cnt) * 100
-
-    return win_ratio

@@ -38,7 +38,6 @@ def get_availableBalance(asset_type='USDT'):
 
 #           realtime price v1            #
 def get_market_price(symbol):
-
     result = request_client.get_symbol_price_ticker(symbol=symbol)
     # PrintMix.print_data(result)
 
@@ -46,18 +45,16 @@ def get_market_price(symbol):
 
 
 #           get realtime price using websocket           #
-def get_market_price_v2(sub_client):
-
+def get_market_price_v2(sub_client_):
     while 1:
-        res = sub_client.connections[0].price
+        res = sub_client_.connections[0].price
         if res is not None:
             return res
 
 
 #           income history per pair         #
-def total_income(symbol, startTime=None, endTime=None):
-
-    results = request_client.get_income_history(symbol=symbol, startTime=startTime, endTime=endTime)
+def total_income(symbol_, startTime=None, endTime=None):
+    results = request_client.get_income_history(symbol=symbol_, startTime=startTime, endTime=endTime)
     # PrintMix.print_data(result)
     total_income_ = 0.0
     for result in results:
@@ -67,9 +64,23 @@ def total_income(symbol, startTime=None, endTime=None):
     return total_income_
 
 
+def get_order_info(symbol_, orderId):
+    return request_client.get_order(symbol_, orderId=orderId)
+
+
+def check_exec_by_order_info(symbol_, post_order_res, qty_precision):
+    while 1:
+        try:
+            order_info_res = get_order_info(symbol_, post_order_res.orderId)
+        except Exception as e:
+            print("error in check_exec_by_order_info :", e)
+            continue
+        else:
+            return (float(order_info_res.origQty) - float(order_info_res.executedQty)) < 1 / (10 ** qty_precision)
+
+
 #           remaining order check           #
 def remaining_order_check(symbol_):
-
     result = request_client.get_open_orders(symbol_)
     if len(result) == 0:
         return None
@@ -79,7 +90,6 @@ def remaining_order_check(symbol_):
 
 
 def remaining_order_info(symbol_):
-
     # info_col = ['activatePrice', 'avgPrice', 'clientOrderId', 'closePosition', 'cumQuote', 'executedQty',
     #   'json_parse', 'orderId', 'origQty', 'origType', 'positionSide', 'price', 'priceRate', 'reduceOnly',
     #   'side', 'status', 'stopPrice', 'symbol', 'timeInForce', 'type', 'updateTime', 'workingType']
@@ -127,35 +137,16 @@ def get_position_info(symbol_):
     return None
 
 
-#           get precision info            #
 def get_precision(symbol_):
-
-    result = request_client.get_exchange_information()
-    # members = [attr for attr in dir(result) if not callable(attr) and not attr.startswith("__")]
-    # print(members)
-    # precision_data =
-    # precision_dict = dict()
-    for data in result.symbols:
-        # print(result.symbols[i].symbol)
-        # print(result.symbols[i].pricePrecision)
-        # print(result.symbols[i].quantityPrecision)
-        # print(symbols_data[i].symbol, '->', symbols_data[i].pricePrecision, symbols_data[i].quantityPrecision)
-        # precision_dict[data.symbol] = [data.pricePrecision, data.quantityPrecision]
-        # print(precision_dict['BTCUSDT'])
-        if data.symbol == symbol_:
-            return [data.pricePrecision, data.quantityPrecision]
-
-    return None
+    results = request_client.get_exchange_information()
+    return [[data.pricePrecision, data.quantityPrecision] for data in results.symbols if data.symbol == symbol_][0]
 
 
 def get_precision_by_price(price):
-
     try:
         precision = len(str(price).split('.')[1])
-
     except Exception as e:
         precision = 0
-
     return precision
 
 
@@ -206,155 +197,6 @@ def error(e: 'BinanceApiException'):
     print(e.error_code + e.error_message)
 
 
-def get_partial_tplist(ep, tp, open_side, partial_num, price_precision_):
-
-    #       Todo : ultimate tp 설정       #
-    #              calc_precision 씌워야함       #
-    tp_list_ = []
-    if open_side == OrderSide.BUY:
-
-        for part_i in range(partial_num, 0, -1):
-            partial_tp = ep + abs(tp - ep) * (part_i / partial_num)
-            tp_list_.append(partial_tp)
-
-        #   Todo : 이부분 왜 있지 ?       #
-        # if order.entry_type == OrderType.MARKET:
-        #     if ep <= sl_level:
-        #         print('ep <= level : %s <= %s' % (ep, sl_level))
-        #         continue  # while loop 가 위에 형성되면서 차후 사용을 위해선 break 으로 바뀌어야할 것
-
-    else:
-
-        #      Todo     #
-        #       이부분이 문제네, dynamic tp 라, ep 보다 tp 가 커질 수 있음     #
-        for part_i in range(partial_num, 0, -1):
-            partial_tp = ep - abs(tp - ep) * (part_i / partial_num)
-            tp_list_.append(partial_tp)
-
-        # if order.entry_type == OrderType.MARKET:
-        #     if ep >= sl_level:
-        #         print('ep >= level : %s >= %s' % (ep, sl_level))
-        #         continue
-
-    tp_list_ = list(map(lambda x: calc_with_precision(x, price_precision_), tp_list_))
-
-    return tp_list_
-
-
-def get_partial_tplist_v2(ep, tp, partial_num, price_precision_):
-
-    #       Todo : ultimate tp 설정       #
-    #              calc_precision 씌워야함       #
-    tp_list_ = []
-    if tp > ep:
-
-        for part_i in range(partial_num, 0, -1):
-            partial_tp = ep + abs(tp - ep) * (part_i / partial_num)
-            tp_list_.append(partial_tp)
-
-        #   Todo : 이부분 왜 있지 ?       #
-        # if order.entry_type == OrderType.MARKET:
-        #     if ep <= sl_level:
-        #         print('ep <= level : %s <= %s' % (ep, sl_level))
-        #         continue  # while loop 가 위에 형성되면서 차후 사용을 위해선 break 으로 바뀌어야할 것
-
-    else:
-
-        #      Todo     #
-        #       이부분이 문제네, dynamic tp 라, ep 보다 tp 가 커질 수 있음     #
-        for part_i in range(partial_num, 0, -1):
-            partial_tp = ep - abs(tp - ep) * (part_i / partial_num)
-            tp_list_.append(partial_tp)
-
-        # if order.entry_type == OrderType.MARKET:
-        #     if ep >= sl_level:
-        #         print('ep >= level : %s >= %s' % (ep, sl_level))
-        #         continue
-
-    tp_list_ = list(map(lambda x: calc_with_precision(x, price_precision_), tp_list_))
-
-    return tp_list_
-
-
-def partial_limit(symbol, tp_list_, close_side, quantity_precision, partial_qty_divider):
-
-    tp_count = 0
-    tp_type = OrderType.LIMIT
-    retry_cnt = 0
-    while 1:  # loop for partial tp
-
-        #          get remaining quantity         #
-        if tp_count == 0:
-            try:
-                remain_qty = get_remaining_quantity(symbol)
-            except Exception as e:
-                print('error in get_remaining_quantity :', e)
-                continue
-
-        #           partial tp_level        #
-        tp_level = tp_list_[tp_count]
-
-        if tp_count == len(tp_list_) - 1:
-            quantity = calc_with_precision(remain_qty, quantity_precision)
-            # quantity = calc_with_precision(remain_qty, quantity_precision, def_type='ceil')
-
-        else:
-            quantity = remain_qty / partial_qty_divider
-            quantity = calc_with_precision(quantity, quantity_precision)
-
-        #       1. 남을 qty 가 최소 주분 qty 보다 작고
-        #       2. 반올림 주문 가능한 양이라면, remain_qty 로 order 진행    #
-        if 9 / (10 ** (quantity_precision + 1)) < remain_qty - quantity < 1 / (10 ** quantity_precision):
-            print('remain_qty, quantity (in qty < 1 / (10 ** quantity_precision) phase) :', remain_qty, quantity)
-
-            #       Todo        #
-            #        1. calc_with_precision 은 내림 상태라 r_qty 를 온전히 반영하지 못함      #
-            #        2. r_qty - qty < 1 / (10 ** quantity_precision) --> 따라서, ceil 로 반영함
-            # quantity = calc_with_precision(remain_qty, quantity_precision)
-            quantity = calc_with_precision(remain_qty, quantity_precision, def_type='ceil')
-
-        print('remain_qty, quantity :', remain_qty, quantity)
-
-        #   Todo    #
-        #    1. 남은 qty 가 최소 주문 qty_precision 보다 작다면, tp order 하지말고 return       #
-        if quantity < 1 / (10 ** quantity_precision):
-            return
-
-        #           partial tp             #
-        try:
-            #           limit order             #
-            request_client.post_order(timeInForce=TimeInForce.GTC, symbol=symbol, side=close_side,
-                                      ordertype=tp_type,
-                                      quantity=str(quantity), price=str(tp_level),
-                                      reduceOnly=True)
-        except Exception as e:
-            print('error in partial tp :', e)
-
-            # quit()
-
-            #        1. Quantity error occurs, tp_list_[0] & remain_qty 로 close_order 진행       #
-            #        2. 기존 주문에 추가로 주문이 가능하지 cancel order 진행하지 않고 일단, 진행         #
-            #        3. e 를 str 로 변환해주지 않으면, argument of type 'BinanceApiException' is not iterable error 가 발생함
-            if "zero" in str(e):
-                tp_count = 0
-                tp_list_ = [tp_list_[0]]
-                continue
-
-            retry_cnt += 1
-            if retry_cnt >= 10:
-                return "maximum_retry"
-            continue
-        else:
-            tp_count += 1
-            if tp_count >= len(tp_list_):
-                break
-            remain_qty -= quantity
-            if remain_qty < 1 / (10 ** quantity_precision):  # --> means remain_qty = 0.0
-                break
-
-    return
-
-
 def get_trade_history_info(symbol_):    # pnl != percentage
     result = request_client.get_account_trades(symbol=symbol_)
     # for i in range(len(result)):
@@ -365,65 +207,66 @@ def get_trade_history_info(symbol_):    # pnl != percentage
 
 if __name__ == '__main__':
 
-    tp_list = [91.8, 91.7, 91.65]
-    partial_qty_divider = 1.5
-    quantity_precision = 1
-    symbol = 'XRPUSDT'
+    #   Todo - test_vars. should be named differ, by from _ import *
+    t_tp_list = [91.8, 91.7, 91.65]
+    t_partial_qty_divider = 1.5
+    t_quantity_precision = 1
+    t_symbol = 'XRPUSDT'
+    # quantity =
     # symbol = 'ADAUSDT'
 
-    open_side = OrderSide.BUY
-    close_side = OrderSide.SELL
+    # result = request_client.get_exchange_information()
+    # # print(result.symbols)   # type = obj
+    # print(get_precision(t_symbol))
+    # print([[data.pricePrecision, data.quantityPrecision] for data in result.symbols if data.symbol == t_symbol][0])
+    # for data in result.symbols:
+    #     if data.symbol == symbol_:
+    #         print([data.pricePrecision, data.quantityPrecision])
 
-    # print(get_limit_leverage(symbol))
-    # print(total_income(symbol))
-    # print(get_precision(symbol))
+    # open_side = OrderSide.BUY
+    # close_side = OrderSide.SELL
 
-    print(get_precision_by_price(91.823))
+    # print(get_precision_by_price(91.823))
+    # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=symbol,
+    #                           side=open_side,
+    #                           ordertype=OrderType.LIMIT,
+    #                           quantity=str(15.0), price=str(0.6415),
+    #                           reduceOnly=False)
+    # #{"orderId":19419988889,"symbol":"XRPUSDT","status":"NEW","clientOrderId":"8NaTskf7GFXnwUyD3Z4BME",
+    # # "price":"0.6515","avgPrice":"0.00000","origQty":"15","executedQty":"0","cumQty":"0","cumQuote":"0",
+    # # "timeInForce":"GTC","type":"LIMIT","reduceOnly":false,"closePosition":false,"side":"BUY","positionSide":"BOTH",
+    # # "stopPrice":"0","workingType":"CONTRACT_PRICE","priceProtect":false,"origType":"LIMIT","updateTime":1644024833731}
+    # res_obj = request_client.post_order(symbol=t_symbol, side=OrderSide.SELL,
+    #                                     ordertype=OrderType.MARKET,
+    #                                     quantity=str(15.0),
+    #                                     reduceOnly=False)
+    # {"orderId": 19420890060, "symbol": "XRPUSDT", "status": "NEW", "clientOrderId": "cSkFxDVuYPyViD1O1pcypT", "price": "0", "avgPrice": "0.00000",
+    #  "origQty": "15", "executedQty": "0", "cumQty": "0", "cumQuote": "0", "timeInForce": "GTC", "type": "MARKET", "reduceOnly": false,
+    #  "closePosition": false, "side": "BUY", "positionSide": "BOTH", "stopPrice": "0", "workingType": "CONTRACT_PRICE", "priceProtect": false,
+    #  "origType": "MARKET", "updateTime": 1644032979553}
+    # print(result.orderId)
+
+    result = request_client.get_order(t_symbol, orderId=19478631422)
+    # # print(float(result.origQty) - float(result.executedQty))
+    PrintBasic.print_obj(result)
+
+    # result = request_client.get_open_orders()
+    # PrintMix.print_data(result)
+
+    # import time
+    # time.sleep(5)
+    # try:
+    #     result = request_client.cancel_order(symbol=symbol, orderId=19420814937)
+    # except Exception as e:
+    #     print(str(e))
+    #     if '-2011' not in str(e):
+    #         print(1)
+    # print(result)
+    # #{"orderId":19420814937,"symbol":"XRPUSDT","status":"CANCELED","clientOrderId":"O1xL7JhPxLw9Z4RSZyJr0F",
+    # # "price":"0.6515","avgPrice":"0.00000","origQty":"15","executedQty":"0","cumQty":"0","cumQuote":"0",
+    # # "timeInForce":"GTC","type":"LIMIT","reduceOnly":false,"closePosition":false,"side":"BUY","positionSide":"BOTH",
+    # # "stopPrice":"0","workingType":"CONTRACT_PRICE","priceProtect":false,"origType":"LIMIT","updateTime":1644032291286}
+    # PrintBasic.print_obj(result)
     quit()
 
 
-    # result = request_client.get_open_orders(symbol)
-    # results = request_client.get_position_v2()
-    #
-    # info_col = ['entryPrice', 'isAutoAddMargin', 'isolatedMargin', 'json_parse', 'leverage', 'liquidationPrice'
-    #     , 'marginType', 'markPrice', 'maxNotionalValue', 'positionAmt', 'positionSide', 'symbol', 'unrealizedProfit']
-    # for result in results:
-    #     if result.symbol == symbol:
-    #         # print(dir(result))
-    #         for ic in info_col:
-    #             print(getattr(result, ic))
-
-    # print(dir(result[0]))
-    # print((result[0].price))
-    # print((result[0].side))
-    # info_col = ['activatePrice', 'avgPrice', 'clientOrderId', 'closePosition', 'cumQuote', 'executedQty',
-    #   'json_parse', 'orderId', 'origQty', 'origType', 'positionSide', 'price', 'priceRate', 'reduceOnly',
-    #   'side', 'status', 'stopPrice', 'symbol', 'timeInForce', 'type', 'updateTime', 'workingType']
-    # for ic in info_col:
-    #     print(getattr(result[0], ic))
-
-    print(remaining_order_check(symbol))
-
-    # info = request_client.futures_exchange_info()
-    # PrintMix.print_data(info)
-    quit()
-
-    # if info['symbols'][0]['pair'] == tradingPairs[i]:
-    # print("Price Pre ", info['symbols'][0]['pricePrecision'])
-
-    # sub_client.subscribe_candlestick_event("btcusdt", CandlestickInterval.MIN1, callback, error)
-    # print(dir(sub_client.connections[0]))
-    # print(sub_client.connections.__contains__())
-    # ep = 2.1762
-    # quantity = 1622.59212
-    # quantity_precision = 0
-    # quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
-    # # quantity = 1622.0
-    #
-    # # print("quantity :", quantity)
-
-    # request_client.post_order(timeInForce=TimeInForce.GTC, symbol=symbol,
-    #                                    side=open_side,
-    #                                    ordertype='LIMIT',
-    #                                    quantity=str(quantity), price=str(ep),
-    #

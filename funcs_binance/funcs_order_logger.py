@@ -8,23 +8,18 @@ sys_log2 = logging.getLogger()
 
 def limit_order(self, order_type, config, limit_side, limit_price, limit_quantity,
                 order_info=None, reduceonly=False):
-
     open_retry_cnt = 0
     res_code = 0
     while 1:  # <-- loop for complete open order
-
         try:
             if order_type == OrderType.MARKET:
-
                 #           market order            #
-                request_client.post_order(symbol=config.trader_set.symbol, side=limit_side, ordertype=OrderType.MARKET,
+                res_obj = request_client.post_order(symbol=config.trader_set.symbol, side=limit_side, ordertype=OrderType.MARKET,
                                           quantity=str(limit_quantity))
-
             else:
                 #       limit order      #
                 #       limit order needs execution waiting time & check remaining order         #
-
-                request_client.post_order(timeInForce=TimeInForce.GTC, symbol=config.trader_set.symbol,
+                res_obj = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=config.trader_set.symbol,
                                           side=limit_side,
                                           ordertype=OrderType.LIMIT,
                                           quantity=str(limit_quantity), price=str(limit_price),
@@ -43,7 +38,6 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
 
                 except Exception as e:
                     sys_log2.error('error in get_market_price_v2 (open_order phase): {}'.format(e))
-
                 continue
 
             #        -4003 : quantity less than zero        #
@@ -62,7 +56,6 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
 
             #        -2019 : Margin is insufficient     #
             open_retry_cnt += 1
-
             if '-2019' in str(e):
                 try:
                     max_available_balance = get_availableBalance()
@@ -86,7 +79,6 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
                 res_code = -2019
                 return self.over_balance, res_code
                 # quit()
-
             continue
 
         else:
@@ -96,11 +88,9 @@ def limit_order(self, order_type, config, limit_side, limit_price, limit_quantit
 
 
 def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, partial_qty_divider):
-
     tp_count = 0
     # retry_cnt = 0
     while 1:  # loop for partial tp
-
         #          get remaining quantity         #
         if tp_count == 0:
             try:
@@ -166,7 +156,6 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
 
         else:   # -2019 (Margin is insufficient) or something else
             # continue 하면, limit_order 내부에서 재정의할 것
-
             # retry_cnt += 1
             # if retry_cnt >= 10:
             #     return "maximum_retry"
@@ -176,9 +165,7 @@ def partial_limit_v2(self, config, tp_list_, close_side, quantity_precision, par
 
 
 def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp):
-
     while 1:  # <--- This loop for out close & complete close
-
         #               cancel all tp order                 #
         if not remain_tp_canceled:
             #               remaining tp order check            #
@@ -235,16 +222,13 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
             try:
                 #        1. limit out 은 한동안 없을 것
                 if config.out_set.out_type != OrderType.MARKET:
-
                     if pd.isna(out):
-
                         try:
                             #   Todo
                             exit_price = get_market_price_v2(self.sub_client)
                         except Exception as e:
                             sys_log2.error('error in get_market_price_v2 (close_order phase): {}'.format(e))
                             continue
-
                     else:
                         exit_price = log_tp
 
@@ -330,7 +314,6 @@ def market_close_order(self, remain_tp_canceled, config, close_side, out, log_tp
             sys_log2.info('market close order executed')
             # break
             return
-
         else:
             #           complete close by market            #
             sys_log2.info('out_type changed to market')
