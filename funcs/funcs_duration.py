@@ -1,5 +1,5 @@
-from funcs.funcs_indicator_candlescore_addnb import *
-from funcs.funcs_trader import *
+from funcs.funcs_indicator_candlescore_addnb import get_candle_score
+from funcs.funcs_trader import calc_tp_out_fee
 import logging
 
 sys_log = logging.getLogger()

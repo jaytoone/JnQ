@@ -1,42 +1,43 @@
 from funcs_binance.binance_futures_bot_config import *
 import math
 import pandas as pd
+import logging
 # import time
+
+sys_log = logging.getLogger()
 
 
 def get_limit_leverage(symbol_):
-
     results = request_client.get_leverage_bracket()
-    # leverage_dict = dict()
-    for result in results:
-        if result.symbol == symbol_:
-            return result.brackets[0].initialLeverage
+    # for result in results:
+    #     if result.symbol == symbol_:
+    #         return result.brackets[0].initialLeverage
+    #
+    # return None
+    return [res.brackets[0].initialLeverage for res in results if res.symbol == symbol_][0]
 
-    return None
 
-
-#               get balance v2              #
 def get_availableBalance(asset_type='USDT'):
-
-    results = request_client.get_balance_v2()
-
-    # print(dir(result[0]))
-    for result in results:
-
-        # --- check asset : USDT --- #
-        if result.asset == asset_type:
-        # print(result.availableBalance)
-            available_asset = result.availableBalance
-            break
-
-    return calc_with_precision(available_asset, 2)
+    while 1:
+        try:
+            results = request_client.get_balance_v2()
+        except Exception as e:
+            sys_log.error("error in get_balance_v2() :", e)
+        else:
+            available_asset = [res.availableBalance for res in results if res.asset == asset_type][0]
+            # for result in results:
+            #     # --- check asset : USDT --- #
+            #     if result.asset == asset_type:
+            #     # print(result.availableBalance)
+            #         available_asset = result.availableBalance
+            #         break
+            return calc_with_precision(available_asset, 2)
 
 
 # result = request_client.get_balance_v2()
 # PrintMix.print_data(result)
 
 
-#           realtime price v1            #
 def get_market_price(symbol):
     result = request_client.get_symbol_price_ticker(symbol=symbol)
     # PrintMix.print_data(result)
@@ -65,21 +66,46 @@ def total_income(symbol_, startTime=None, endTime=None):
 
 
 def get_order_info(symbol_, orderId):
-    return request_client.get_order(symbol_, orderId=orderId)
-
-
-def check_exec_by_order_info(symbol_, post_order_res, qty_precision):
     while 1:
         try:
-            order_info_res = get_order_info(symbol_, post_order_res.orderId)
+            order_info_res = request_client.get_order(symbol_, orderId=orderId)
         except Exception as e:
-            print("error in check_exec_by_order_info :", e)
+            sys_log.error("error in get_order_info : {}".format(e))
             continue
         else:
-            return (float(order_info_res.origQty) - float(order_info_res.executedQty)) < 1 / (10 ** qty_precision)
+            return order_info_res
 
 
-#           remaining order check           #
+def get_execPrice(order_info):
+    if order_info.origType == OrderType.LIMIT:
+        executedPrice = float(order_info.price)
+    else:
+        executedPrice = float(order_info.avgPrice)
+
+    return executedPrice
+
+
+def get_execQty(order_info):
+    return float(order_info.executedQty)
+
+
+def check_execution(order_info, qty_precision):
+    return (float(order_info.origQty) - float(order_info.executedQty)) < 1 / (10 ** qty_precision)
+
+
+# old
+def check_exec_by_order_info(symbol_, post_order_res, qty_precision, return_price=False, order_type=OrderType.LIMIT):
+    order_info = get_order_info(symbol_, post_order_res.orderId)
+    if return_price:
+        if order_type == OrderType.LIMIT:
+            executedPrice = float(order_info.price)
+        else:
+            executedPrice = float(order_info.avgPrice)
+        return (float(order_info.origQty) - float(order_info.executedQty)) < 1 / (10 ** qty_precision), executedPrice
+    return (float(order_info.origQty) - float(order_info.executedQty)) < 1 / (10 ** qty_precision)
+
+
+# old
 def remaining_order_check(symbol_):
     result = request_client.get_open_orders(symbol_)
     if len(result) == 0:
@@ -89,6 +115,7 @@ def remaining_order_check(symbol_):
         return [result[i].orderId for i in range(len(result))]
 
 
+# old
 def remaining_order_info(symbol_):
     # info_col = ['activatePrice', 'avgPrice', 'clientOrderId', 'closePosition', 'cumQuote', 'executedQty',
     #   'json_parse', 'orderId', 'origQty', 'origType', 'positionSide', 'price', 'priceRate', 'reduceOnly',
@@ -104,7 +131,7 @@ def remaining_order_info(symbol_):
         return result[0]
 
 
-# -------- remaining position amount check -------- #
+# old
 def get_remaining_quantity(symbol_):
 
     results = request_client.get_position_v2()
@@ -119,7 +146,7 @@ def get_remaining_quantity(symbol_):
     return None
 
 
-# -------- remaining position info -------- #
+# old
 def get_position_info(symbol_):
 
     # info_col = ['entryPrice', 'isAutoAddMargin', 'isolatedMargin', 'json_parse', 'leverage', 'liquidationPrice'
@@ -138,8 +165,16 @@ def get_position_info(symbol_):
 
 
 def get_precision(symbol_):
-    results = request_client.get_exchange_information()
-    return [[data.pricePrecision, data.quantityPrecision] for data in results.symbols if data.symbol == symbol_][0]
+    while 1:
+        try:
+            results = request_client.get_exchange_information()
+        except Exception as e:
+            sys_log.error("error in get_precision :", e)
+        else:
+            price_precision, quantity_precision = [[data.pricePrecision, data.quantityPrecision] for data in results.symbols if data.symbol == symbol_][0]
+            sys_log.info('price_precision : {}'.format(price_precision))
+            sys_log.info('quantity_precision : {}'.format(quantity_precision))
+            return price_precision, quantity_precision
 
 
 def get_precision_by_price(price):
@@ -212,9 +247,15 @@ if __name__ == '__main__':
     t_partial_qty_divider = 1.5
     t_quantity_precision = 1
     t_symbol = 'XRPUSDT'
+    # t_symbol = 'ETHUSDT'
     # quantity =
     # symbol = 'ADAUSDT'
 
+    # result = request_client.get_account_trades(t_symbol)
+    # # result = request_client.get_account_trades(t_symbol, fromId=1422647525)
+    # PrintMix.print_data(result)
+
+    # print(total_income(t_symbol, 1644589260000, 1644589376739))
     # result = request_client.get_exchange_information()
     # # print(result.symbols)   # type = obj
     # print(get_precision(t_symbol))
@@ -223,15 +264,31 @@ if __name__ == '__main__':
     #     if data.symbol == symbol_:
     #         print([data.pricePrecision, data.quantityPrecision])
 
-    # open_side = OrderSide.BUY
+    open_side = OrderSide.BUY
     # close_side = OrderSide.SELL
 
     # print(get_precision_by_price(91.823))
-    # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=symbol,
-    #                           side=open_side,
+    # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=t_symbol,
+    #                           side='BUY',
+    #                           positionSide="LONG",
     #                           ordertype=OrderType.LIMIT,
     #                           quantity=str(15.0), price=str(0.6415),
-    #                           reduceOnly=False)
+    #                           # reduceOnly=False
+    #                                    )
+    # result = request_client.post_order(symbol=t_symbol,
+    #                           side='BUY',
+    #                           positionSide="LONG",
+    #                           ordertype=OrderType.MARKET,
+    #                           quantity=str(15.0)
+    #                           # reduceOnly=False
+    #                                    )
+    result = request_client.post_order(symbol=t_symbol,
+                                       side='SELL',
+                                       positionSide="LONG",
+                                       ordertype=OrderType.MARKET,
+                                       quantity=str(15.0)
+                                       # reduceOnly=False
+                                       )
     # #{"orderId":19419988889,"symbol":"XRPUSDT","status":"NEW","clientOrderId":"8NaTskf7GFXnwUyD3Z4BME",
     # # "price":"0.6515","avgPrice":"0.00000","origQty":"15","executedQty":"0","cumQty":"0","cumQuote":"0",
     # # "timeInForce":"GTC","type":"LIMIT","reduceOnly":false,"closePosition":false,"side":"BUY","positionSide":"BOTH",
@@ -246,9 +303,9 @@ if __name__ == '__main__':
     #  "origType": "MARKET", "updateTime": 1644032979553}
     # print(result.orderId)
 
-    result = request_client.get_order(t_symbol, orderId=19478631422)
-    # # print(float(result.origQty) - float(result.executedQty))
-    PrintBasic.print_obj(result)
+    # result = request_client.get_order(t_symbol, orderId=19420890060)
+    # # # print(float(result.origQty) - float(result.executedQty))
+    # PrintBasic.print_obj(result)
 
     # result = request_client.get_open_orders()
     # PrintMix.print_data(result)

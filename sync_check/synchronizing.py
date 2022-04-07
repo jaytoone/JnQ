@@ -1,6 +1,4 @@
-import os
 # pwd = os.getcwd()
-#
 # # print(os.path.dirname(pwd))
 # # print(pwd)
 # switch_path = os.path.dirname(pwd)
@@ -8,15 +6,12 @@ import os
 
 # from binance_f import RequestClient
 # from binance_f.model import *
-from binance_f.constant.test import *
 # from binance_f.base.printobject import *
-
 from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
-
 import matplotlib.pyplot as plt
-
 from funcs.funcs_trader import *
-from funcs.funcs_indicator_candlescore import *
+# from funcs.olds.funcs_indicator_candlescore import *
+from funcs.funcs_indicator import *
 import mpl_finance as mf
 
 # import numpy as np
@@ -29,17 +24,30 @@ pd.set_option('display.max_columns', 2500)
 
 def sync_check(df, plot_size=45, plotting=False):
 
-    #       mmh_st      #
-    # df['tsl'] = mmh_st(df, 5)
-    # print(df.tail(40))
+    # ------ lucid sar ------ #
+    df_3T = to_htf(df, itv_='3T', offset='1h')
+    start_0 = time.time()
+    lucid_sar(df_3T)        # 0.12494134902954102s
+    print(time.time() - start_0)
+    start_0 = time.time()
+    lucid_sar_v2(df_3T)     # 0.0
+    print(time.time() - start_0)
+
+    df = df.join(to_lower_tf_v2(df, df_3T, [-2, -1]), how='inner')
+    print(df.tail())
+    quit()
+
+    # ------ ha ------ #
+    # heikinashi_v2(df)
+    # print(df.tail())
     # quit()
 
-    # ----- stdev ----- #
+    # ------ stdev ------ #
     # df['stdev'] = stdev(df, 20)
     # print(df.stdev.tail(10))
     # quit()
 
-    # ----- atr ----- #
+    # ------ atr ------ #
     # df['atr'] = atr(df, 20)
     # print(df.stdev.tail(10))
     # quit()
@@ -68,13 +76,13 @@ def sync_check(df, plot_size=45, plotting=False):
 
         sample_df = res_df.iloc[-sample_len - offset:-offset]
 
-        # --------- input using indi.s --------- #
+        # ---------- input using indi.s ---------- #
         # res = ema_v0(sample_df['close'], 190)
         # res = rsi(sample_df, 190)
 
         df_5T = to_htf(sample_df, itv_='5T', offset='1h')
         sample_len2 = len(df_5T)
-        res = ema(df_5T['close'], 190)
+        res = ema(df_5T['close'], 195)
 
         res_last_row = res.iloc[-1]
         if pd.isnull(res_last_row):
@@ -118,38 +126,37 @@ def sync_check(df, plot_size=45, plotting=False):
     print(df_5T['ema_5m'].tail(5))
     # print(time.time() - start_0)
     quit()
-    #
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf_v2(df, third_df, [-1]), columns=['ema_5m']))
+
     # print(df['ema_5m'].tail(20))
     # # print(df.tail(5))
     # # print(df['ema_5m'].loc["2022-01-13 20:19:59.999"])
     # quit()
 
-    # ----- bb ----- #
+    # ------ bb ------ #
     # df = bb_line(df, None, '1m')
     # df = bb_level(df, '1m', 1)
     # print(df.iloc[:, -6:].tail(40))
     # quit()
 
-    # # ----- dc ----- #
+    # # ------ dc ------ #
     # df = dc_line(df, None, '1m')
     # df = dc_level(df, '1m', 1)
     # print(df.iloc[:, -8:].tail(40))
     # quit()
 
-    # ----- rsi ----- #
+    # ------ rsi ------ #
     df['rsi'] = rma(df['close'], 14)    # 11:21:59.999    3166.373131 11:21:59.999    3166.373131 11:21:59.999    3166.373131
     # df['rsi'] = rsi(df, 14)
     print(df.rsi.tail(40))
     quit()
 
-    # ----- cci ----- #
+    # ------ cci ------ #
     df['cci'] = cci(df, 20)
     print(df.cci.tail(40))
     quit()
 
 
-    # ----- cloud bline ----- #
+    # ------ cloud bline ------ #
     # df['cloud_bline'] = cloud_bline(df, 26)
     # third_df['cloud_bline_5m'] = cloud_bline(third_df, 26)
     # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['cloud_bline_5m']))
@@ -167,28 +174,6 @@ def sync_check(df, plot_size=45, plotting=False):
     print(df.iloc[:, -6:].tail(60))
     quit()
 
-    #
-    # # print(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]].tail())
-    # # min_upper = np.minimum(df["minor_ST1_Up"], df["minor_ST2_Up"], df["minor_ST3_Up"])
-    # # max_lower = np.maximum(df["minor_ST1_Down"], df["minor_ST2_Down"], df["minor_ST3_Down"])
-    # min_upper = np.min(df[["minor_ST1_Up", "minor_ST2_Up", "minor_ST3_Up"]], axis=1)
-    # max_lower = np.max(df[["minor_ST1_Down", "minor_ST2_Down", "minor_ST3_Down"]], axis=1)
-    #
-    # df['middle_line'] = (min_upper + max_lower) / 2
-    #
-    # #           lucid sar              #
-    second_df['sar'] = lucid_sar(second_df)
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-1]), columns=['sar1']))
-    #
-    # # third_df['sar'] = lucid_sar(third_df)
-    # # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, third_df, [-1]), columns=['sar2']))
-    #
-    # fourth_df['sar'] = lucid_sar(fourth_df)
-    # df = df.join(pd.DataFrame(index=df.index, data=to_lower_tf(df, fourth_df, [-1]), columns=['sar2']))
-    #
-    # # print(df[['sar1', 'sar2']].tail(20))
-    # # quit()
-    #
     # #           ichimoku            #
     # # df['senkou_a'], df['senkou_b'] = ichimoku(df)
     #
@@ -222,7 +207,7 @@ def sync_check(df, plot_size=45, plotting=False):
     # # print(df['trix'].tail(15))
     # # quit()
 
-    # ------------ ema_roc ------------ #
+    # -------------- ema_roc -------------- #
     df['ema_roc'] = ema_roc(df['close'], 13, 9)
 
     print(df.iloc[:, -3:].tail(20))
@@ -290,7 +275,7 @@ if __name__=="__main__":
 
     symbol = "ETHUSDT"
 
-    df, _ = concat_candlestick(symbol, '1m', days=7, limit=1500, show_process=True)    # limit(400) 05:01:59.999000    days(1) 14:35:00    2638.234157
+    df, _ = concat_candlestick(symbol, '1m', days=1, limit=500, show_process=True)    # limit(400) 05:01:59.999000    days(1) 14:35:00    2638.234157
     #  days(3) 16:55:00    3125.530734 days(4) 16:55:00    3126.399747 days(5) 16:55:00    3126.441473 days(6) 16:55:00    3126.443448
     #  days(7) 16:55:00    3126.443546
 

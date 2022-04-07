@@ -3,10 +3,7 @@ import os
 import pickle
 import importlib
 from datetime import datetime
-from easydict import EasyDict
-from funcs.funcs_indicator_candlescore import *
-import json
-
+from funcs.olds.funcs_indicator_candlescore import *
 
 if __name__ == "__main__":
 
@@ -23,18 +20,18 @@ if __name__ == "__main__":
 
     #        1. ftr_list 로 작업할 수 있도록 - idep 와 동기화
     #       history variables       #
-    # date = "2022-01-10"
-    date = "2022-01-24"
+    date = "2022-01-10"
+    # date = "2022-01-24"
     ticker_list = ["ETHUSDT"]
     ftr_dir = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated/res_df/concat/cum"  # write abspath
     ftr_path = os.path.join(ftr_dir, date)
     ftr_list = ["{} {}.ftr".format(date, ticker) for ticker in ticker_list]
 
     # ----------- trade log ver. - data slicing & back_ep_tp ----------- #
-    log_name = "ETHUSDT_1642864464.pkl"
+    log_name = "ETHUSDT_1644383502.pkl"
 
     #       Todo        #
-    #        1. 이곳에서 multi_mode, switch 지원가능 하도록 구성 - 필요성 의문 제기
+    #        1. 이곳에서 multi_mode, switch 지원가능 하도록 구성 <- 필요성 의문 제기
 
     #        edit datetime     #
     edited_start_datetime = pd.to_datetime(str("2021-12-01 00:49:59.999000"))
@@ -42,13 +39,12 @@ if __name__ == "__main__":
     edited_start_timestamp = datetime.timestamp(edited_start_datetime)
 
     # ------------- link module ------------- #
-    bot_name = "{}.bots.{}_bot_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)
-    bot_name = "{}.bots.{}_bot_{}_{}_{}".format("0123_ppr", frame_ver, *ID_list)
+    bot_name = "{}.bots.{}_bot".format(strat_pkg, frame_ver, *ID_list)
     bot_lib = importlib.import_module(bot_name)
 
     pkg_path = bot_lib.trader_lib.pkg_path
 
-    strat_name = "{}.back_pr.back_id.{}_back_id_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)
+    strat_name = "{}.back_pr.back_id.{}_back_id".format(strat_pkg, frame_ver, *ID_list)
     # strat_name = "{}.back_pr.back_id.{}_back_id_{}_{}_{}_bkfor_independ".format(strat_pkg, frame_ver, *ID_list)
     strat_lib = importlib.import_module(strat_name)
 
@@ -66,7 +62,7 @@ if __name__ == "__main__":
         else:
             end_datetime = pd.to_datetime(trade_log['last_trading_time'][:17] + "59.999000")
 
-    cfg_path_list = [os.path.join(pkg_path, "config", name_) for name_ in bot_lib.config_list]
+    cfg_path_list = [os.path.join(pkg_path, "config", name_) for name_ in bot_lib.config_name_list]
     cfg_list = bot_lib.trader_lib.read_write_cfg_list(cfg_path_list)
 
     config = cfg_list[0]    # Todo - 현재 ticker 1 개만 지원함

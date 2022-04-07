@@ -6,7 +6,7 @@
 # import plotly.offline as offline
 # import plotly.graph_objs as go
 # import pickle
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 from funcs.funcs_trader import *
 
 pd.set_option('display.width', 1000)

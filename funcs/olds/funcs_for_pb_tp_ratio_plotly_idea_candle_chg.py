@@ -1,9 +1,7 @@
 from binance_f import RequestClient
 from binance_f.model import *
 from binance_f.constant.test import *
-from binance_f.base.printobject import *
 from plotly import subplots
-import plotly.offline as offline
 import plotly.graph_objs as go
 # import numpy as np
 # import pandas as pd
@@ -17,7 +15,7 @@ import plotly.graph_objs as go
 # import math
 
 from funcs.funcs_trader import *
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', 2500)
@@ -923,7 +921,6 @@ if __name__ == "__main__":
     dir = './candlestick_concated/'
 
     import pickle
-    import random
 
     #       when we use Realtime Data       #
     with open('future_coin.p', 'rb') as f:

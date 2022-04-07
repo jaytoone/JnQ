@@ -1,6 +1,5 @@
-import numpy as np
-from funcs.funcs_trader import intmin, sharpe_ratio, calc_tp_out_fee
-from funcs.funcs_indicator_candlescore import *
+from funcs.funcs_trader import sharpe_ratio, calc_tp_out_fee
+from funcs.olds.funcs_indicator_candlescore import *
 from funcs.funcs_idep import *
 import matplotlib.pyplot as plt
 import time

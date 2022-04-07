@@ -99,13 +99,13 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    # days = 1
+    days = 1
 
-    # end_date = '2021-07-01'
-    # end_date = '2021-10-10'
     end_date = "2021-04-12"
+    end_date = "2020-09-06"
+    end_date = None
 
-    # intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
+    # intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
     intervals = ['1m']
 
     concat_path = '../candlestick_concated/database_bn'
@@ -118,14 +118,12 @@ if __name__ == '__main__':
 
     exist_files = os.listdir(save_dir)
 
-    with open('../ticker_list/binance_futures_20211207.pkl', 'rb') as f:
-        coin_list = pickle.load(f)
-
+    # with open('../ticker_list/binance_futures_20211207.pkl', 'rb') as f:
+    #     coin_list = pickle.load(f)
     # coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
     #              'BCHUSDT']
-    coin_list = ['SOLUSDT']
+    coin_list = ['ETHUSDT']
     print(coin_list)
-    # quit()
 
     for coin in coin_list:
         for interval in intervals:
@@ -140,8 +138,8 @@ if __name__ == '__main__':
             try:
                 concated_df, end_date = concat_candlestick(coin, interval, days, limit=1500,
                                                               end_date=end_date, show_process=True, timesleep=0.2)
+                # print(concated_df.tail())
                 # quit()
-            # try:
                 concated_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')
             except Exception as e:
                 print('Error in save to_excel :', e)

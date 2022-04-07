@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
 from funcs.funcs_trader import to_lower_tf_v2, intmin, ffill, bfill, to_itvnum
-from numba import jit, NumbaWarning, NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+# from numba import jit, NumbaWarning, NumbaDeprecationWarning, NumbaPendingDeprecationWarning
 # import functools
 import warnings
 
-warnings.simplefilter('ignore', category=NumbaWarning)
-warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
-warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
+# warnings.simplefilter('ignore', category=NumbaWarning)
+# warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
+# warnings.simplefilter('ignore', category=NumbaPendingDeprecationWarning)
 
 
 def nz(x, y=0):
@@ -64,8 +64,9 @@ def tozero_v2(result):
 
 def stdev(df, period):
 
-    avg = df['close'].rolling(period).mean()
-    std = pd.Series(index=df.index, data=np.zeros(len(df)))
+    avg = df['close'].rolling(period).mean().to_numpy()
+    # std = pd.Series(index=df.index, data=np.zeros(len(df)))
+    std = np.zeros(len(df))
 
     #       Todo        #
     #        1. rolling - one_line 보류
@@ -74,17 +75,18 @@ def stdev(df, period):
 
     # print(df['close'].rolling(period) - avg)
 
+    close = df['close'].to_numpy()
     for i in range(period - 1, len(df)):
 
-        close_series = df['close'].iloc[i + 1 - period:i + 1]
-        sum_series = close_series - avg.iloc[i]
-
+        sum_series = close[i + 1 - period:i + 1] - avg[i]
+        # sum_series = close.iloc[i + 1 - period:i + 1] - avg.iloc[i]
         sum2_series = [tozero_v2(sum_) ** 2 for sum_ in sum_series]
         # print(sum2_series)
 
         #   rolling minus avg
 
-        std.iloc[i] = np.sum(sum2_series)
+        # std.iloc[i] = np.sum(sum2_series)
+        std[i] = np.sum(sum2_series)
         # print("np.sum(sum2_series) :", np.sum(sum2_series))
 
         #   rolled_sum.rolling(period).sum(sum2_series)
@@ -120,6 +122,19 @@ def dev(data, period):
     return dev_
 
 
+def norm_hohlc(res_df, h_c_itv, norm_period=120):
+    try:
+        res_df.norm_max
+    except:
+        res_df['norm_max'] = res_df['high'].rolling(norm_period).max()
+        res_df['norm_min'] = res_df['low'].rolling(norm_period).min()
+
+    for hcol in h_candle_cols(h_c_itv):
+        res_df['norm_' + hcol] = (res_df[hcol] - res_df['norm_min']) / (res_df['norm_max'] - res_df['norm_min']) * 100
+
+    return
+
+
 #    개별 candle_score 조회를 위해 _ratio 와 분리함        #
 def get_candle_score(o, h, l, c):
 
@@ -153,7 +168,7 @@ def candle_score(res_df, ohlc_col=None):
 
 
 #    개별 candle_score 조회를 위해 _ratio 와 분리함        #
-@jit
+# @jit
 def get_candle_score_nb(o, h, l, c):
 
     #   check up / downward
@@ -174,7 +189,7 @@ def get_candle_score_nb(o, h, l, c):
     return front_wick_score, body_score, back_wick_score
 
 
-@jit
+# @jit
 def candle_score_nb(ohlc_data):  # nb_function 에 numpy 이외의 data_type 은 허용하지 않음
     o, h, l, c = np.split(ohlc_data, 4, axis=1)
 
@@ -182,26 +197,30 @@ def candle_score_nb(ohlc_data):  # nb_function 에 numpy 이외의 data_type 은
 
 
 def add_hrel_habs(res_df, h_c_itv, norm_period=120):
-    norm_cols = ['high', 'low']
-    rolled_data = res_df[norm_cols].rolling(norm_period)
-    res_df['norm_range'] = rolled_data.max().max(axis=1) - rolled_data.min().min(axis=1)
-
     res_df['hrange_{}'.format(h_c_itv)] = res_df['hhigh_{}'.format(h_c_itv)] - res_df['hlow_{}'.format(h_c_itv)]
     res_df['hrel_ratio_{}'.format(h_c_itv)] = res_df['hrange_{}'.format(h_c_itv)] / res_df['hrange_{}'.format(h_c_itv)].shift(
         to_itvnum(h_c_itv)) * 100
-    res_df['habs_ratio_{}'.format(h_c_itv)] = res_df['hrange_{}'.format(h_c_itv)] / res_df['norm_range'] * 100
 
-    return res_df
+    res_df['norm_max'] = res_df['high'].rolling(norm_period).max()
+    res_df['norm_min'] = res_df['low'].rolling(norm_period).min()
+    res_df['habs_ratio_{}'.format(h_c_itv)] = res_df['hrange_{}'.format(h_c_itv)] / (res_df['norm_max'] - res_df['norm_min']) * 100
+
+    return
 
 
-@jit(parallel=True)
-def add_hscores_nb(res_df, h_c_itv_list):
-  for itv_idx, scores in enumerate([candle_score_nb(res_df[h_candle_col].to_numpy()) for h_candle_col in [h_candle_cols(h_c_itv) for h_c_itv in h_c_itv_list]]):
-    # res_df[score_cols(h_c_itv_list[itv_idx])] = scores #  -->  갑자기 안되는 이유, 모름
-    for score_col, score in zip(score_cols(h_c_itv_list[itv_idx]), scores):
+# @jit(parallel=True)
+def add_hscores_nb(res_df, h_c_itv):
+    for score_col, score in zip(score_cols(h_c_itv), candle_score_nb(res_df[h_candle_cols(h_c_itv)].to_numpy())):  # scores = fws, bs, bws
       res_df[score_col] = score
 
-  return res_df
+    return
+# def add_hscores_nb(res_df, h_c_itv_list):
+#   for itv_idx, scores in enumerate([candle_score_nb(res_df[h_candle_col].to_numpy()) for h_candle_col in [h_candle_cols(h_c_itv) for h_c_itv in h_c_itv_list]]):
+#     # res_df[score_cols(h_c_itv_list[itv_idx])] = scores #  -->  갑자기 안되는 이유, 모름
+#     for score_col, score in zip(score_cols(h_c_itv_list[itv_idx]), scores):
+#       res_df[score_col] = score
+#
+#   return res_df
 
 
 def h_ratio_cols(h_c_itv):   # 아래 함수와 통일성 유지

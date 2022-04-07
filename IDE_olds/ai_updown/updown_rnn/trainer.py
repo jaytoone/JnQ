@@ -1,7 +1,7 @@
 from updown_rnn.utils import *
 from updown_rnn.model import lstm_model
 # from binance_futures_concat_candlestick import concat_candlestick
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 from funcs.funcs_trader import min_max_scaler
 from sklearn.model_selection import train_test_split
 from tqdm.notebook import tqdm

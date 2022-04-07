@@ -1,4 +1,4 @@
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 import numpy as np
 
 

@@ -2,9 +2,8 @@
 #        1. back_id ajustment
 #        2. title_position & tight_layout
 
-import numpy as np
-from funcs.funcs_trader import intmin, sharpe_ratio
-from funcs.funcs_indicator_candlescore import *
+from funcs.funcs_trader import sharpe_ratio
+from funcs.olds.funcs_indicator_candlescore import *
 import matplotlib.pyplot as plt
 import time
 from matplotlib import gridspec

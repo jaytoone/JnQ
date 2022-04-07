@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 import warnings
 import logging
+import pickle
 
 sys_log4 = logging.getLogger()
 
@@ -11,8 +12,31 @@ sys_log4 = logging.getLogger()
 warnings.simplefilter("ignore", category=RuntimeWarning)
 np.seterr(invalid="ignore")
 
+def save_pkl(input_list, f_path):
+  with open(f_path, 'wb') as pickle_file:
+    pickle.dump(input_list, pickle_file)
+    print(f_path, "saved !")
 
-def save_bin(bin_path_, data):
+def load_pkl(f_path):
+  with open(f_path, 'rb') as pickle_load:
+      return pickle.load(pickle_load)
+
+def dup_col_value(x, invalid_value, dup_x):
+  return dup_x if x == invalid_value else x
+
+
+def chng_bin_col(np_bin, inval_list, input_arr, col_i):
+  np_bin[:, col_i] = [dup_col_value(x, inval_list[col_i], input_arr[col_i]) for x in np_bin[:, col_i]]
+  # short_bin[:, col_i] = [dup_col_value(x, -11, input_arr[col_i]) for x in short_bin[:, col_i]]
+  # short_bin
+  return
+
+
+def preproc_bin(np_bin, inval_list, input_arr):
+  _ = [chng_bin_col(np_bin, inval_list, input_arr, col_i) for col_i in range(np_bin.shape[-1])]
+
+
+def save_bin(bin_path_, data):  # funcs_trader 에 numpy 존재해서, 이곳에 배치해놓음, 그리고 funcs_duration 은 앞으로 deprecate 될 .py 임
   with open(bin_path_, 'wb') as f:
     np.save(f, data)
     print(bin_path_, 'saved !')
@@ -358,7 +382,7 @@ def consecutive_df(res_df, itv_num):
 def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
     #       Todo        #
     #        1. 현재 downsampled df 만 허용, direct_df 사용시 issue 발생 가능할 것
-    assert type(column[0]) == int, "column value should be integer"
+    assert type(column[0]) in [int, np.int64], "column value should be integer"
     # if not replace_last_idx:
     #     assert datetime.timestamp(htf_df.index[-1]) >= datetime.timestamp(
     #         ltf_df.index[-1]), "htf_lastidx should >= ltf_lastidx"  # data sync confirmation
@@ -483,6 +507,21 @@ def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
 
     return max_rows, days
 
+def calc_tp_out_fee_v2(config_):
+    if config_.ep_set.entry_type == 'MARKET':
+        if not config_.tp_set.non_tp:  # Todo : 실제로, tp_fee 가 아닌 spread const. 를 위한 spread_fee1 임 (추후 수정 권고)
+            tp_fee = config_.trader_set.market_fee + config_.trader_set.limit_fee
+        else:
+            tp_fee = config_.trader_set.market_fee + config_.trader_set.market_fee
+        out_fee = config_.trader_set.market_fee + config_.trader_set.market_fee
+    else:
+        if not config_.tp_set.non_tp:
+            tp_fee = config_.trader_set.limit_fee + config_.trader_set.limit_fee
+        else:
+            tp_fee = config_.trader_set.limit_fee + config_.trader_set.market_fee
+        out_fee = config_.trader_set.limit_fee + config_.trader_set.market_fee
+
+    return tp_fee, out_fee
 
 def calc_tp_out_fee(config_):
 

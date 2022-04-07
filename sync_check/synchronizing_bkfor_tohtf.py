@@ -1,4 +1,3 @@
-import os
 # pwd = os.getcwd()
 #
 # # print(os.path.dirname(pwd))
@@ -8,7 +7,6 @@ import os
 
 # from binance_f import RequestClient
 # from binance_f.model import *
-from binance_f.constant.test import *
 # from binance_f.base.printobject import *
 
 from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
@@ -16,7 +14,7 @@ from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlest
 import matplotlib.pyplot as plt
 
 from funcs.funcs_trader import *
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 import mpl_finance as mf
 
 # import numpy as np

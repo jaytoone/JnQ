@@ -6,17 +6,11 @@ pwd = os.getcwd()
 switch_path = os.path.dirname(pwd)
 os.chdir(switch_path)
 
-from binance_f import RequestClient
-from binance_f.model import *
-from binance_f.constant.test import *
-from binance_f.base.printobject import *
-
 from binance_futures_concat_candlestick import concat_candlestick
 
 import matplotlib.pyplot as plt
 
-from funcs.funcs_trader import *
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 import mpl_finance as mf
 
 # from tqdm.notebook import tqdm

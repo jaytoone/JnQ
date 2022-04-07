@@ -1,3 +1,4 @@
+torch
 absl-py==0.8.1
 altair==4.0.0
 APScheduler==3.6.3

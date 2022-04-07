@@ -1,7 +1,7 @@
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 from funcs.funcs_trader import *
 import logging
-from numba import jit, njit, float64, float32, int8, int64, vectorize, guvectorize, prange
+from numba import jit, float64, int8, vectorize
 import torch     # this file deprecated
 
 sys_log3 = logging.getLogger()

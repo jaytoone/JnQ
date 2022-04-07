@@ -2,9 +2,7 @@
 #        1. back_id ajustment
 #        5. title_position & tight_layout
 
-import numpy as np
-from funcs.funcs_trader import intmin
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 from IDE.utils.utils_v3_colabsync import *
 import matplotlib.pyplot as plt
 import time

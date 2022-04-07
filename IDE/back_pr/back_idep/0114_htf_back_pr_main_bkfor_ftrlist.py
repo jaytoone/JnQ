@@ -3,10 +3,7 @@ import os
 import pickle
 import importlib
 from datetime import datetime
-from easydict import EasyDict
-from funcs.funcs_indicator_candlescore import *
-import json
-
+from funcs.olds.funcs_indicator_candlescore import *
 
 if __name__ == "__main__":
 

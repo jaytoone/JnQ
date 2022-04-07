@@ -1,5 +1,4 @@
 from binance_f.model.constant import OrderSide
-from funcs.funcs_indicator_candlescore import *
 from funcs.funcs_trader import *
 
 pd.set_option('display.width', 1000)
@@ -94,8 +93,6 @@ if __name__ == '__main__':
 
     os.chdir("./..")
     # print()
-
-    from binance_futures_concat_candlestick import concat_candlestick
 
     days = 1
     symbol = 'ETHUSDT'

@@ -6,9 +6,7 @@
 #        4. plt.show() off
 #        5. title_position & tight_layout
 
-import numpy as np
-from funcs.funcs_trader import intmin
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 import matplotlib.pyplot as plt
 
 pd.set_option('display.max_rows', 500)

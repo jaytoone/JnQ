@@ -1,5 +1,5 @@
 # from binance_f.model.constant import OrderSide
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 from funcs.funcs_trader import *
 
 pd.set_option('display.width', 1000)

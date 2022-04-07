@@ -1,4 +1,4 @@
-from funcs.funcs_indicator_candlescore import *
+from funcs.olds.funcs_indicator_candlescore import *
 import numpy as np
 
 #       indi. making 이 이곳에서 이루어져서는 안됨 -> period 계산 안됨       #
