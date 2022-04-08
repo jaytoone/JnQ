@@ -1,6 +1,9 @@
 {
   "strat_version": "3_5",
   "trader_set": {
+    "backtrade": 1,
+    "back_data_path": "C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\candlestick_concated\\database_bn\\2022-04-08\\2022-04-08 ETHUSDT_1m.ftr",
+    "start_datetime": "2022-03-14 16:34:59.999000",
     "run": 1,
     "df_log": 0,
     "latest_index": -1,
@@ -100,7 +103,7 @@
     "tp_onexec": 0,
     "decay_term": 60,
     "p_ranges": "[1]",
-    "p_qty": "[1]"
+    "p_qty_ratio": "[1]"
   },
   "out_set": {
     "hl_out": 1,

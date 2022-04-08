@@ -398,13 +398,12 @@ class Trader:
                 #   a. 아래의 조건문을 담을 변수가 필요함 - 병합 불가 (latest)
                 #       i. => load_new_df2 는 1 -> 0 으로 변경됨
                 use_new_df2 = 0
-                if not self.config.tp_set.static_tp or not self.config.out_set.static_out or \
-                        strat_version in self.config.trader_set.rsi_out_stratver:
+                if not self.config.tp_set.static_tp or not self.config.out_set.static_out:
                     use_new_df2 = 1    # for signal_out, dynamic_out & tp
                 load_new_df2 = 1
                 limit_tp = 0
                 post_order_res_list = []
-                tp_executedQty = 0
+                # tp_executedQty = 0    # dynamic 미사용으로 invalid
                 ex_dict = {}   # exist for ideal_ep
                 tp_executedPrice_list, out_executedPrice_list = [], []
                 cross_on = 0  # exist for signal_out (early_out)
@@ -429,22 +428,21 @@ class Trader:
                             #   series 형태는, dynamic_tp reorder 를 위한 tp change 여부를 확인하기 위함임
 
                     # --------- limit_tp check for order --------- #
-                    if self.config.tp_set.tp_type == OrderType.LIMIT or self.config.tp_set.tp_type == "BOTH":
-                        # ------ 1. 첫 limit_tp order 진행햐야하는 상태 ------ #
-                        if len(post_order_res_list) == 0:
-                            limit_tp = 1
-                        else:
-                            # ------ 2. dynamic_tp reorder - Todo, dynamic 미예정 (solved) ------ #
-                            if not self.config.tp_set.static_tp:    # np.nan != np.nan
-                                tp_series_np = tp_series.to_numpy()
-                                if tp_series_np[self.config.trader_set.complete_index] != \
-                                        tp_series_np[self.config.trader_set.complete_index - 1]:
-                                    #        1. 본래는, remaining 으로 open_executedQty refresh 진행함,
-                                    #        2. 지금은, 직접 구해야할 것
-                                    #           a. refreshedQty = open_executedQty - tp_executedQty : error 발생할때마다 recalc.
-                                    #        3. cancel post_order_res in list
-                                    dynamic_tp_executedPrice_list, tp_executedQty = cancel_order_list(self.config.trader_set.symbol, post_order_res_list)
-                                    limit_tp = 1
+                    # ------ 1. 첫 limit_tp order 진행햐야하는 상태 ------ #
+                    if len(post_order_res_list) == 0:
+                        limit_tp = 1
+                    else:
+                        # ------ 2. dynamic_tp reorder - Todo, dynamic 미예정 (solved) ------ #
+                        if not self.config.tp_set.static_tp:    # np.nan != np.nan
+                            tp_series_np = tp_series.to_numpy()
+                            if tp_series_np[self.config.trader_set.complete_index] != \
+                                    tp_series_np[self.config.trader_set.complete_index - 1]:
+                                #        1. 본래는, remaining 으로 open_executedQty refresh 진행함,
+                                #        2. 지금은, 직접 구해야할 것
+                                #           a. refreshedQty = open_executedQty - tp_executedQty : error 발생할때마다 recalc.
+                                #        3. cancel post_order_res in list
+                                dynamic_tp_executedPrice_list, tp_executedQty = cancel_order_list(self.config.trader_set.symbol, post_order_res_list)
+                                limit_tp = 1
 
                     # ------- limit_tp order ------- #
                     if limit_tp:
@@ -456,10 +454,9 @@ class Trader:
                             try:
                                 #   a. tp_exectuedQty 감산 : dynamic_tp 의 경우 체결된 qty 제외
                                 #   b. reduceOnly=False for multi_position
-                                post_order_res_list, p_tps, p_qtys = partial_limit_order_v3(self, self.config, ep, tp, close_side, pos_side,
-                                                                             open_executedQty, quantity_precision)
+                                post_order_res_list, p_tps, p_qtys = partial_limit_order_v3(self, ep, tp, close_side, pos_side,
+                                                                                            open_executedQty, price_precision, quantity_precision)
                                                                              # open_executedQty - tp_executedQty, quantity_precision, reduceOnly=False)
-
                             except Exception as e:
                                 sys_log.error("error in partial_limit_order_v3 : {}".format(e))
                                 time.sleep(self.config.trader_set.api_retry_term)
@@ -488,20 +485,19 @@ class Trader:
                                 res_df, _, load_new_df3 = get_new_df(self, calc_rows=False, mode="CLOSE")
 
                         # ------ 2. tp execution check ------ #
-                        if self.config.tp_set.tp_type == OrderType.LIMIT or self.config.tp_set.tp_type == "BOTH":
-                            all_executed, tp_executedPrice_list = check_limit_tp_exec(self, post_order_res_list, quantity_precision, return_price=True)
+                        all_executed, tp_executedPrice_list = check_limit_tp_exec(self, post_order_res_list, quantity_precision, return_price=True)
 
-                            # ------ tp execution logging ------ #
-                            # Todo, dynamic_tp 안만듬 - 미예정 (solved)
-                            exec_tp_len = len(tp_executedPrice_list)
-                            if prev_exec_tp_len != exec_tp_len:  # logging 기준
-                                ex_dict[res_df.index[self.config.trader_set.complete_index]] = p_tps[prev_exec_tp_len:exec_tp_len]
-                                prev_exec_tp_len = exec_tp_len
-                                sys_log.info("ex_dict : {}".format(ex_dict))
-                                
-                            if all_executed:
-                                limit_done = 1
-                                break
+                        # ------ tp execution logging ------ #
+                        # Todo, dynamic_tp 안만듬 - 미예정 (solved)
+                        exec_tp_len = len(tp_executedPrice_list)
+                        if prev_exec_tp_len != exec_tp_len:  # logging 기준
+                            ex_dict[res_df.index[self.config.trader_set.complete_index]] = p_tps[prev_exec_tp_len:exec_tp_len]
+                            prev_exec_tp_len = exec_tp_len
+                            sys_log.info("ex_dict : {}".format(ex_dict))
+
+                        if all_executed:
+                            limit_done = 1
+                            break
 
                         # ------ 3. out check ------ #
                         try:

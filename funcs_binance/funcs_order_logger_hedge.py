@@ -88,6 +88,58 @@ def limit_order(self, order_type, limit_side, pos_side, limit_price, limit_quant
             sys_log.info('open order enlisted : {}'.format(datetime.now()))
             return post_order_res, self.over_balance, res_code
 
+
+def partial_limit_order_v4(self, p_tps, p_qtys, close_side, pos_side, open_executedQty, quantity_precision):
+    p_tp_idx = 0
+    len_p = len(p_tps)
+    post_order_res_list = []
+    while 1:
+        if p_tp_idx >= len_p:
+            break
+
+        p_tp = p_tps[p_tp_idx]
+        if p_tp_idx == len_p - 1:
+            p_qty = calc_with_precision(open_executedQty - np.sum(p_qtys[:-1]), quantity_precision)
+        else:
+            p_qty = p_qtys[p_tp_idx]
+
+        # ------ 1. tp_order ------ #
+        # try:
+        #   Todo - 들고 있는 position != order_side 일 경우,  -2022,"msg":"ReduceOnly Order is rejected." 발생함
+        #    1. reduceOnly=False 줘도 무관한가 => 를 줘야 무방해짐 (solved)
+        post_order_res, _, res_code = limit_order(self, self.config.tp_set.tp_type, close_side, pos_side, p_tp, p_qty)
+        post_order_res_list.append(post_order_res)
+
+        # ------ 2. check success ------ #
+        if not res_code:  # if succeed, res_code = 0
+            p_tp_idx += 1
+
+        # ------ 3. errors ------ #
+        # ------ -1111 : quantity precision error ------ #
+        elif res_code == -1111:  # Todo, all_cancel 하고 처음부터 다시 (temp-solved)
+            p_tp_idx = 0
+            cancel_order_list(self.config.trader_set.symbol, post_order_res_list)
+            _, quantity_precision = get_precision(self.config.trader_set.symbol)
+            p_qtys = list(map(lambda x: calc_with_precision(x, quantity_precision), p_qtys))
+            sys_log.info('p_qtys : {}'.format(p_qtys))
+            continue
+
+        # ------ -4003 : quantity less than zero ------ # Todo -> openQty 가 잘못되면 그러지 않을까, outer_scope 에서 진행해야할 것
+        elif res_code == -4003:
+            continue
+
+        # except Exception as e:
+        # sys_log.error('error in partial tp : {}'.format(e))
+
+        else:  # -2019 (Margin is insufficient) or something else
+            # continue 하면, limit_order 내부에서 재정의할 것
+            # retry_cnt += 1
+            # if retry_cnt >= 10:
+            #     return "maximum_retry"
+            continue
+
+    return post_order_res_list
+
 def partial_limit_order_v3(self, ep, tp, close_side, pos_side, open_executedQty, price_precision, quantity_precision):
 
     p_ranges, p_qty = literal_eval(self.config.tp_set.p_ranges), literal_eval(self.config.tp_set.p_qty)
@@ -296,7 +348,7 @@ def market_close_order_v2(self, post_order_res_list, close_side, pos_side, open_
                         sys_log.error('error in get modified qty_precision : {}'.format(e))
                     continue
 
-                self.config.out_set.out_type = OrderType.MARKET  # just 재시도
+                # self.config.out_set.out_type = OrderType.MARKET  # just 재시도
                 continue
 
             else:
@@ -304,14 +356,14 @@ def market_close_order_v2(self, post_order_res_list, close_side, pos_side, open_
                 break
 
         # ------------ enough time for close_remain_quantity to be consumed ------------ #
-        if self.config.out_set.out_type != OrderType.MARKET:
-            # ------ wait for bar ends ------ #
-            time.sleep(self.config.trader_set.exit_execution_wait - datetime.now().second)
-            sys_log.info("self.config.trader_set.exit_execution_wait - datetime.now().second : {}"
-                         .format(self.config.trader_set.exit_execution_wait - datetime.now().second))
-            sys_log.info("datetime.now().second : {}".format(datetime.now().second))
-        else:
-            time.sleep(1)  # time for qty consumed
+        # if self.config.out_set.out_type != OrderType.MARKET:
+        #     # ------ wait for bar ends ------ #
+        #     time.sleep(self.config.trader_set.exit_execution_wait - datetime.now().second)
+        #     sys_log.info("self.config.trader_set.exit_execution_wait - datetime.now().second : {}"
+        #                  .format(self.config.trader_set.exit_execution_wait - datetime.now().second))
+        #     sys_log.info("datetime.now().second : {}".format(datetime.now().second))
+        # else:
+        time.sleep(1)  # time for qty consumed
 
         if error_code in ['-2022', '-4003']:    # post_order_res 가 재정의되지 않은 경우
             sys_log.info('market close order executed')
@@ -325,6 +377,5 @@ def market_close_order_v2(self, post_order_res_list, close_side, pos_side, open_
                 return market_executedPrice_list
             else:
                 # ------ complete close by market ------ #
-                sys_log.info('out_type changed to market')
-                self.config.out_set.out_type = OrderType.MARKET
+                sys_log.info('re-close')
                 continue

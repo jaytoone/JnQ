@@ -99,7 +99,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    days = 1
+    days = 30
 
     end_date = "2021-04-12"
     end_date = "2020-09-06"
