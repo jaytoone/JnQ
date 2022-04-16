@@ -4,13 +4,13 @@ import os
 #        2. 깊이가 다르면, './../' 이런식의 표현으로는 동일 pkg_path 에 접근할 수 없음
 # print(os.getcwd())
 # pkg_path = os.path.abspath('./../')
-pkg_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE"  # system env. 에 따라 가변적
+pkg_path = r"/IDE"  # system env. 에 따라 가변적
 os.chdir(pkg_path)
 
 from funcs_binance.binance_futures_modules import *  # math, pandas, bot_config (API_key & clients)
-from funcs_binance.funcs_trader_modules import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
-    get_new_df, get_new_df_onstream, check_hl_out_onbarclose, check_hl_out, check_signal_out, check_limit_tp_exec, log_sub_tp_exec, get_dynamic_tpout, \
-    check_breakout_qty, check_ei_k_v2, get_balance, get_tpepout, check_ei_k_onbarclose_v2, init_set, get_open_side_v2, get_p_tpqty
+from funcs_binance.funcs_trader_modules import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v4, \
+    get_new_df, check_hl_out, check_signal_out, check_limit_tp_exec, log_sub_tp_exec, get_dynamic_tpout, check_breakout_qty, check_ei_k_v2, get_balance, \
+    get_tpepout, check_ei_k_onbarclose_v2, init_set, get_open_side_v2, get_p_tpqty
 from funcs_binance.funcs_order_logger_hedge import limit_order, partial_limit_order_v4, cancel_order_list, market_close_order_v2
 from funcs.funcs_trader import intmin_np
 import numpy as np  # for np.nan
@@ -85,9 +85,9 @@ class Trader:
                 read_write_cfg_list(cfg_path_list, mode='w', edited_cfg_list=self.config_list)
 
                 # ------ trade_log_fullpath define ------ #
-                trade_log = {}  # for ideal ep & tp logging
+                # trade_log = {}  # for ideal ep & tp logging
+                # trade_log_fullpath = os.path.join(trade_log_path, trade_log_name)
                 trade_log_name = "{}_{}.pkl".format(self.config.trader_set.symbol, str(datetime.now().timestamp()).split(".")[0])
-                trade_log_fullpath = os.path.join(trade_log_path, trade_log_name)
 
                 # ------ copy base_cfg.json -> {ticker}.json (log_cfg name) ------ #
                 src_cfg_path = sys_log_path.replace(exec_file_name, "base_cfg.json")  # dir 대신 .json 가져옴
@@ -144,16 +144,17 @@ class Trader:
                 if load_new_df:
                     # ------ log last trading time ------ #
                     #        미체결을 고려해, load_new_df 마다 log 수행       #
-                    trade_log["last_trading_time"] = str(datetime.now())
-                    with open(trade_log_fullpath, "wb") as dict_f:
-                        pickle.dump(trade_log, dict_f)
+                    # trade_log["last_trading_time"] = str(datetime.now())
+                    # with open(trade_log_fullpath, "wb") as dict_f:
+                    #     pickle.dump(trade_log, dict_f)
 
                     # ------------ get_new_df ------------ #
                     start_ts = time.time()
                     if self.config.trader_set.backtrade:
-                        res_df, load_new_df = get_new_df_onstream(self)
+                        res_df = next(self.streamer)    # Todo, 무결성 검증 미진행
+                        load_new_df = 0
                     else:
-                        res_df, load_new_df = get_new_df(self)
+                        res_df, _, load_new_df = get_new_df(self)
                     sys_log.info("~ load_new_df time : %.2f" % (time.time() - start_ts))
 
                     # ------------ self.utils_ ------------ #
@@ -345,6 +346,9 @@ class Trader:
                         break
 
                 # ------------ execution wait time ------------ #
+                # Todo, iterator 객체에서 res_df 를 pop() 할 수 있게만 만들면 아래 형태 유지 가능함
+                #  1. market 은 다음 bar 에 즉시 체결
+                #  2. limit 은 hl_check 해야겠지
                 # ------ 1. market : prevent close at open bar ------ #
                 if self.config.ep_set.entry_type == OrderType.MARKET:
                     if self.config.trader_set.backtrade:
@@ -388,6 +392,8 @@ class Trader:
 
                 # ------ when, open order time expired or executed ------ #
                 #        regardless to position exist, cancel open orders       #
+                # Todo, backtrader 에 불필요
+                #  1. open_executedPrice_list, open_executedQty 정의 필요 (open_executedPrice_list = [ep]), real_pr unnecessary
                 if not self.config.trader_set.backtrade:
                     open_executedPrice_list, open_executedQty = cancel_order_list(self.config.trader_set.symbol, [post_order_res],
                                                                                   self.config.ep_set.entry_type)
@@ -416,13 +422,13 @@ class Trader:
 
                 #        1. save trade_log      #
                 #        2. check str(res_df.index[-2]), back_sync entry on close     #
-                #        3. back_pr 에서 res_df.index[-2] line 에 무엇을 기입하냐에 따라 달라짐
-                trade_log[str(res_df_open.index[self.config.trader_set.complete_index])] = [open_side, "open"]
-                trade_log[str(res_df.index[self.config.trader_set.complete_index])] = [ep, open_side, "entry"]
-
-                with open(trade_log_fullpath, "wb") as dict_f:
-                    pickle.dump(trade_log, dict_f)
-                    sys_log.info("entry trade_log dumped !\n")
+                #         3. back_pr 에서 res_df.index[-2] line 에 무엇을 기입하냐에 따라 달라짐
+                # trade_log[str(res_df_open.index[self.config.trader_set.complete_index])] = [open_side, "open"]
+                # trade_log[str(res_df.index[self.config.trader_set.complete_index])] = [ep, open_side, "entry"]
+                #
+                # with open(trade_log_fullpath, "wb") as dict_f:
+                #     pickle.dump(trade_log, dict_f)
+                #     sys_log.info("entry trade_log dumped !\n")
 
                 # ------ set close side ------ #
                 if open_side == OrderSide.BUY:
@@ -448,9 +454,10 @@ class Trader:
                     if use_new_df2:
                         if load_new_df2:  # dynamic_out & tp phase
                             if self.config.trader_set.backtrade:
-                                res_df, load_new_df2 = get_new_df_onstream(self)
+                                res_df = next(self.streamer)  # Todo, 무결성 검증 미진행
+                                load_new_df2 = 0
                             else:
-                                res_df, load_new_df2 = get_new_df(self, mode="CLOSE")
+                                res_df, _, load_new_df2 = get_new_df(self, mode="CLOSE")
 
                             try:
                                 res_df = self.utils_public.sync_check(res_df, self.config, order_side="CLOSE")
@@ -467,7 +474,7 @@ class Trader:
                             tp, out, tp_series, out_series = get_dynamic_tpout(self, res_df, open_side, tp, out)
                             #   series 형태는, dynamic_tp reorder 를 위한 tp change 여부를 확인하기 위함임
 
-                    # --------- limit_tp on/offer --------- #
+                    # --------- limit_tp check for order --------- #
                     # ------ 1. 첫 limit_tp order 진행햐야하는 상태 ------ #
                     if len(post_order_res_list) == 0:
                         limit_tp = 1
@@ -523,42 +530,35 @@ class Trader:
                         if not use_new_df2:
                             if load_new_df3:
                                 if self.config.trader_set.backtrade:
-                                    res_df, load_new_df3 = get_new_df_onstream(self)
+                                    res_df = next(self.streamer)  # Todo, 무결성 검증 미진행
+                                    load_new_df3 = 0
                                 else:
-                                    res_df, load_new_df3 = get_new_df(self, calc_rows=False, mode="CLOSE")
+                                    res_df, _, load_new_df3 = get_new_df(self, calc_rows=False, mode="CLOSE")
 
                         # ------ 2. tp execution check ------ #
+                        # Todo, execution_check 을 위한 backtrader 의 다른 logic 필요함
                         if not self.config.trader_set.backtrade:
                             all_executed, tp_executedPrice_list = check_limit_tp_exec(self, post_order_res_list, quantity_precision, return_price=True)
+
+                            # ------ tp execution logging ------ #
                             # Todo, dynamic_tp 안만듬 - 미예정 (solved)
                             exec_tp_len = len(tp_executedPrice_list)
+                            if prev_exec_tp_len != exec_tp_len:  # logging 기준
+                                ex_dict[res_df.index[self.config.trader_set.complete_index]] = p_tps[prev_exec_tp_len:exec_tp_len]
+                                prev_exec_tp_len = exec_tp_len
+                                sys_log.info("ex_dict : {}".format(ex_dict))
+
+                            if all_executed:
+                                limit_done = 1
+                                break
+
                         else:
-                            if open_side == OrderSide.BUY:
-                                exec_tp_len = np.sum(res_df['high'].to_numpy()[self.config.trader_set.complete_index] >= np.array(p_tps))
-                            else:
-                                exec_tp_len = np.sum(res_df['low'].to_numpy()[self.config.trader_set.complete_index] <= np.array(p_tps))
 
-                            tp_executedPrice_list = p_tps[:exec_tp_len]  # 지속적 갱신
-                            all_executed = 1 if exec_tp_len == len(p_tps) else 0
-
-                            # ------ a. tp execution logging ------ #
-                        if prev_exec_tp_len != exec_tp_len:  # logging 기준
-                            ex_dict[res_df.index[self.config.trader_set.complete_index]] = p_tps[prev_exec_tp_len:exec_tp_len]
-                            prev_exec_tp_len = exec_tp_len
-                            sys_log.info("ex_dict : {}".format(ex_dict))
-
-                            # ------ b. all_execution ------ #
-                        if all_executed:
-                            limit_done = 1
-                            break
 
                         # ------ 3. out check ------ #
                         try:
-                            if not self.config.trader_set.backtrade:
-                                market_close_on, log_out = check_hl_out(self, res_df, market_close_on, log_out, out, open_side)
-                            else:
-                                market_close_on, log_out = check_hl_out_onbarclose(self, res_df, market_close_on, log_out, out, open_side)
-
+                            # Todo, barclose hl_out
+                            market_close_on, log_out = check_hl_out(self, res_df, market_close_on, log_out, out, open_side)
                             if not market_close_on:  # log_out 갱신 방지
                                 market_close_on, log_out, cross_on = check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side)
 
@@ -575,38 +575,30 @@ class Trader:
                             continue
 
                         # ------ 3. bar_end phase - loop selection ------ #
-                        if not self.config.trader_set.backtrade:
-                            if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
-                                if use_new_df2:
-                                    load_new_df2 = 1  # return to outer loop - get df2's data
-                                    break
-                                else:
-                                    load_new_df3 = 1  # return to current loop
-                            else:
-                                time.sleep(self.config.trader_set.realtime_term)
-                        else:
+                        # Todo, iterator 기준, 필요없어질 것
+                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
                             if use_new_df2:
                                 load_new_df2 = 1  # return to outer loop - get df2's data
-                                break    # get next(gen.)
+                                break
                             else:
-                                load_new_df3 = 1
+                                load_new_df3 = 1  # return to current loop
+                        else:
+                            time.sleep(self.config.trader_set.realtime_term)
 
                     # ------------ limit / market execution or load_new_df2 ------------ #
                     # ------ 1. all p_tps executed ------ #
                     if limit_done:
                         fee += self.config.trader_set.limit_fee
                         break
-
                     if not market_close_on:  # = load_new_df2
                         continue
                     else:
                         # ------ 2. hl & signal_out ------ #
+                        # Todo, rm close_order, out_executedPrice_list = [out] if market_close_on (real_pr unnecessary)
                         fee += self.config.trader_set.market_fee
-                        if not self.config.trader_set.backtrade:
-                            out_executedPrice_list = market_close_order_v2(self, post_order_res_list, close_side, pos_side, open_executedQty)
-                        else:
-                            out_executedPrice_list = [log_out]
-                        break  # ---> break close order loop
+                        out_executedPrice_list = market_close_order_v2(self, post_order_res_list, close_side, pos_side, open_executedQty)
+                        # market_close_order() 내부에서 close_qty 계산 진행함
+                        break  # <--- break for all close order loop, break partial tp loop
 
                 # ------ total_income() function confirming -> wait close confirm
                 #           => we don't need this now, cause get_income_info_v2 ------ #
@@ -616,12 +608,12 @@ class Trader:
                 #         break
 
                 # ------------ calc_ideal_profit - market_order 시 ideal <-> real gap 발생 가능해짐 ------------ #
-                ideal_profit, real_profit, trade_log = calc_ideal_profit_v3(self, res_df, open_side, ep, ex_dict, open_executedPrice_list,
-                                                                 tp_executedPrice_list, out_executedPrice_list, fee, trade_log)
-
-                with open(trade_log_fullpath, "wb") as dict_f:
-                    pickle.dump(trade_log, dict_f)
-                    sys_log.info("exit trade_log dumped !")
+                #  Todo - p_qtys, 즉, non_tp 일 경우 error 발생할 거임
+                ideal_profit, real_profit = calc_ideal_profit_v4(self, res_df, open_side, ep, ex_dict, open_executedPrice_list,
+                                                                            tp_executedPrice_list, out_executedPrice_list, p_qtys, fee)
+                # with open(trade_log_fullpath, "wb") as dict_f:
+                #     pickle.dump(trade_log, dict_f)
+                #     sys_log.info("exit trade_log dumped !")
 
                 # ------------ get total income from this trade ------------ #
                 self.income, self.accumulated_income, self.accumulated_profit, self.ideal_accumulated_profit = \

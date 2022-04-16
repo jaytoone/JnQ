@@ -78,16 +78,16 @@ def get_open_side_v2(self, res_df, np_timeidx):
     open_side = None
     for utils_, cfg_ in zip(self.utils_list, self.config_list):
         # ------ 1. point ------ #
-        # if res_df['short_open_{}'.format(cfg_.strat_version)][cfg_.trader_set.latest_index] == cfg_.ep_set.short_entry_score:
-        # Todo - 여기 왜 latest_index 사용했는지 모르겠음 -> bar_close point 를 고려해 mr_res 와의 index 분리
-        #  vecto. 하는 이상, point x ep_loc 의 index 는 sync. 되어야함 => complete_index 사용
+        #  여기 왜 latest_index 사용했는지 모르겠음 -> bar_close point 를 고려해 mr_res 와의 index 분리
+        #   vecto. 하는 이상, point x ep_loc 의 index 는 sync. 되어야함 => complete_index 사용 (solved)
+        #  Todo, 각 phase 분리한 이유 = sys_logging (solved)
         if res_df['short_open_{}'.format(cfg_.strat_version)].to_numpy()[cfg_.trader_set.complete_index]:
-            sys_log.warning("\n[ short ] true_point strat_version : {}".format(cfg_.strat_version))
+            sys_log.warning("[ short ] true_point strat_version : {}".format(cfg_.strat_version))
             # ------ 2. ban ------ #
             if not cfg_.pos_set.short_ban:
                 # ------ 3. mr_res ------ #
                 mr_res, zone_arr = self.utils_public.ep_loc_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
-                sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}".format(mr_res[cfg_.trader_set.complete_index]))
+                sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
                 # ------ assign ------ #
                 if mr_res[cfg_.trader_set.complete_index]:
                     self.utils = utils_
@@ -100,12 +100,12 @@ def get_open_side_v2(self, res_df, np_timeidx):
         # ------ 1. point ------ #
         #       'if' for nested ep_loc.point        #
         if res_df['long_open_{}'.format(cfg_.strat_version)].to_numpy()[cfg_.trader_set.complete_index]:
-            sys_log.warning("\n[ long ] true_point strat_version : {}".format(cfg_.strat_version))
+            sys_log.warning("[ long ] true_point strat_version : {}".format(cfg_.strat_version))
             # ------ 2. ban ------ #
             if not cfg_.pos_set.long_ban:  # additional const. on trader
                 # ------ 3. mr_res ------ #
                 mr_res, zone_arr = self.utils_public.ep_loc_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
-                sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}".format(mr_res[cfg_.trader_set.complete_index]))
+                sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
                 # ------ assign ------ #
                 if mr_res[cfg_.trader_set.complete_index]:
                     self.utils = utils_
@@ -169,16 +169,15 @@ def get_streamer(self):
 
     back_df = pd.read_feather(self.config.trader_set.back_data_path, columns=None, use_threads=True).set_index("index")
 
-    if self.config.trader_set.start_datetime is not None:
+    if self.config.trader_set.start_datetime != "None":
         start_idx = np.argwhere(back_df.index == pd.to_datetime(self.config.trader_set.start_datetime)).item()
     else:
-        start_idx = 0
+        start_idx = use_rows
 
-    end_idx = len(back_df) - use_rows
-    assert end_idx > start_idx, "more dataframe row required"
+    assert start_idx >= use_rows, "more dataframe rows required"
 
-    for i in range(start_idx, end_idx):
-        yield back_df.iloc[i:i + use_rows]
+    for i in range(start_idx + 1, len(back_df)):    # +1 for i inclusion
+        yield back_df.iloc[i - use_rows:i]
 
 def get_new_df_onstream(self):
     try:
@@ -206,7 +205,8 @@ def get_new_df(self, calc_rows=True, mode="OPEN"):
                                             limit=use_rows,
                                             timesleep=None,
                                             show_process=0)
-            if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():
+            if datetime.timestamp(new_df_.index[-1]) < datetime.now().timestamp():  # ts validation 1
+                time.sleep(self.config.trader_set.realtime_term)
                 continue
             if mode == "OPEN":
                 sys_log.info("complete new_df_'s time : {}".format(datetime.now()))
@@ -363,7 +363,7 @@ def check_ei_k_v2(self, res_df_open, res_df, open_side):
     strat_version = self.config.strat_version
 
     if self.config.loc_set.zone.ep_out_tick != "None":
-        if datetime.timestamp(res_df.index[-1]) - datetime.timestamp(res_df_open.index[self.config.trader_set.latest_index]) \
+        if time.time() - datetime.timestamp(res_df_open.index[self.config.trader_set.latest_index]) \
                 >= self.config.loc_set.zone.ep_out_tick * 60:
             ep_out = 1
 
@@ -523,24 +523,38 @@ def get_p_tpqty(self, ep, tp, open_executedQty, price_precision, quantity_precis
     return p_tps, p_qtys
 
 
-def check_limit_tp_exec(self, post_order_res_list, quantity_precision, return_price=False):
+def check_limit_tp_exec_v2(self, post_order_res_list, quantity_precision, return_price=False):
     all_executed = 0
-    if self.config.tp_set.tp_type == OrderType.LIMIT or self.config.tp_set.tp_type == "BOTH":
-        # order_exec_check_list = [check_exec_by_order_info(self.config.trader_set.symbol, post_order_res, quantity_precision, return_price, order_type)
-        #                          for post_order_res in post_order_res_list if post_order_res is not None]
-        order_info_list = [get_order_info(self.config.trader_set.symbol, post_order_res.orderId)
-                           for post_order_res in post_order_res_list if post_order_res is not None]
-        order_exec_check_list = [check_execution(order_info, quantity_precision) for order_info in order_info_list]
+    order_info_list = [get_order_info(self.config.trader_set.symbol, post_order_res.orderId)
+                       for post_order_res in post_order_res_list if post_order_res is not None]
+    order_exec_check_list = [check_execution(order_info, quantity_precision) for order_info in order_info_list]
 
-        if np.sum(order_exec_check_list) == len(order_exec_check_list):
-            sys_log.info('all limit tp order executed')
-            all_executed = 1
+    if np.sum(order_exec_check_list) == len(order_exec_check_list):
+        sys_log.info('all limit tp order executed')
+        all_executed = 1
 
-        if return_price:  # order_list 로 변환하는김에 같이 넣은 거임
-            execPrice_list = [get_execPrice(order_info) for order_info, executed in zip(order_info_list, order_exec_check_list) if executed]
-            return all_executed, execPrice_list
+    if return_price:  # order_list 로 변환하는김에 같이 넣은 거임
+        execPrice_list = [get_execPrice(order_info) for order_info, executed in zip(order_info_list, order_exec_check_list) if executed]
+        return all_executed, execPrice_list
 
-    return all_executed, []  # => 체결된 tp 가 없음, return_length 는 유지해야할 것
+# def check_limit_tp_exec(self, post_order_res_list, quantity_precision, return_price=False):
+#     all_executed = 0
+#     if self.config.tp_set.tp_type == OrderType.LIMIT or self.config.tp_set.tp_type == "BOTH":
+#         # order_exec_check_list = [check_exec_by_order_info(self.config.trader_set.symbol, post_order_res, quantity_precision, return_price, order_type)
+#         #                          for post_order_res in post_order_res_list if post_order_res is not None]
+#         order_info_list = [get_order_info(self.config.trader_set.symbol, post_order_res.orderId)
+#                            for post_order_res in post_order_res_list if post_order_res is not None]
+#         order_exec_check_list = [check_execution(order_info, quantity_precision) for order_info in order_info_list]
+#
+#         if np.sum(order_exec_check_list) == len(order_exec_check_list):
+#             sys_log.info('all limit tp order executed')
+#             all_executed = 1
+#
+#         if return_price:  # order_list 로 변환하는김에 같이 넣은 거임
+#             execPrice_list = [get_execPrice(order_info) for order_info, executed in zip(order_info_list, order_exec_check_list) if executed]
+#             return all_executed, execPrice_list
+#
+#     return all_executed, []  # => 체결된 tp 가 없음, return_length 는 유지해야할 것
 
 
 # old
@@ -710,13 +724,6 @@ def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side
             sys_log.info("signal out : {}".format(log_out))
 
     return market_close_on, log_out, cross_on
-
-
-
-
-
-
-
 
 # def get_income_info(self, real_balance, leverage, ideal_profit, real_profit, start_timestamp, end_timestamp):
 #     while 1:

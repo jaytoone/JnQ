@@ -107,7 +107,7 @@ def partial_limit_order_v4(self, p_tps, p_qtys, close_side, pos_side, open_execu
         # try:
         #   Todo - 들고 있는 position != order_side 일 경우,  -2022,"msg":"ReduceOnly Order is rejected." 발생함
         #    1. reduceOnly=False 줘도 무관한가 => 를 줘야 무방해짐 (solved)
-        post_order_res, _, res_code = limit_order(self, self.config.tp_set.tp_type, close_side, pos_side, p_tp, p_qty)
+        post_order_res, _, res_code = limit_order(self, OrderType.LIMIT, close_side, pos_side, p_tp, p_qty)
         post_order_res_list.append(post_order_res)
 
         # ------ 2. check success ------ #
@@ -173,7 +173,7 @@ def partial_limit_order_v3(self, ep, tp, close_side, pos_side, open_executedQty,
         # try:
         #   Todo - 들고 있는 position != order_side 일 경우,  -2022,"msg":"ReduceOnly Order is rejected." 발생함
         #    1. reduceOnly=False 줘도 무관한가 => 를 줘야 무방해짐 (solved)
-        post_order_res, _, res_code = limit_order(self, self.config.tp_set.tp_type, close_side, pos_side, p_tp, p_qty)
+        post_order_res, _, res_code = limit_order(self, OrderType.LIMIT, close_side, pos_side, p_tp, p_qty)
         post_order_res_list.append(post_order_res)
 
         # ------ 2. check success ------ #

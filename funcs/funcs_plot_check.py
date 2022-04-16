@@ -62,6 +62,76 @@ def sort_bypr(pr, obj, descending=True):
   return pr[sort_idx], [ob[sort_idx] for ob in obj]
 
 
+def eptp_hvline_v5(config, en_p, ex_p, entry_idx, exit_idx, open_idx, point1_idx, tp_line, out_line, en_tp1, en_out0,
+                   front_plot, iin, iout, x_max, x_margin_mult, y_margin_mult, a_data, **col_idx_dict):
+  # ------ get vertical ticks ------ #
+  entry_tick = int(entry_idx - iin)
+  exit_tick = entry_tick + int(exit_idx - entry_idx)
+  open_tick = entry_tick - int(entry_idx - open_idx)
+  point1_tick = open_tick - int(open_idx - point1_idx)
+  bias_info_tick = entry_tick + config.tr_set.bias_info_tick
+
+  if front_plot == 1:
+    x_max = open_tick + 20
+  elif front_plot == 2:
+    x_max = entry_tick + 20
+  elif front_plot == 3:
+    x_max = exit_tick + 20
+  elif front_plot == 4:
+    x_max = bias_info_tick + 20
+
+  if (iout - iin) > x_max:
+    x_margin = x_max * x_margin_mult
+    plt.xlim(0 - x_margin, x_max + x_margin)
+  x0, x1 = plt.gca().get_xlim()
+
+  # ------------ hlines ------------ #
+  # ------ entry & exit ------ #
+  en_xmin = entry_tick / x1
+  ex_xmin = exit_tick / x1
+  plt.axhline(en_p, x0, en_xmin, linewidth=2, linestyle='--', alpha=1, color='lime')  # en_p line axhline
+  plt.text(x0, en_p, 'en_p :\n {:.3f} \n epg {}'.format(en_p, config.tr_set.ep_gap), ha='right', va='center', fontweight='bold',
+           fontsize=15)  # en_p line label
+  plt.axhline(ex_p, ex_xmin, 1, linewidth=2, linestyle='--', alpha=1, color='lime')  # ex_p line axhline (signal 도 포괄함, 존재 의미)
+  plt.text(x1, ex_p, 'ex_p :\n {}'.format(ex_p), ha='left', va='center', fontweight='bold', fontsize=15)  # ex_p line label
+
+  # ------ tpout_line ------ #
+  plt.axhline(tp_line, 0.05, 1, linewidth=4, linestyle='-', alpha=1, color='#00ff00')  # ep 와 gap 비교 용이하기 위해 ex_xmin -> 0.1 사용
+  plt.text(x0, tp_line, 'tpg {}'.format(config.tr_set.tp_gap), ha='right', va='center', fontweight='bold', fontsize=15, color='#00ff00')
+  plt.axhline(out_line, 0.05, 1, linewidth=4, linestyle='-', alpha=1, color='#ff0000')
+  plt.text(x0, out_line, 'outg {}'.format(config.tr_set.out_gap), ha='right', va='center', fontweight='bold', fontsize=15, color='#ff0000')
+
+  # ------ bias_line ------ #
+  text_x_pos = (x0 + x1) * 0.1
+  plt.axhline(en_tp1, 0.2, 1, linewidth=4, linestyle='-', alpha=1, color='#ffffff')
+  plt.text(text_x_pos, en_tp1, ' en_tp1', ha='right', va='bottom', fontweight='bold', fontsize=15)
+  plt.axhline(en_out0, 0.2, 1, linewidth=4, linestyle='-', alpha=1, color='#ffffff')
+  plt.text(text_x_pos, en_out0, ' en_out0', ha='right', va='bottom', fontweight='bold', fontsize=15)
+
+  # ------ ylim ------ #
+  if front_plot:
+    y_lim_data = a_data[:x_max + 1, col_idx_dict['ylim_col_idxs']]  # +1 for including open_tick
+  else:
+    y_lim_data = a_data[:, col_idx_dict['ylim_col_idxs']]
+
+  y_min = y_lim_data.min()
+  y_max = y_lim_data.max()
+  y_margin = (y_max - y_min) * y_margin_mult
+  plt.ylim(y_min - y_margin, y_max + y_margin)
+
+  # ------------ vline (open_tick, entry_tick, exit_tick) ------------ #
+  y0, y1 = plt.gca().get_ylim()
+  l_data = a_data[:exit_tick + 1, col_idx_dict['ohlc_col_idxs'][2]]  # +1 for including exit_tick
+  point1_ymax, open_ymax, en_ymax, ex_ymax = [(l_data[tick_] - y0) / (y1 - y0) - .01 for tick_ in
+                                              [point1_tick, open_tick, entry_tick, exit_tick]]  # -.05 for margin
+  plt.axvline(point1_tick, 0, point1_ymax, alpha=1, linewidth=2, linestyle='--', color='#ff7722')
+  plt.axvline(open_tick, 0, open_ymax, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')  # 추후, tick 별 세부 정의가 달라질 수 있음을 고려해 multi_line 작성 유지
+  plt.axvline(entry_tick, 0, en_ymax, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')
+  plt.axvline(exit_tick, 0, ex_ymax, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')
+  plt.axvline(bias_info_tick, alpha=1, linewidth=2, linestyle='-', color='#ffeb3b')
+
+  return
+
 def eptp_hvline_v4(config, en_p, ex_p, entry_idx, exit_idx, open_idx, point1_idx, tp_line, out_line, bias_info, bias_thresh,
                    front_plot, iin, iout, x_max, x_margin_mult, y_margin_mult, a_data, **col_idx_dict):
   # ------ get vertical ticks ------ #
@@ -91,16 +161,16 @@ def eptp_hvline_v4(config, en_p, ex_p, entry_idx, exit_idx, open_idx, point1_idx
   plt.text(x0, en_p, 'en_p :\n {:.3f} \n epg {}'.format(en_p, config.tr_set.ep_gap), ha='right', va='center', fontweight='bold',
            fontsize=15)  # en_p line label
   plt.axhline(ex_p, ex_xmin, 1, linewidth=2, linestyle='--', alpha=1, color='lime')  # ex_p line axhline (signal 도 포괄함, 존재 의미)
-  plt.text(x1, ex_p, 'ex_p :\n {}'.format(ex_p), ha='left', va='center', fontweight='bold')  # ex_p line label
+  plt.text(x1, ex_p, 'ex_p :\n {}'.format(ex_p), ha='left', va='center', fontweight='bold', fontsize=15)  # ex_p line label
 
   # ------ tpout_line ------ #
   plt.axhline(tp_line, 0.1, 1, linewidth=4, linestyle='-', alpha=1, color='#00ff00')  # ep 와 gap 비교 용이하기 위해 ex_xmin -> 0.1 사용
-  plt.text(x0, tp_line, 'tpg {}'.format(config.tr_set.tp_gap), ha='right', va='center', fontweight='bold', fontsize=15)
+  plt.text(x0, tp_line, 'tpg {}'.format(config.tr_set.tp_gap), ha='right', va='center', fontweight='bold', fontsize=15, color='#00ff00')
   plt.axhline(out_line, 0.1, 1, linewidth=4, linestyle='-', alpha=1, color='#ff0000')
-  plt.text(x0, out_line, 'outg {}'.format(config.tr_set.out_gap), ha='right', va='center', fontweight='bold', fontsize=15)
+  plt.text(x0, out_line, 'outg {}'.format(config.tr_set.out_gap), ha='right', va='center', fontweight='bold', fontsize=15, color='#ff0000')
 
   # ------ bias_line ------ #
-  plt.axhline(bias_info, 0.1, 1, linewidth=4, linestyle='-', alpha=1, color='dodgerblue')
+  plt.axhline(bias_info, 0.1, 1, linewidth=4, linestyle='-', alpha=1, color='#a231d4')
   plt.text(x0, bias_info, ' bias_info', ha='left', va='center', fontweight='bold')
   plt.axhline(bias_thresh, 0.1, 1, linewidth=4, linestyle='-', alpha=1, color='#ff8400')
   plt.text(x0, bias_thresh, ' bias_thresh', ha='left', va='center', fontweight='bold')
@@ -254,6 +324,58 @@ def eptp_hvline(ep, tp, entry_idx, exit_idx, prev_plotsize):
   plt.text(x1, tp, ' tp :\n {}'.format(tp), ha='left', va='center', fontweight='bold')  # tp line label
 
   return ep_tick
+
+def plot_check_v5(data, config, param_zip, pr_msg, x_max, x_margin_mult, y_margin_mult, front_plot, plot_check_dir=None, **col_idx_dict):
+  # start_0 = time.time()
+  plt.style.use(['dark_background', 'fast'])
+  fig = plt.figure(figsize=(30, 18))
+  nrows, ncols = 2, 2
+  gs = gridspec.GridSpec(nrows=nrows,  # row 부터 index 채우고 col 채우는 순서임 (gs_idx)
+                         ncols=ncols,
+                         height_ratios=[3, 1]
+                         )
+  for gs_idx, params in enumerate(param_zip):
+    ax = fig.add_subplot(gs[gs_idx])
+    iin, iout, pr, ep, tp, entry_idx, exit_idx, open_idx, point1_idx, lvrg, fee, tp_line, out_line, en_tp1, en_out0 = params
+
+    # if ep > out_line:  # for tp > ep > out plot_check
+    #   break
+
+    # ------------ add_col section ------------ #
+    a_data = data[int(iin):int(iout + 1)]
+    # a_data = data[iin:iout]
+    # ------ candles ------ #
+    candle_plot(a_data[:, col_idx_dict['ohlc_col_idxs']], ax, alpha=1.0, wickwidth=1.0)
+
+    # ------ add cols ------ #
+    [nonstep_col_plot(a_data[:, params[0]], *params[1:]) for params in col_idx_dict['nonstep_col_info']]
+    [step_col_plot(a_data[:, params[0]], *params[1:]) for params in col_idx_dict['step_col_info']]
+    [stepmark_col_plot(a_data[:, params[0]], *params[1:]) for params in col_idx_dict['stepmark_col_info']]
+
+    # ------ ep, tp + xlim ------ #
+    try:
+      eptp_hvline_v5(config, ep, tp, entry_idx, exit_idx, open_idx, point1_idx, tp_line, out_line, en_tp1, en_out0,
+                    front_plot, iin, iout, x_max, x_margin_mult, y_margin_mult, a_data, **col_idx_dict)
+    except Exception as e:
+      print("error in eptp_hvline_v3 :", e)
+
+    #     Todo    #
+    #     3. outer_price plot 일 경우, gs_idx + nrows 하면 됨
+
+    # ------ trade_info ------ #
+    plt.title(pr_msg.format(entry_idx, exit_idx, pr, lvrg, fee))
+
+  if plot_check_dir is None:
+    plt.show()
+    print()
+  else:
+    fig_name = plot_check_dir + "/%s.png" % int(entry_idx)
+    plt.savefig(fig_name)
+    print(fig_name, "saved !")
+  plt.close()
+  # print("elapsed time :", time.time() - start_0)
+
+  return
 
 def plot_check_v4(data, config, param_zip, pr_msg, x_max, x_margin_mult, y_margin_mult, front_plot, plot_check_dir=None, **col_idx_dict):
   # start_0 = time.time()

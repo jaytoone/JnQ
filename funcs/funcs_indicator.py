@@ -184,6 +184,45 @@ def get_candle_score(o, h, l, c, updown=None, unsigned=True):
 
     return wick_score, body_score
 
+def candle_score_v3(res_df, itv, updown=None, unsigned=True):
+    if itv == "T":
+        ohlc_col = ["open", "high", "low", "close"]
+    else:
+        ohlc_col = ['open_{}'.format(itv), 'high_{}'.format(itv), 'low_{}'.format(itv), 'close_{}'.format(itv)]
+
+    # ohlcs = res_df[ohlc_col]
+    # o, h, l, c = np.split(ohlcs.values, 4, axis=1)
+    o, h, l, c = [res_df[col_].to_numpy() for col_ in ohlc_col]
+    #   check up / downward
+    up = np.where(c >= o, 1, 0)
+
+    total_len = h - l
+    upper_wick = (h - np.maximum(c, o)) / total_len
+    lower_wick = (np.minimum(c, o) - l) / total_len
+
+    body_score = abs(c - o) / total_len * 100
+
+    up_score = (1 - upper_wick) * 100
+    dn_score = (1 - lower_wick) * 100
+
+    if updown is not None:
+        if updown == "up":
+            wick_score = up_score
+        else:
+            if unsigned:
+                wick_score = dn_score
+            else:
+                wick_score = -dn_score
+    else:
+        if unsigned:
+            wick_score = np.where(up, up_score, dn_score)
+        else:
+            wick_score = np.where(up, up_score, -dn_score)
+
+    res_df['wick_score_{}'.format(itv)] = wick_score
+    res_df['body_score_{}'.format(itv)] = body_score
+
+    return
 
 def candle_score_v2(res_df, itv, ohlc_col=None, updown=None, unsigned=True):
     if ohlc_col is None:
@@ -506,13 +545,25 @@ def cct_bbo(df, period, smooth):
 
     return cctbbo, ema_cctbbo
 
+def donchian_channel_v3(df, period):
+  itv = pd.infer_freq(df.index)
+  upper_name = 'dc_upper_{}{}'.format(itv, period)
+  lower_name = 'dc_lower_{}{}'.format(itv, period)
+  base_name = 'dc_base_{}{}'.format(itv, period)
 
-def donchian_channel(df, period):
-    hh = df['high'].rolling(period).max().to_numpy()
-    ll = df['low'].rolling(period).min().to_numpy()
-    base = (hh + ll) / 2
+  try:
+    df.drop([upper_name, lower_name, base_name], inplace=True, axis=1)
+  except:
+    pass
 
-    return hh, ll, base
+  hh = df['high'].rolling(period).max().to_numpy()
+  ll = df['low'].rolling(period).min().to_numpy()
+
+  df[upper_name] = hh
+  df[lower_name] = ll
+  df[base_name] = (hh + ll) / 2
+
+  return
 
 def donchian_channel_v2(df, period):
   itv = pd.infer_freq(df.index)
@@ -528,6 +579,13 @@ def donchian_channel_v2(df, period):
   df[lower_name] = df['low'].rolling(period).min()
 
   return
+
+def donchian_channel(df, period):
+    hh = df['high'].rolling(period).max().to_numpy()
+    ll = df['low'].rolling(period).min().to_numpy()
+    base = (hh + ll) / 2
+
+    return hh, ll, base
 
 def sd_dc(df, period1, period2, ltf_df=None):
     assert period1 <= period2, "assert period1 <= period2"
@@ -555,6 +613,61 @@ def get_line(touch_idx, rtc_):
   touch_line[nan_idx] = np.nan   # for true comp.
 
   return touch_line
+
+
+def wave_range_v7(df, period1, period2, ltf_df=None, touch_period=50):  # v2 for period1 only
+
+    itv = pd.infer_freq(df.index)
+
+    donchian_channel_v2(df, period1)
+    donchian_channel_v2(df, period2)
+    dc_lower_, dc_upper_ = df['dc_lower_{}{}'.format(itv, period1)].to_numpy(), df['dc_upper_{}{}'.format(itv, period1)].to_numpy()
+    dc_lower2_, dc_upper2_ = df['dc_lower_{}{}'.format(itv, period2)].to_numpy(), df['dc_upper_{}{}'.format(itv, period2)].to_numpy()
+
+    short_base = (dc_lower_ + dc_upper2_) / 2
+    long_base = (dc_upper_ + dc_lower2_) / 2
+    df['short_base_{}{}{}'.format(itv, period1, period2)] = short_base
+    df['long_base_{}{}{}'.format(itv, period1, period2)] = long_base
+
+    len_df = len(df)
+    short_open_res = np.ones(len_df)
+    long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low']
+    open, high, low = [df[col_].to_numpy() for col_ in data_cols]
+
+    short_upper_touch_idx = pd.Series(np.where(high >= dc_upper2_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                       min_periods=1).max().to_numpy()  # min -> max
+    short_lower_touch_idx = pd.Series(np.where(low <= dc_lower_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                     min_periods=1).max().to_numpy()  # min 으로 하면 a 이전에 b 있는건 모두 제외하게됨
+    short_open_res *= (high >= short_base) & (short_base >= open) & (short_upper_touch_idx < short_lower_touch_idx)
+    df['short_upper_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_upper_touch_idx
+    df['short_lower_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_lower_touch_idx
+    df['short_upper_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(short_upper_touch_idx, dc_upper2_)
+    df['short_lower_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(short_lower_touch_idx, dc_lower_)
+    df['short_wave_point_{}{}{}'.format(itv, period1, period2)] = short_open_res
+
+    long_lower_touch_idx = pd.Series(np.where(low <= dc_lower2_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_upper_touch_idx = pd.Series(np.where(high >= dc_upper_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_open_res *= (open >= long_base) & (long_base >= low) & (long_lower_touch_idx < long_upper_touch_idx)
+    df['long_lower_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_lower_touch_idx
+    df['long_upper_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_upper_touch_idx
+    df['long_lower_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(long_lower_touch_idx, dc_lower2_)
+    df['long_upper_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(long_upper_touch_idx, dc_upper_)
+    df['long_wave_point_{}{}{}'.format(itv, period1, period2)] = long_open_res
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-16, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range()'s join() :", e)
+    else:
+        ltf_df = df
+
+    return ltf_df
 
 
 def wave_range_v6(df, period1, period2, ltf_df=None, touch_period=50):  # v2 for period1 only
@@ -852,13 +965,22 @@ def wave_range(df, period1, period2, ltf_df=None, touch_lbperiod=50):
 
     return ltf_df
 
+def dc_line_v2(ltf_df, htf_df, interval, dc_period=20):
+
+    if interval not in ['T', '1m']:
+        donchian_channel_v3(htf_df, dc_period)
+        return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
+    else:
+        donchian_channel_v3(ltf_df, dc_period)
+        return ltf_df
+
 def dc_line(ltf_df, htf_df, interval, dc_period=20):
 
     dc_upper = 'dc_upper_%s' % interval
     dc_lower = 'dc_lower_%s' % interval
     dc_base = 'dc_base_%s' % interval
 
-    if interval not in  ['T', '1m']:
+    if interval not in ['T', '1m']:
         htf_df[dc_upper], htf_df[dc_lower], htf_df[dc_base] = donchian_channel(htf_df, dc_period)
         joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
     else:
@@ -932,7 +1054,7 @@ def bb_width(df, period, multiple):
     lower = basis - dev_
     bbw = 2 * dev_ / basis
 
-    return upper, lower, bbw
+    return upper, lower, basis, bbw
 
 
 def bb_width_v2(df, period, multiple, return_bbw=False):
@@ -955,13 +1077,14 @@ def bb_line(ltf_df, htf_df, interval, period=20, multi=1):  # deprecated - join 
 
     bb_upper = 'bb_upper_%s' % interval
     bb_lower = 'bb_lower_%s' % interval
+    bb_base = 'bb_base_%s' % interval
 
     if interval not in ['T', '1m']:
-        htf_df[bb_upper], htf_df[bb_lower], _ = bb_width(htf_df, period, multi)
-        joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-2, 0, 1)]), how='inner')
+        htf_df[bb_upper], htf_df[bb_lower], htf_df[bb_base], _ = bb_width(htf_df, period, multi)
+        joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
     else:
         joined_ltf_df = ltf_df.copy()
-        joined_ltf_df[bb_upper], joined_ltf_df[bb_lower], _ = bb_width(ltf_df, period, multi)
+        joined_ltf_df[bb_upper], joined_ltf_df[bb_lower], joined_ltf_df[bb_base], _ = bb_width(ltf_df, period, multi)
 
     return joined_ltf_df
 

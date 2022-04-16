@@ -266,6 +266,7 @@ if __name__ == '__main__':
 
     open_side = OrderSide.BUY
     # close_side = OrderSide.SELL
+    print(dir(get_order_info("ETHUSDT", 8389765520388500621)))
 
     # print(get_precision_by_price(91.823))
     # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=t_symbol,
@@ -282,13 +283,13 @@ if __name__ == '__main__':
     #                           quantity=str(15.0)
     #                           # reduceOnly=False
     #                                    )
-    result = request_client.post_order(symbol=t_symbol,
-                                       side='SELL',
-                                       positionSide="LONG",
-                                       ordertype=OrderType.MARKET,
-                                       quantity=str(15.0)
-                                       # reduceOnly=False
-                                       )
+    # result = request_client.post_order(symbol=t_symbol,
+    #                                    side='SELL',
+    #                                    positionSide="LONG",
+    #                                    ordertype=OrderType.MARKET,
+    #                                    quantity=str(15.0)
+    #                                    # reduceOnly=False
+    #                                    )
     # #{"orderId":19419988889,"symbol":"XRPUSDT","status":"NEW","clientOrderId":"8NaTskf7GFXnwUyD3Z4BME",
     # # "price":"0.6515","avgPrice":"0.00000","origQty":"15","executedQty":"0","cumQty":"0","cumQuote":"0",
     # # "timeInForce":"GTC","type":"LIMIT","reduceOnly":false,"closePosition":false,"side":"BUY","positionSide":"BOTH",
@@ -324,6 +325,6 @@ if __name__ == '__main__':
     # # "timeInForce":"GTC","type":"LIMIT","reduceOnly":false,"closePosition":false,"side":"BUY","positionSide":"BOTH",
     # # "stopPrice":"0","workingType":"CONTRACT_PRICE","priceProtect":false,"origType":"LIMIT","updateTime":1644032291286}
     # PrintBasic.print_obj(result)
-    quit()
+    # quit()
 
 

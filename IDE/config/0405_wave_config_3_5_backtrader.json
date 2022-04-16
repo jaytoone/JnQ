@@ -1,7 +1,7 @@
 {
   "strat_version": "3_5",
   "trader_set": {
-    "backtrade": 0,
+    "backtrade": 1,
     "back_data_path": "C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\candlestick_concated\\database_bn\\2022-02-17\\2022-02-17 ETHUSDT_1m.ftr",
     "start_datetime": "2022-01-14 16:34:59.999000",
     "run": 1,

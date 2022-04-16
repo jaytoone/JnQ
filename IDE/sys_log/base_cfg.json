@@ -19,7 +19,7 @@
       "level": "DEBUG",
       "formatter": "form_name",
       "filename": "test_log_dir/test_log.log",
-      "maxBytes" : 1048576,
+      "maxBytes" : 31457280,
       "backupCount": 10
     }
   },

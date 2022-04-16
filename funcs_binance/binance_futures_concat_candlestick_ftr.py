@@ -99,7 +99,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    days = 30
+    days = 15
 
     end_date = "2021-04-12"
     end_date = "2020-09-06"
@@ -131,9 +131,9 @@ if __name__ == '__main__':
             #       Todo        #
             #        1. this phase require valid end_date       #
             save_name = '%s %s_%s.ftr' % (end_date, coin, interval)
-            if save_name in exist_files:
-                print(save_name, 'exist !')
-                continue
+            # if save_name in exist_files:
+            #     print(save_name, 'exist !')
+            #     continue
 
             try:
                 concated_df, end_date = concat_candlestick(coin, interval, days, limit=1500,
