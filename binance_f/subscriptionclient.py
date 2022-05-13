@@ -58,7 +58,13 @@ class SubscriptionClient(object):
         connection = WebsocketConnection(self.__api_key, self.__secret_key, self.uri, self.__watch_dog, request)
         self.connections.append(connection)
         connection.connect()
-        # print(connection.res)
+        # print("dir(connection) :", dir(connection))
+        # print("dir(self.connections[0]) :", dir(self.connections[0]))
+        # print("connection.price :",  connection.price)
+        # quit()
+        # # print("len(self.connections) :", len(self.connections))
+        # print("self.connections[0].price :",  self.connections[0].price)
+        # print("self.connections[0].price :",  self.connections[0].qty)
         # print((connection.__on_receive_payload))
 
     def unsubscribe_all(self):
@@ -75,8 +81,12 @@ class SubscriptionClient(object):
         Stream Name: <symbol>@aggTrade
         """
         request = self.websocket_request_impl.subscribe_aggregate_trade_event(symbol, callback, error_handler)
+
         self.__create_connection(request)
-        # print((request.json_parser.price))
+        # print("request.json_parser.price :", request.json_parser.price)
+        # print(dir(request.update_callback))
+        # quit()
+        # print("request.json_parser.price :", request.json_parser.price)
         # return request
 
     def subscribe_mark_price_event(self, symbol: 'str', callback, error_handler=None):

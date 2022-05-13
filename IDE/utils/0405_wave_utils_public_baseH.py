@@ -383,12 +383,12 @@ def ep_loc_v3(res_df, config, np_timeidx, show_detail=True, ep_loc_side=OrderSid
                 # if show_detail:
                 #     sys_log.warning("dc_upper2_ >= dc_base_H : {:.5f} {:.5f} ({})".format(dc_upper2_[c_i], dc_base_H[c_i], mr_res[c_i]))
 
-                # dc_lower2_ = res_df['dc_lower_{}{}'.format(itv, period2)].to_numpy()
-                # mr_res *= dc_lower2_ >= dc_base_H
-                # if show_detail:
-                #     sys_log.warning("dc_lower2_ >= dc_base_H : {:.5f} {:.5f} ({})".format(dc_lower2_[c_i], dc_base_H[c_i], mr_res[c_i]))  
+                dc_lower2_ = res_df['dc_lower_{}{}'.format(itv, period2)].to_numpy()
+                mr_res *= dc_lower2_ >= dc_base_H
+                if show_detail:
+                    sys_log.warning("dc_lower2_ >= dc_base_H : {:.5f} {:.5f} ({})".format(dc_lower2_[c_i], dc_base_H[c_i], mr_res[c_i]))
 
-                    # ------ consecutive base ascender ------ #
+                        # ------ consecutive base ascender ------ #
                 # ------ 1. roll_min ------ #
                 dc_base_3T_rollmin = res_df['dc_base_3T'].rolling(config.loc_set.zone.base_roll_period).min().to_numpy()
                 mr_res *= dc_base_3T_rollmin == dc_base_3T

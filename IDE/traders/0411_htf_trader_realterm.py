@@ -441,7 +441,7 @@ class Trader:
 
                 # ------ save trade_log ------ #
                 trade_log[str(res_df_open.index[self.config.trader_set.complete_index])] = [open_side, "open"]
-                trade_log[str(res_df.index[self.config.trader_set.complete_index])] = [ep, open_side, "entry"]
+                trade_log[str(res_df.index[self.config.trader_set.latest_index])] = [ep, open_side, "entry"]
                 # real_trade 의 경우, entry_ts 로 수정 요망이었으나 -> trade_log for backtrade <-> idep only (solved)
 
                 with open(trade_log_fullpath, "wb") as dict_f:
@@ -576,7 +576,7 @@ class Trader:
 
                         # ------ a. tp execution logging ------ #
                         if prev_exec_tp_len != exec_tp_len:  # logging 기준
-                            ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = p_tps[prev_exec_tp_len:exec_tp_len]
+                            ex_dict[str(res_df.index[self.config.trader_set.latest_index])] = p_tps[prev_exec_tp_len:exec_tp_len]
                             prev_exec_tp_len = exec_tp_len
                             sys_log.info("ex_dict : {}".format(ex_dict))
 
@@ -599,7 +599,7 @@ class Trader:
                                 sys_log.info("market_close_on is True")
                                 # ------ out execution logging ------ #
                                 # market_close_on = True, log_out != None (None 도 logging 가능하긴함)
-                                ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = [log_out]
+                                ex_dict[str(res_df.index[self.config.trader_set.latest_index])] = [log_out]
                                 sys_log.info("ex_dict : {}".format(ex_dict))
                                 break
 

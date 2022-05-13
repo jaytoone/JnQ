@@ -4,7 +4,7 @@ import pickle
 # print("os.getcwd() in test.py :", os.getcwd())
 
 key_abspath = os.path.abspath("../private_info/mademerich.pkl")
-# key_abspath = os.path.abspath("private_info/JnQ.pkl")
+# key_abspath = os.path.abspath("../private_info/JnQ.pkl")
 # key_abspath = os.path.abspath(__file__)
 # print("key_abspath :", key_abspath)
 

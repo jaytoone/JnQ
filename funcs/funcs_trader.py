@@ -273,114 +273,36 @@ def consecutive_df(res_df, itv_num):
 
     return new_res_idx_df
 
+def to_lower_tf_v3(ltf_df, htf_df, column, backing_i=1, show_info=False):
+    ltf_itv = pd.infer_freq(ltf_df.index)
+    assert ltf_itv == 'T', "currently only -> 'T' allowed.."
+    assert type(column[0]) in [int, np.int64], "column value should be integer"
 
-# def to_lower_tf(ltf_df, htf_df, column, output_len=None, show_info=False, backing_i=-2):
-# 
-#     start_0 = time.time()
-# 
-#     last_datetime_index = ltf_df.index[-1]
-# 
-#     last_min = int(str(last_datetime_index).split(':')[1])
-#     last_hour = int(str(last_datetime_index).split(':')[0].split(' ')[1])
-# 
-#     interval = int((to_timestamp(htf_df.index[-1]) - to_timestamp(htf_df.index[-2])) / 60)
-# 
-#     if show_info:
-#         print('last_min :', last_min)
-#         print('last_hour :', last_hour)
-#         print('interval :', interval)
-#         # print('type(interval) :', type(interval))
-# 
-#     if interval < 60:
-#         sliced_index_len = last_min % interval + 1  # +1 하는 이유는, 나머지가 0 인 경우에 대해서도 value 를 채워주어야하기 때문임
-#                                                     # 채우지않으면, ltf 에 np.nan 이 생김
-#         # ==> 59.9999 붙어서 그런걸로 알고 있음 (31 분이면 실제로 30:59.999999 니까)
-#     else:
-# 
-#         if interval == 240:  # 4h
-#             modi_last_hour = last_hour % 4 - 1        #  Todo - 여기 이상해서, to_ltf_v2 만듬
-#             if modi_last_hour < 0:
-#                 modi_last_hour += 4
-# 
-#         elif interval == 1440:  # 1d
-#             modi_last_hour = last_hour - 9
-#             if modi_last_hour < 0:
-#                 modi_last_hour += 24
-# 
-#         else:
-#             modi_last_hour = last_hour
-# 
-#         if show_info:
-#             print("modi_last_hour :", modi_last_hour)
-# 
-#         sliced_index_len = (modi_last_hour * 60 + last_min) % interval + 1  # 이렇게 하면 하루를 기준으로 잡는거내
-# 
-#         #       Todo        #
-#         #        1. 4h, 1d timestamp 시작 시간이 다르기 때문에 각 interval 의 기준으로 재정의해야할 것      #
-#         #           a. 1d 는 9:00:00 기준으로 현재까지의 시간을 모두 minute 으로 변경 (sliced_index_len)
-#         #               i. last_hour -> last_hour - 9, if < 0 => + 24
-#         #           b. 4h 는 1, 5, 9... 시 기준으로 현재까지의 시간을 minute 으로 변경 (sliced_index_len)
-#         #               i. last_hour -> last_hour % 4(h) - 1, if < 0 => + 4 
-#         #        2. 1h 는 아직
-# 
-#     #           -2 => 오차없는 이전 데이터를 사용하기 위함           #
-#     # backing_i = -2
-#     #           -1 => 완성된 future data, => realtime 은 아님      #
-#     # backing_i = -1
-# 
-#     if show_info:
-#         print("backing_i :", backing_i)
-#         print("sliced_index_len :", sliced_index_len)
-# 
-#     # value_list = [htf_df[column].iloc[backing_i]] * sliced_index_len
-# 
-#     #           1. backing_i 만큼 이전 데이터를 htf 로부터 추출함            #
-#     value_list = htf_df.iloc[[backing_i], column].values
-#     # print("value_list[-1] :", value_list[-1])
-# 
-#     #           2. 해당 htf data 를 ltf 로 변환함 (sliced_len 만큼 변환함)         #
-#     value_list = np.tile(value_list, (sliced_index_len, 1))
-# 
-#     # print(value_list)
-#     # print(type(value_list))
-#     # quit()
-#     while True:
-# 
-#         #       org backing_i 의 htf data 는 이미 value_list 에 채웠으니,
-#         #       다음 index 부터 htf data slicing 시작
-#         backing_i -= 1
-# 
-#         if show_info:
-#             print('backing_i :', backing_i)
-# 
-#         # temp_list = [htf_df[column].iloc[backing_i]] * interval
-# 
-#         temp_list = htf_df.iloc[[backing_i], column].values
-#         temp_list = np.tile(temp_list, (interval, 1))
-#         value_list = np.vstack((temp_list, value_list))
-# 
-#         # print(value_list)
-#         # print(value_list.shape)
-#         # quit()
-# 
-#         if len(value_list) > len(ltf_df):
-#             break
-# 
-#     # value_list = value_list[: -(len(value_list) - len(ltf_df))]
-#     # value_list = value_list[(len(value_list) - len(ltf_df)):]
-#     value_list = value_list[-len(ltf_df):]
-#     # print(value_list.shape)
-#     # quit()
-#     # print(len(ltf_df), len(value_list))
-#     # ltf_df[column] = list(reversed(value_list))
-# 
-#     # print("elasped time in to_lower_tf :", time.time() - start_0)
-# 
-#     return value_list
+    cols = htf_df.columns[column]  # to_lower_tf_v1 의 int col 반영
 
+    if show_info:
+        print("backing_i :", backing_i)
+
+    renamed_last_index = htf_df.rename(index={htf_df.index[-1]: ltf_df.index[-1]}, inplace=False).iloc[[-1]]
+    if htf_df.index[-1] != renamed_last_index.index[-1]:  # cannot reindex a non-unique index with a method or limit 방지
+        htf_df = htf_df.append(renamed_last_index)
+
+    downsample_df = htf_df[cols].shift(backing_i).resample(ltf_itv).ffill()
+
+    if len(downsample_df) > len(ltf_df):
+        downsample_df = downsample_df.iloc[-len(ltf_df):]
+
+    downsample_df.index = ltf_df.index[-len(downsample_df):]
+    # assert len(ltf_df) <= len(downsample_df), "for join method, assert len(ltf_df) <= len(downsample_df)"
+
+    # ------ check last row's validity ------ #
+    assert np.sum(~pd.isnull(downsample_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsample_df.iloc[-1].values)) > 0"
+
+    return downsample_df
 
 def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
     #       Todo        #
+    #        0. T 에 대한 backing_i 는 제공하지 않음, assert htf_df's itv != T
     #        1. 현재 downsampled df 만 허용, direct_df 사용시 issue 발생 가능할 것
     assert type(column[0]) in [int, np.int64], "column value should be integer"
     # if not replace_last_idx:
@@ -438,29 +360,7 @@ def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
         pd.isnull(resampled_df.iloc[-1].values)) == 0, "np.nan value occured, more {} rows might be reguired".format(
         cols)
 
-    # if datetime.timestamp(htf_df.index[-1]) < datetime.timestamp(ltf_df.index[-1]):
-    #     # resampled_df.rename(index={resampled_df.index[-1]: ltf_df.index[-1]}, inplace=True)
-    #     print(resampled_df.tail())
-    #     print("-----------")
-
-    #        1. 필요한 len 계산해서 pre_proc. 진행 --> open_idx 를 동일하게 맞춰놓았고, shift 적용 상태이기 때문에 불필요함
-
-    #        1. ltf_df 의 마지막 timeidx 와 sync. 맞춰주어야함
-    #           a. itv '1T' 가 아닌경우, 교집합 timeidx 가 존재하지 않을 수 있음
-    # ltf_lastidx = ltf_df.tail(1).resample('1T').asfreq().index
-    # intersec_idx_arr = np.argwhere(resampled_df.index == ltf_lastidx.item())
-    # intersec_idx = intersec_idx_arr.item()
-    # print("intersec_idx :", intersec_idx)
-    # print("len(resampled_df) :", len(resampled_df))
-    #
-    # assert len(intersec_idx_arr) >= 1, "len(intersec_idx_arr) is zero"
-    #
-    # sliced_resampled_df = resampled_df[:intersec_idx + 1]
-    # return sliced_resampled_df.values[-len(ltf_df):]
-
-    # return resampled_df.values[-len(ltf_df):]
     return resampled_df
-
 
 def to_htf(df, itv_, offset):
 

@@ -8,6 +8,31 @@ class OrderSide:    # 추후 위치 옮길 것 - colab 에 binance_file 종속�
     SELL = "SELL"
     INVALID = None
 
+def get_res_v5(res_df, open_info_df, ohlc_list, config_list, np_timeidx, funcs, inversion=False, test_ratio=0.3, plot_is=True, signi=False):
+  # ------------ make open_info_list ------------ #
+  open_idx = open_info_df.index.to_numpy()
+  len_df = len(res_df)
+  s_idx = (open_idx < int(len_df * (1 - test_ratio))) == plot_is
+  s_open_info_df = open_info_df[s_idx]
+  s_open_idx = open_idx[s_idx]
+
+  open_info_list = [s_open_info_df[col_].to_numpy() for col_ in s_open_info_df.columns]
+  side_arr, zone_arr, id_arr, id_idx_arr = open_info_list
+
+  # ------------ get paired_res ------------ #
+  start_0 = time.time()
+  paired_res = en_ex_pairing_v5(res_df, s_open_idx, open_info_list, ohlc_list, config_list, np_timeidx, funcs)
+  # valid_openi_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr = paired_res
+  print("en_ex_pairing elapsed time :", time.time() - start_0)  #  0.37 --> 0.3660471439361572 --> 0.21(lesser if)
+
+  # ------------ idep_plot ------------ #
+  start_0 = time.time()
+  high, low = ohlc_list[1:3]
+  res = idep_plot_v13(res_df, len_df, config_list[0], high, low, s_open_idx, side_arr, paired_res, inversion=inversion, sample_ratio=1 - test_ratio, signi=signi)
+  print("idep_plot elapsed time :", time.time() - start_0)   # 1.40452 (v6) 1.4311 (v5)
+
+  return res
+
 def get_res_v4(res_df, open_info_df, ohlc_list, config_list, np_timeidx, funcs, test_ratio=0.3, plot_is=True, signi=False):
   # ------------ make open_info_list ------------ #
   open_idx = open_info_df.index.to_numpy()
@@ -28,7 +53,7 @@ def get_res_v4(res_df, open_info_df, ohlc_list, config_list, np_timeidx, funcs, 
   # ------------ idep_plot ------------ #
   start_0 = time.time()
   high, low = ohlc_list[1:3]
-  res = idep_plot_v11(res_df, len_df, config_list[0], high, low, s_open_idx, side_arr, paired_res, inversion=False, sample_ratio=1 - test_ratio, signi=signi)
+  res = idep_plot_v12(res_df, len_df, config_list[0], high, low, s_open_idx, side_arr, paired_res, inversion=False, sample_ratio=1 - test_ratio, signi=signi)
   print("idep_plot elapsed time :", time.time() - start_0)   # 1.40452 (v6) 1.4311 (v5)
 
   return res
@@ -170,18 +195,18 @@ def en_ex_pairing_v5(res_df, open_idx, open_info_list, ohlc_list, config_list, n
         #     1. 해당 id 로 config 재할당해야함
         id_idx = id_idx_arr[open_i]
         config = config_list[id_idx]
-        strat_version = config.strat_version
+        selection_id = config.selection_id
         open_side = side_arr[open_i]
 
         side_pos = 'short' if open_side == OrderSide.SELL else 'long'
-        tp_arr = res_df['{}_tp_{}'.format(side_pos, strat_version)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
-        point_idxgap_arr = res_df['{}_point_idxgap_{}'.format(side_pos, strat_version)].to_numpy()
+        tp_arr = res_df['{}_tp_{}'.format(side_pos, selection_id)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
+        point_idxgap_arr = res_df['{}_point_idxgap_{}'.format(side_pos, selection_id)].to_numpy()
 
-        ep_arr = res_df['{}_ep_{}'.format(side_pos, strat_version)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
-        out_arr = res_df['{}_out_{}'.format(side_pos, strat_version)].to_numpy()
-        # bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, strat_version)].to_numpy()  # ex. rolling(entry ~ end)'s high
-        # bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, strat_version)].to_numpy()  # ex. close + dc_T20 * 0.5
-        tr_arr = res_df['{}_tr_{}'.format(side_pos, strat_version)].to_numpy()
+        ep_arr = res_df['{}_ep_{}'.format(side_pos, selection_id)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
+        out_arr = res_df['{}_out_{}'.format(side_pos, selection_id)].to_numpy()
+        # bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, selection_id)].to_numpy()  # ex. rolling(entry ~ end)'s high
+        # bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, selection_id)].to_numpy()  # ex. close + dc_T20 * 0.5
+        tr_arr = res_df['{}_tr_{}'.format(side_pos, selection_id)].to_numpy()
 
         # ------ ei_k & point2 ------ #
         i = op_idx + 1  # open_signal 이 close_bar.shift(1) 이라고 가정하고 다음 bar 부터 체결확인한다는 의미
@@ -194,7 +219,7 @@ def en_ex_pairing_v5(res_df, open_idx, open_info_list, ohlc_list, config_list, n
             continue
         else:
             # ------ allow point2 only next to point1 ------ #
-            open_arr = res_df['{}_open_{}'.format(side_pos, strat_version)].to_numpy()
+            open_arr = res_df['{}_open_{}'.format(side_pos, selection_id)].to_numpy()
             tp_j = int(op_idx - point_idxgap)
             if np.sum(open_arr[tp_j:op_idx]) != 0:
                 continue
@@ -300,18 +325,18 @@ def en_ex_pairing_v4(res_df, open_idx, open_info_list, ohlc_list, config_list, n
         #     1. 해당 id 로 config 재할당해야함
         id_idx = id_idx_arr[open_i]
         config = config_list[id_idx]
-        strat_version = config.strat_version
+        selection_id = config.selection_id
         open_side = side_arr[open_i]
 
         side_pos = 'short' if open_side == OrderSide.SELL else 'long'
-        tp_arr = res_df['{}_tp_{}'.format(side_pos, strat_version)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
-        point_idxgap_arr = res_df['{}_point_idxgap_{}'.format(side_pos, strat_version)].to_numpy()
+        tp_arr = res_df['{}_tp_{}'.format(side_pos, selection_id)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
+        point_idxgap_arr = res_df['{}_point_idxgap_{}'.format(side_pos, selection_id)].to_numpy()
 
-        ep_arr = res_df['{}_ep_{}'.format(side_pos, strat_version)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
-        out_arr = res_df['{}_out_{}'.format(side_pos, strat_version)].to_numpy()
-        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, strat_version)].to_numpy()  # ex. rolling(entry ~ end)'s high
-        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, strat_version)].to_numpy()  # ex. close + dc_T20 * 0.5
-        tr_arr = res_df['{}_tr_{}'.format(side_pos, strat_version)].to_numpy()
+        ep_arr = res_df['{}_ep_{}'.format(side_pos, selection_id)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
+        out_arr = res_df['{}_out_{}'.format(side_pos, selection_id)].to_numpy()
+        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, selection_id)].to_numpy()  # ex. rolling(entry ~ end)'s high
+        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, selection_id)].to_numpy()  # ex. close + dc_T20 * 0.5
+        tr_arr = res_df['{}_tr_{}'.format(side_pos, selection_id)].to_numpy()
 
         # ------ ei_k & point2 ------ #
         i = op_idx + 1  # open_signal 이 close_bar.shift(1) 이라고 가정하고 다음 bar 부터 체결확인한다는 의미
@@ -324,7 +349,7 @@ def en_ex_pairing_v4(res_df, open_idx, open_info_list, ohlc_list, config_list, n
             continue
         else:
             # ------ allow point2 only next to point1 ------ #
-            open_arr = res_df['{}_open_{}'.format(side_pos, strat_version)].to_numpy()
+            open_arr = res_df['{}_open_{}'.format(side_pos, selection_id)].to_numpy()
             tp_j = int(op_idx - point_idxgap)
             if np.sum(open_arr[tp_j:op_idx]) != 0:
                 continue
@@ -430,18 +455,18 @@ def en_ex_pairing_v3(res_df, open_idx, open_info_list, ohlc_list, point2_list, m
         #     1. 해당 id 로 config 재할당해야함
         id_idx = id_idx_arr[open_i]
         config = config_list[id_idx]
-        strat_version = config.strat_version
+        selection_id = config.selection_id
         open_side = side_arr[open_i]
 
         side_pos = 'short' if open_side == OrderSide.SELL else 'long'
-        tp_arr = res_df['{}_tp_{}'.format(side_pos, strat_version)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
-        point_idxgap_arr = res_df['{}_point_idxgap_{}'.format(side_pos, strat_version)].to_numpy()
+        tp_arr = res_df['{}_tp_{}'.format(side_pos, selection_id)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
+        point_idxgap_arr = res_df['{}_point_idxgap_{}'.format(side_pos, selection_id)].to_numpy()
 
-        ep_arr = res_df['{}_ep_{}'.format(side_pos, strat_version)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
-        out_arr = res_df['{}_out_{}'.format(side_pos, strat_version)].to_numpy()
-        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, strat_version)].to_numpy()  # ex. rolling(entry ~ end)'s high
-        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, strat_version)].to_numpy()  # ex. close + dc_T20 * 0.5
-        tr_arr = res_df['{}_tr_{}'.format(side_pos, strat_version)].to_numpy()
+        ep_arr = res_df['{}_ep_{}'.format(side_pos, selection_id)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
+        out_arr = res_df['{}_out_{}'.format(side_pos, selection_id)].to_numpy()
+        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, selection_id)].to_numpy()  # ex. rolling(entry ~ end)'s high
+        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, selection_id)].to_numpy()  # ex. close + dc_T20 * 0.5
+        tr_arr = res_df['{}_tr_{}'.format(side_pos, selection_id)].to_numpy()
 
         # ------ ei_k & point2 ------ #
         i = op_idx + 1  # open_signal 이 close_bar.shift(1) 이라고 가정하고 다음 bar 부터 체결확인한다는 의미
@@ -454,7 +479,7 @@ def en_ex_pairing_v3(res_df, open_idx, open_info_list, ohlc_list, point2_list, m
             continue
         else:
             # ------ allow point2 only next to point1 ------ #
-            open_arr = res_df['{}_open_{}'.format(side_pos, strat_version)].to_numpy()
+            open_arr = res_df['{}_open_{}'.format(side_pos, selection_id)].to_numpy()
             tp_j = int(op_idx - point_idxgap)
             if np.sum(open_arr[tp_j:op_idx]) != 0:
                 continue
@@ -561,16 +586,16 @@ def en_ex_pairing_v2(res_df, open_idx, open_info_list, ohlc_list, point2_list, m
         #     1. 해당 id 로 config 재할당해야함
         id_idx = id_idx_arr[open_i]
         config = config_list[id_idx]
-        strat_version = config.strat_version
+        selection_id = config.selection_id
         open_side = side_arr[open_i]
 
         side_pos = 'short' if open_side == OrderSide.SELL else 'long'
-        ep_arr = res_df['{}_ep_{}'.format(side_pos, strat_version)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
-        tp_arr = res_df['{}_tp_{}'.format(side_pos, strat_version)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
-        out_arr = res_df['{}_out_{}'.format(side_pos, strat_version)].to_numpy()
-        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, strat_version)].to_numpy()  # ex. rolling(entry ~ end)'s high
-        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, strat_version)].to_numpy()  # ex. close + dc_T20 * 0.5
-        tr_arr = res_df['{}_tr_{}'.format(side_pos, strat_version)].to_numpy()
+        ep_arr = res_df['{}_ep_{}'.format(side_pos, selection_id)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
+        tp_arr = res_df['{}_tp_{}'.format(side_pos, selection_id)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
+        out_arr = res_df['{}_out_{}'.format(side_pos, selection_id)].to_numpy()
+        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, selection_id)].to_numpy()  # ex. rolling(entry ~ end)'s high
+        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, selection_id)].to_numpy()  # ex. close + dc_T20 * 0.5
+        tr_arr = res_df['{}_tr_{}'.format(side_pos, selection_id)].to_numpy()
 
         # ------ ei_k & point2 ------ #
         i = op_idx + 1  # open_signal 이 close_bar.shift(1) 이라고 가정하고 다음 bar 부터 체결확인한다는 의미
@@ -677,15 +702,15 @@ def en_ex_pairing(res_df, open_idx, open_info_list, ohlc_list, point2_list, mark
         #     1. 해당 id 로 config 재할당해야함
         id_idx = id_idx_arr[open_i]
         config = config_list[id_idx]
-        strat_version = config.strat_version
+        selection_id = config.selection_id
         open_side = side_arr[open_i]
 
         side_pos = 'short' if open_side == OrderSide.SELL else 'long'
-        ep_arr = res_df['{}_ep_{}'.format(side_pos, strat_version)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
-        tp_arr = res_df['{}_tp_{}'.format(side_pos, strat_version)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
-        out_arr = res_df['{}_out_{}'.format(side_pos, strat_version)].to_numpy()
-        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, strat_version)].to_numpy()  # ex. rolling(entry ~ end)'s high
-        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, strat_version)].to_numpy()  # ex. close + dc_T20 * 0.5
+        ep_arr = res_df['{}_ep_{}'.format(side_pos, selection_id)].to_numpy()  # Todo - while loop 내에서 to_numpy() 반복하느니, pd_indexing 이 낫지 않을까
+        tp_arr = res_df['{}_tp_{}'.format(side_pos, selection_id)].to_numpy()  # => eptpout arr_list 만들어서 꺼내 사용하면 될 것
+        out_arr = res_df['{}_out_{}'.format(side_pos, selection_id)].to_numpy()
+        bias_info_arr = res_df['{}_bias_info_{}'.format(side_pos, selection_id)].to_numpy()  # ex. rolling(entry ~ end)'s high
+        bias_thresh_arr = res_df['{}_bias_thresh_{}'.format(side_pos, selection_id)].to_numpy()  # ex. close + dc_T20 * 0.5
 
         # ------ ei_k & point2 ------ #
         i = op_idx + 1  # open_signal 이 close_bar.shift(1) 이라고 가정하고 다음 bar 부터 체결확인한다는 의미
@@ -771,7 +796,7 @@ def check_eik_point2_exec_v3(res_df, config, op_idx, tp_j, len_df, open_side, np
     # tp_j = op_idx
     out_j = op_idx
 
-    strat_version = config.strat_version
+    selection_id = config.selection_id
     allow_ep_in = 0 if config.ep_set.point2.use_point2 else 1
     entry_done = 0
     ep = None
@@ -840,7 +865,7 @@ def check_eik_point2_exec_v2(res_df, config, op_idx, tp_j, len_df, open_side, np
     # tp_j = op_idx
     out_j = op_idx
 
-    strat_version = config.strat_version
+    selection_id = config.selection_id
     allow_ep_in = 0 if config.ep_set.point2.use_point2 else 1
     entry_done = 0
     ep = None
@@ -908,7 +933,7 @@ def check_eik_point2_exec(res_df, config, op_idx, len_df, open_side, np_datas, p
     tp_j = op_idx
     out_j = op_idx
 
-    strat_version = config.strat_version
+    selection_id = config.selection_id
     allow_ep_in = 0 if config.ep_set.point2.use_point2 else 1
     entry_done = 0
     ep = None
@@ -974,7 +999,7 @@ def check_eik_point2_exec(res_df, config, op_idx, len_df, open_side, np_datas, p
 def check_limit_tp_exec(res_df, config, open_i, j, tp_j, len_df, fee, open_side, exit_done, np_datas):
     o, h, l, c, tps = np_datas
     tp = None
-    strat_version = config.strat_version
+    selection_id = config.selection_id
     len_tps = len(tps)
 
     for tp_i, tp_arr in enumerate(tps):
@@ -986,9 +1011,9 @@ def check_limit_tp_exec(res_df, config, open_i, j, tp_j, len_df, fee, open_side,
                 decay_remain = (j - open_i) % config.tp_set.decay_term
                 if j != open_i and decay_remain == 0:
                     if open_side == OrderSide.SELL:
-                        tp_arr[tp_j] += res_df['short_rtc_gap_{}'.format(strat_version)].iloc[open_i] * config.tr_set.decay_gap * decay_share
+                        tp_arr[tp_j] += res_df['short_rtc_gap_{}'.format(selection_id)].iloc[open_i] * config.tr_set.decay_gap * decay_share
                     else:
-                        tp_arr[tp_j] -= res_df['long_rtc_gap_{}'.format(strat_version)].iloc[open_i] * config.tr_set.decay_gap * decay_share
+                        tp_arr[tp_j] -= res_df['long_rtc_gap_{}'.format(selection_id)].iloc[open_i] * config.tr_set.decay_gap * decay_share
         except:
             pass
 
@@ -1049,7 +1074,7 @@ def check_limit_tp_exec(res_df, config, open_i, j, tp_j, len_df, fee, open_side,
 def check_market_out_exec_v2(config, res_df, np_timeidx, open_i, j, len_df, fee, open_side, cross_on, exit_done):
     close = res_df['close'].to_numpy()
     ex_p = None
-    strat_version = config.strat_version
+    selection_id = config.selection_id
 
     # ------ timestamp ------ #
     if config.out_set.tf_exit != "None":
@@ -1068,7 +1093,7 @@ def check_market_out_exec_v2(config, res_df, np_timeidx, open_i, j, len_df, fee,
                 exit_done = 1
 
     # ------ heikin_ashi ------ #
-    # if strat_version in ['v3_3']:
+    # if selection_id in ['v3_3']:
     #     if open_side == OrderSide.SELL:
     #       if (ha_o[j] < ha_c[j]):# & (ha_o[j] == ha_l[j]):   # 양봉 출현
     #           exit_done = 1
@@ -1078,7 +1103,7 @@ def check_market_out_exec_v2(config, res_df, np_timeidx, open_i, j, len_df, fee,
 
     # ------------ early out ------------ #
     # ------ bb ------ # --> cross_on 기능은 ide latency 개선 여부에 해당되지 않음
-    if strat_version in ['v5_2']:
+    if selection_id in ['v5_2']:
         bb_upper_5T = res_df['bb_upper_5T'].to_numpy()
         bb_lower_5T = res_df['bb_lower_5T'].to_numpy()
 
@@ -1102,7 +1127,7 @@ def check_market_out_exec_v2(config, res_df, np_timeidx, open_i, j, len_df, fee,
 def check_market_out_exec(config, open_i, j, len_df, fee, open_side, cross_on, exit_done, np_datas):
     np_timeidx, c, bb_lower_5T, bb_upper_5T, rsi_exit, ha_o, ha_h, ha_l, ha_c = np_datas
     ex_p = None
-    strat_version = config.strat_version
+    selection_id = config.selection_id
 
     # ------ timestamp ------ #
     if config.out_set.tf_exit != "None":
@@ -1119,7 +1144,7 @@ def check_market_out_exec(config, open_i, j, len_df, fee, open_side, cross_on, e
                 exit_done = 1
 
     # ------ heikin_ashi ------ #
-    # if strat_version in ['v3_3']:
+    # if selection_id in ['v3_3']:
     #     if open_side == OrderSide.SELL:
     #       if (ha_o[j] < ha_c[j]):# & (ha_o[j] == ha_l[j]):   # 양봉 출현
     #           exit_done = 1
@@ -1129,7 +1154,7 @@ def check_market_out_exec(config, open_i, j, len_df, fee, open_side, cross_on, e
 
     # ------------ early out ------------ #
     # ------ bb ------ # --> cross_on 기능은 ide latency 개선 여부에 해당되지 않음
-    if strat_version in ['v5_2']:
+    if selection_id in ['v5_2']:
         if open_side == OrderSide.SELL:
             if c[j] < bb_lower_5T[j] < c[j - 1]:
                 cross_on = 1

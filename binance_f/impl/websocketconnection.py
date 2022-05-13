@@ -146,7 +146,8 @@ class WebsocketConnection:
     def on_failure(self, error):
         print('on_failure')
         self.on_error("Unexpected error: " + str(error))
-        self.close_on_error()
+        # self.close_on_error()
+        self.re_connect()   # 일단은, re_connect 시킴, close 가 아니라
 
     def on_message(self, message):
         self.last_receive_time = get_current_timestamp()
@@ -201,7 +202,7 @@ class WebsocketConnection:
             self.close()
 
         # return res.price
-        self.price = res.price
+        self.price = res.price  # payload 쪽에서 직접 원하는 data 를 가져옴 (customized)
 
     def __process_ping_on_trading_line(self, ping_ts):
         self.send("{\"op\":\"pong\",\"ts\":" + str(ping_ts) + "}")

@@ -2,7 +2,7 @@ from funcs_binance.binance_futures_bot_config import *
 import math
 import pandas as pd
 import logging
-# import time
+import time
 
 sys_log = logging.getLogger()
 
@@ -60,7 +60,7 @@ def total_income(symbol_, startTime=None, endTime=None):
     total_income_ = 0.0
     for result in results:
         total_income_ += result.income
-        # print(result[i].income)
+        print(result.income)
 
     return total_income_
 
@@ -71,6 +71,7 @@ def get_order_info(symbol_, orderId):
             order_info_res = request_client.get_order(symbol_, orderId=orderId)
         except Exception as e:
             sys_log.error("error in get_order_info : {}".format(e))
+            time.sleep(1)   # for prevent max retries error
             continue
         else:
             return order_info_res
@@ -246,8 +247,8 @@ if __name__ == '__main__':
     t_tp_list = [91.8, 91.7, 91.65]
     t_partial_qty_divider = 1.5
     t_quantity_precision = 1
-    t_symbol = 'XRPUSDT'
-    # t_symbol = 'ETHUSDT'
+    # t_symbol = 'XRPUSDT'
+    t_symbol = 'ETHUSDT'
     # quantity =
     # symbol = 'ADAUSDT'
 
@@ -266,7 +267,33 @@ if __name__ == '__main__':
 
     open_side = OrderSide.BUY
     # close_side = OrderSide.SELL
-    print(dir(get_order_info("ETHUSDT", 8389765520388500621)))
+    # print(dir(get_order_info(t_symbol, 8389765520388500621)))
+    # print(total_income(t_symbol, 1650933600000, 1650981660000))
+    # sub_client.unsubscribe_all()
+    start_0 = time.time()
+    sub_client.subscribe_aggregate_trade_event(t_symbol.lower(), callback, error)
+    # sub_client.subscribe_candlestick_event(t_symbol.lower(), '1m', callback, error)
+    # print(dir(sub_client.subscribe_aggregate_trade_event))
+    # quit()
+    while 1:
+        # print(dir(sub_client.connections[0]))
+        if 3 > time.time() - start_0 > 2:
+            sub_client.connections[0].on_failure(error)
+            # sub_client.connections[0].close()
+            # sub_client.connections[0].re_connect()
+        # if sub_client.connections[0].price is not None:
+        #     print(time.time() - start_0)
+        #     break
+        print("sub_client.connections[0].price :", sub_client.connections[0].price)
+
+        time.sleep(1)
+
+    # print(dir(sub_client.connections[0].request))
+    # print((sub_client.connections[0].request.json_parser.price))
+    # print("dir(sub_client.connections[1]) :", dir(sub_client.connections[1]))
+    # print(sub_client.connections[0].price)
+    # print((sub_client.connections.price))
+    # print(get_market_price_v2(sub_client))
 
     # print(get_precision_by_price(91.823))
     # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=t_symbol,
@@ -326,5 +353,3 @@ if __name__ == '__main__':
     # # "stopPrice":"0","workingType":"CONTRACT_PRICE","priceProtect":false,"origType":"LIMIT","updateTime":1644032291286}
     # PrintBasic.print_obj(result)
     # quit()
-
-

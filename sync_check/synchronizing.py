@@ -24,6 +24,12 @@ pd.set_option('display.max_columns', 2500)
 
 def sync_check(df, plot_size=45, plotting=False):
 
+
+    # ------ cci ------ #
+    df = cci_v2(df, 20)
+    print(df.cci_T20.tail(40))
+    quit()
+
     # ------ lucid sar ------ #
     df_3T = to_htf(df, itv_='3T', offset='1h')
     start_0 = time.time()
@@ -148,11 +154,6 @@ def sync_check(df, plot_size=45, plotting=False):
     df['rsi'] = rma(df['close'], 14)    # 11:21:59.999    3166.373131 11:21:59.999    3166.373131 11:21:59.999    3166.373131
     # df['rsi'] = rsi(df, 14)
     print(df.rsi.tail(40))
-    quit()
-
-    # ------ cci ------ #
-    df['cci'] = cci(df, 20)
-    print(df.cci.tail(40))
     quit()
 
 

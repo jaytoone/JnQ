@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from funcs.funcs_trader import to_lower_tf_v2, to_lower_tf_v3, intmin, ffill, bfill, to_itvnum, to_htf
+from funcs.funcs_trader import to_lower_tf_v2, intmin, ffill, bfill, to_itvnum, to_htf
 import talib
 
 
@@ -90,84 +90,6 @@ def dev(data, period):
 
     return dev_
 
-def cci_v2(df, period=20):
-
-    itv = pd.infer_freq(df.index)
-    high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
-
-    df['cci_{}{}'.format(itv, period)] = talib.CCI(high, low, close, timeperiod=period)
-
-    return df
-
-def wave_range_ratio_v4_1(res_df, config, roll_hl_cnt=3):
-    wave_itv = pd.infer_freq(res_df.index)
-    wave_period = config.tr_set.wave_period
-    len_df = len(res_df)
-
-    valid_high_prime_idx, valid_low_prime_idx, roll_high_idx_arr, roll_low_idx_arr = roll_wave_hl_v4(res_df, config, roll_hl_cnt=roll_hl_cnt)
-
-    wave_high_fill_ = res_df['wave_high_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    wave_low_fill_ = res_df['wave_low_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    roll_high_ = get_roll_wave_data(valid_high_prime_idx, roll_high_idx_arr, len_df, wave_high_fill_, roll_hl_cnt)
-    roll_low_ = get_roll_wave_data(valid_low_prime_idx, roll_low_idx_arr, len_df, wave_low_fill_, roll_hl_cnt)
-
-    cu_wave1_range = roll_high_[:, -1] - roll_low_[:, -2]   # cu's roll_high_[:, -1] = prev_high & cu's roll_low_[:, -1] = current_low
-    cu_wave2_range = roll_high_[:, -1] - wave_low_fill_     # for short, cu
-    co_wave1_range = roll_high_[:, -2] - roll_low_[:, -1]   # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
-    co_wave2_range = wave_high_fill_ - roll_low_[:, -1]     # for long, co
-    wave3_range = wave_high_fill_ - wave_low_fill_
-
-    res_df['cu_wrr_21_{}{}'.format(wave_itv, wave_period)] = cu_wave2_range / cu_wave1_range
-    res_df['cu_wrr_32_{}{}'.format(wave_itv, wave_period)] = wave3_range / cu_wave2_range
-
-    res_df['co_wrr_21_{}{}'.format(wave_itv, wave_period)] = co_wave2_range / co_wave1_range
-    res_df['co_wrr_32_{}{}'.format(wave_itv, wave_period)] = wave3_range / co_wave2_range
-
-    return res_df
-
-def wave_range_ratio_v4(res_df, config, roll_hl_cnt=3):
-    wave_itv = pd.infer_freq(res_df.index)
-    wave_period = config.tr_set.wave_period
-    len_df = len(res_df)
-
-    valid_high_prime_idx, valid_low_prime_idx, roll_high_idx_arr, roll_low_idx_arr = roll_wave_hl_v4(res_df, config, roll_hl_cnt=roll_hl_cnt)
-
-    wave_high_fill_ = res_df['wave_high_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    wave_low_fill_ = res_df['wave_low_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    roll_high_ = get_roll_wave_data(valid_high_prime_idx, roll_high_idx_arr, len_df, wave_high_fill_, roll_hl_cnt)
-    roll_low_ = get_roll_wave_data(valid_low_prime_idx, roll_low_idx_arr, len_df, wave_low_fill_, roll_hl_cnt)
-
-    wave1_range = roll_high_[:, -2] - roll_low_[:, -2]
-    cu_wave2_range = roll_high_[:, -2] - roll_low_[:, -1]  # for short, cu
-    co_wave2_range = roll_high_[:, -1] - roll_low_[:, -2]  # for long, co
-    wave3_range = roll_high_[:, -1] - roll_low_[:, -1]
-
-    res_df['cu_wrr_21_{}{}'.format(wave_itv, wave_period)] = cu_wave2_range / wave1_range
-    res_df['cu_wrr_32_{}{}'.format(wave_itv, wave_period)] = wave3_range / cu_wave2_range
-
-    res_df['co_wrr_21_{}{}'.format(wave_itv, wave_period)] = co_wave2_range / wave1_range
-    res_df['co_wrr_32_{}{}'.format(wave_itv, wave_period)] = wave3_range / co_wave2_range
-
-    return res_df
-
-def wave_range_ratio_v3(res_df, config):
-    wave_itv = pd.infer_freq(res_df.index)
-    wave_period = config.tr_set.wave_period
-
-    roll_high_, roll_low_, _, _ = roll_wave_hl_v3(res_df, config, roll_hl_cnt=4)
-
-    wave1_range = roll_high_[:, -2] - roll_low_[:, -2]
-    cu_wave2_range = roll_high_[:, -2] - roll_low_[:, -1]  # for short, cu
-    co_wave2_range = roll_high_[:, -1] - roll_low_[:, -2]  # for long, co
-    wave3_range = roll_high_[:, -1] - roll_low_[:, -1]
-
-    res_df['cu_wrr_21_{}{}'.format(wave_itv, wave_period)] = cu_wave2_range / wave1_range
-    res_df['cu_wrr_32_{}{}'.format(wave_itv, wave_period)] = wave3_range / cu_wave2_range
-
-    res_df['co_wrr_21_{}{}'.format(wave_itv, wave_period)] = co_wave2_range / wave1_range
-    res_df['co_wrr_32_{}{}'.format(wave_itv, wave_period)] = wave3_range / co_wave2_range
-
-    return res_df
 
 def wave_range_ratio_v2(res_df, config):
     wave_itv = pd.infer_freq(res_df.index)
@@ -189,60 +111,7 @@ def wave_range_ratio_v2(res_df, config):
     return res_df
 
 
-def get_terms_info_v4(cu_idx, co_idx, len_df, len_df_range):
-
-    cu_fill_idx = fill_arr(cu_idx)
-    co_fill_idx = fill_arr(co_idx)
-
-    notnan_cu_bool = ~np.isnan(cu_idx)
-    notnan_co_bool = ~np.isnan(co_idx)
-
-    valid_cu_bool = notnan_cu_bool * ~np.isnan(co_fill_idx)  # high_terms 를 위해 pair 되는 fill & idx 의 nan 제거
-    valid_co_bool = notnan_co_bool * ~np.isnan(cu_fill_idx)
-
-    # ------ 생략된 idx 에 대한 prime_idx 탐색 ------ #
-    high_bool = cu_fill_idx < co_fill_idx  # 이렇게 해야 high_terms[:, 1] 이 cu_idx 가 나옴
-    low_bool = co_fill_idx < cu_fill_idx
-
-    high_terms_vec = get_index_bybool(high_bool, len_df_range)
-    low_terms_vec = get_index_bybool(low_bool, len_df_range)  # -> low_terms
-
-    high_terms_list = using_clump(high_terms_vec)
-    low_terms_list = using_clump(low_terms_vec)
-
-    valid_co_prime_idx = np.array([terms.min() for terms in high_terms_list])
-    valid_cu_prime_idx = np.array([terms.min() for terms in low_terms_list])
-
-    valid_co_post_idx = np.array([terms.max() for terms in high_terms_list])
-    valid_cu_post_idx = np.array([terms.max() for terms in low_terms_list])
-
-    cu_prime_idx = np.full(len_df, np.nan)
-    co_prime_idx = np.full(len_df, np.nan)
-
-    cu_prime_idx[valid_cu_prime_idx] = valid_cu_prime_idx
-    co_prime_idx[valid_co_prime_idx] = valid_co_prime_idx
-
-    cu_prime_fill_idx = fill_arr(cu_prime_idx)
-    co_prime_fill_idx = fill_arr(co_prime_idx)
-
-    # cu_post_idx = np.full(len_df, np.nan)
-    # co_post_idx = np.full(len_df, np.nan)
-
-    # cu_post_idx[valid_cu_post_idx] = valid_cu_post_idx
-    # co_post_idx[valid_co_post_idx] = valid_co_post_idx
-
-    # cu_post_fill_idx = fill_arr(cu_post_idx)
-    # co_post_fill_idx = fill_arr(co_post_idx)
-
-    valid_cu_bool *= ~np.isnan(co_prime_fill_idx)
-    valid_co_bool *= ~np.isnan(cu_prime_fill_idx)
-
-    return cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, valid_cu_bool, valid_co_bool
-    # return cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, \
-    #         cu_post_idx, co_post_idx, cu_post_fill_idx, co_post_fill_idx, valid_cu_bool, valid_co_bool
-
-
-def get_terms_info_v3(cu_bool, co_bool, len_df, len_df_range, prime_terms=False):
+def get_terms_info_v3(cu_bool, co_bool, len_df_range, prime_terms=False):
     cu_idx = get_index_bybool(cu_bool, len_df_range)
     co_idx = get_index_bybool(co_bool, len_df_range)
 
@@ -301,10 +170,7 @@ def get_terms_info_v3(cu_bool, co_bool, len_df, len_df_range, prime_terms=False)
         high_prime_terms = np.vstack((co_prime_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
         low_prime_terms = np.vstack((cu_prime_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
 
-        high_prime_terms_cnt = high_prime_terms[:, 1] - high_prime_terms[:, 0]
-        low_prime_terms_cnt = low_prime_terms[:, 1] - low_prime_terms[:, 0]
-
-        return high_post_terms, low_post_terms, high_prime_terms_cnt, low_prime_terms_cnt, high_prime_terms, low_prime_terms, cu_idx_term, co_idx_term
+        return high_post_terms, low_post_terms, high_post_terms_cnt, low_post_terms_cnt, high_prime_terms, low_prime_terms, cu_idx_term, co_idx_term
 
     return high_post_terms, low_post_terms, high_post_terms_cnt, low_post_terms_cnt, cu_idx_term, co_idx_term
 
@@ -361,32 +227,6 @@ def get_terms_info(cu_bool, co_bool, len_df_range):
 
     return high_terms, low_terms, high_terms_cnt, low_terms_cnt
 
-
-def get_roll_wave_data(valid_prime_idx, roll_idx_arr, len_df, data, roll_hl_cnt):
-    roll_data = pd.DataFrame(np.full((len_df, roll_hl_cnt), np.nan))
-    roll_data.iloc[valid_prime_idx[roll_hl_cnt - 1:], :] = data[roll_idx_arr]  # 제한된 idx 를 제외한 row 에 roll_hl 입력
-
-    return roll_data.ffill().to_numpy()
-
-
-def roll_wave_hl_v4(t_df, config, roll_hl_cnt=4):
-    wave_itv = pd.infer_freq(t_df.index)
-    wave_period = config.tr_set.wave_period
-
-    high_prime_idx = t_df['wave_high_prime_idx_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    low_prime_idx = t_df['wave_low_prime_idx_{}{}'.format(wave_itv, wave_period)].to_numpy()
-
-    valid_high_prime_idx = high_prime_idx[~np.isnan(high_prime_idx)].astype(int)  # roll_high 를 위한 prime_idx
-    valid_low_prime_idx = low_prime_idx[~np.isnan(low_prime_idx)].astype(int)  # roll_low 를 위한 prime_idx
-
-    roll_high_idx_arr = np.array([valid_high_prime_idx[idx_ + 1 - roll_hl_cnt:idx_ + 1] for idx_ in range(len(valid_high_prime_idx)) if
-                                  idx_ + 1 >= roll_hl_cnt])  # cnt 수를 만족시키기 위해 idx 제한
-    roll_low_idx_arr = np.array(
-        [valid_low_prime_idx[idx_ + 1 - roll_hl_cnt:idx_ + 1] for idx_ in range(len(valid_low_prime_idx)) if idx_ + 1 >= roll_hl_cnt])
-
-    return valid_high_prime_idx, valid_low_prime_idx, roll_high_idx_arr, roll_low_idx_arr
-
-
 def roll_wave_hl_v3(t_df, config, roll_hl_cnt=4):
     wave_itv = pd.infer_freq(t_df.index)
     wave_period = config.tr_set.wave_period
@@ -397,8 +237,6 @@ def roll_wave_hl_v3(t_df, config, roll_hl_cnt=4):
     wave_low_fill_ = t_df['wave_low_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
     high_prime_idx = t_df['wave_high_prime_idx_{}{}'.format(wave_itv, wave_period)].to_numpy()
     low_prime_idx = t_df['wave_low_prime_idx_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    high_prime_idx_fill_ = t_df['wave_high_prime_idx_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
-    low_prime_idx_fill_ = t_df['wave_low_prime_idx_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
 
     valid_high_prime_idx = high_prime_idx[~np.isnan(high_prime_idx)].astype(int)  # roll_high 를 위한 prime_idx
     valid_low_prime_idx = low_prime_idx[~np.isnan(low_prime_idx)].astype(int)  # roll_low 를 위한 prime_idx
@@ -410,15 +248,14 @@ def roll_wave_hl_v3(t_df, config, roll_hl_cnt=4):
 
     roll_high_ = pd.DataFrame(np.full((len_df, roll_hl_cnt), np.nan))
     roll_low_ = pd.DataFrame(np.full((len_df, roll_hl_cnt), np.nan))
-    roll_high_prime_idx_ = pd.DataFrame(np.full((len_df, roll_hl_cnt), np.nan))
-    roll_low_prime_idx_ = pd.DataFrame(np.full((len_df, roll_hl_cnt), np.nan))
 
     roll_high_.iloc[valid_high_prime_idx[roll_hl_cnt - 1:], :] = wave_high_fill_[roll_high_idx_arr]  # 제한된 idx 를 제외한 row 에 roll_hl 입력
     roll_low_.iloc[valid_low_prime_idx[roll_hl_cnt - 1:], :] = wave_low_fill_[roll_low_idx_arr]
-    roll_high_prime_idx_.iloc[valid_high_prime_idx[roll_hl_cnt - 1:], :] = high_prime_idx_fill_[roll_high_idx_arr]  # 제한된 idx 를 제외한 row 에 roll_hl 입력
-    roll_low_prime_idx_.iloc[valid_low_prime_idx[roll_hl_cnt - 1:], :] = low_prime_idx_fill_[roll_low_idx_arr]
 
-    return roll_high_.ffill().to_numpy(), roll_low_.ffill().to_numpy(), roll_high_prime_idx_.ffill().to_numpy(), roll_low_prime_idx_.ffill().to_numpy()  # t_df 에 hl_cnt 만큼 col 만들어야해서 numpy 로 뽑음
+    # roll_high_fill_ = roll_high_.ffill().to_numpy()
+    # roll_low_fill_ = roll_low_.ffill().to_numpy()
+
+    return roll_high_.ffill().to_numpy(), roll_low_.ffill().to_numpy()  # t_df 에 hl_cnt 만큼 col 만들어야해서 numpy 로 뽑음
 
 
 def roll_wave_hl_v2(t_df, config, roll_hl_cnt=4):
@@ -534,7 +371,6 @@ def wave_loc_pct(res_df, config, itv, period):
     return res_df
 
 
-
 def wave_range_ratio(res_df, config, bb_itv, bb_period):
     wave_itv = pd.infer_freq(res_df.index)
     wave_period = config.tr_set.wave_period
@@ -556,7 +392,7 @@ def wave_range_ratio(res_df, config, bb_itv, bb_period):
 
     return res_df
 
-def enough_space(res_df, config, itv, period):
+def enough_space(res_df, itv, period):
 
   dc_upper_ = res_df['dc_upper_{}{}'.format(itv, period)].to_numpy()
   dc_base_ = res_df['dc_base_{}{}'.format(itv, period)].to_numpy()
@@ -712,854 +548,6 @@ def imb_ratio(df, itv):
   df['long_ir_{}'.format(itv)] = np.where(close > open, (close - b1_high) / candle_range, np.nan)  # close > open & close > b1_high
 
   return
-
-
-def wave_range_cci_v1(res_df, config, itv='T'):
-    if itv != 'T':
-        offset = '1h' if itv != 'D' else '9h'
-        t_df = to_htf(res_df, itv, offset=offset)
-    else:
-        t_df = res_df
-
-    wave_period = config.tr_set.wave_period
-    itv_num = to_itvnum(itv)
-    # print(itv_num)
-
-    t_df = cci_v2(t_df, wave_period)
-
-    cci_ = t_df['cci_{}{}'.format(itv, wave_period)].to_numpy()
-    b1_cci_ = t_df['cci_{}{}'.format(itv, wave_period)].shift(itv_num).to_numpy()
-
-    upper_band = 100
-    lower_band = -100
-
-    len_df = len(t_df)
-    len_df_range = np.arange(len_df).astype(int)
-
-    data_cols = ['open', 'high', 'low', 'close']
-    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
-    # b1_close = t_df.close.shift(itv_num).to_numpy()
-
-    # ============ modules ============ #
-    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
-    cu_bool = (b1_cci_ > upper_band) & (upper_band > cci_)
-    co_bool = (b1_cci_ < lower_band) & (lower_band < cci_)
-
-    cu_idx = get_index_bybool(cu_bool, len_df_range)
-    co_idx = get_index_bybool(co_bool, len_df_range)
-
-    cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v4(
-        cu_idx, co_idx, len_df, len_df_range)
-
-    # ------ get post_terms ------ #
-    high_post_terms = np.vstack((co_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
-    low_post_terms = np.vstack((cu_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
-
-    high_post_terms_cnt = high_post_terms[:, 1] - high_post_terms[:, 0]
-    low_post_terms_cnt = low_post_terms[:, 1] - low_post_terms[:, 0]
-
-    paired_post_cu_idx = high_post_terms[:, 1]
-    paired_post_co_idx = low_post_terms[:, 1]
-
-    # ------ get prime_terms ------ # # 기본은 아래 logic 으로 수행하고, update_hl 도 해당 term 구간의 hl 이 더 작거나 클경우 적용 가능할 것
-    # high_prime_terms = np.vstack((co_prime_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
-    # low_prime_terms = np.vstack((cu_prime_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
-
-    # high_prime_terms_cnt = high_prime_terms[:, 1] - high_prime_terms[:, 0]
-    # low_prime_terms_cnt = low_prime_terms[:, 1] - low_prime_terms[:, 0]
-
-    # paired_prime_cu_idx = high_prime_terms[:, 1]
-    # paired_prime_co_idx = low_prime_terms[:, 1]
-
-    # ====== get wave_hl & terms ====== #
-    wave_high_ = np.full(len_df, np.nan)
-    wave_low_ = np.full(len_df, np.nan)
-
-    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_post_terms])
-    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_post_terms])
-
-    wave_high_[paired_post_cu_idx] = wave_highs
-    wave_low_[paired_post_co_idx] = wave_lows
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    # # ------ Todo, update_hl 에 대해서, post_terms_hl 적용 ------ #
-    wave_high_terms_low_ = np.full(len_df, np.nan)
-    wave_low_terms_high_ = np.full(len_df, np.nan)
-
-    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_post_terms])  # for point rejection, Todo, min_max 설정 항상 주의
-    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_post_terms])
-
-    wave_high_terms_low_[paired_post_cu_idx] = wave_high_terms_lows
-    wave_low_terms_high_[paired_post_co_idx] = wave_low_terms_highs
-
-    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
-    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    wave_high_terms_cnt_ = np.full(len_df, np.nan)
-    wave_low_terms_cnt_ = np.full(len_df, np.nan)
-
-    wave_high_terms_cnt_[paired_post_cu_idx] = high_post_terms_cnt
-    wave_low_terms_cnt_[paired_post_co_idx] = low_post_terms_cnt
-
-    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
-    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
-
-    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
-    b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
-    b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
-    wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
-    wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
-
-    high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
-    low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
-
-    # ============ enlist to df_cols ============ #
-    t_df['wave_high_fill_{}{}'.format(itv, wave_period)] = wave_high_fill_
-    t_df['wave_low_fill_{}{}'.format(itv, wave_period)] = wave_low_fill_
-    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_high_terms_cnt_fill_
-    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_low_terms_cnt_fill_
-    t_df['wave_cu_{}{}'.format(itv, wave_period)] = cu_bool * ~update_low_cu_bool
-    t_df['wave_co_{}{}'.format(itv, wave_period)] = co_bool * ~update_high_co_bool
-    t_df['wave_cu_bool_{}{}'.format(itv, wave_period)] = cu_bool  # temporary, for plot_check
-    t_df['wave_co_bool_{}{}'.format(itv, wave_period)] = co_bool
-    t_df['wave_cu_marker_{}{}'.format(itv, wave_period)] = get_line(cu_idx, close)
-    t_df['wave_co_marker_{}{}'.format(itv, wave_period)] = get_line(co_idx, close)
-
-    # ------ for roll prev_hl ------ #
-    # high_post_idx 를 위해 co_prime_idx 입력
-    t_df['wave_high_prime_idx_{}{}'.format(itv,
-                                           wave_period)] = co_prime_idx  # co_prime_idx wave_high_prime_idx  # high 갱신을 고려해, prev_hl 는 prime_idx 기준으로 진행
-    t_df['wave_low_prime_idx_{}{}'.format(itv,
-                                          wave_period)] = cu_prime_idx  # cu_prime_idx wave_low_prime_idx  # cu_prime_idx's low 를 사용하겠다라는 의미, 즉 roll_prev 임
-
-    # ------ for first_high ------ #
-    t_df['wave_high_prime_idx_fill_{}{}'.format(itv, wave_period)] = co_prime_fill_idx  # co_prime_fill_idx high_prime_idx_fill_
-    t_df['wave_low_prime_idx_fill_{}{}'.format(itv, wave_period)] = cu_prime_fill_idx  # cu_prime_fill_idx low_prime_idx_fill_
-
-    if itv != 'T':
-        join_cols = np.arange(-17, 0, 1).astype(int)  # points & donchian_channels
-        res_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
-        try:
-            res_df = res_df.join(to_lower_tf_v3(res_df, t_df, join_cols), how='inner')
-        except Exception as e:
-            print("error in wave_range()'s join() :", e)
-
-        return res_df
-
-    else:
-        return t_df
-
-def wave_range_dcbase_v11_3(res_df, config, itv='T', over_period=2):  # v2 for period1 only
-
-    if itv != 'T':
-        offset = '1h' if itv != 'D' else '9h'
-        t_df = to_htf(res_df, itv, offset=offset)
-    else:
-        t_df = res_df
-
-    period1 = config.tr_set.wave_period
-    # itv_num = to_itvnum(itv)
-    # print(itv_num)
-
-    t_df = donchian_channel_v4(t_df, period1)
-
-    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
-    # b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
-
-    len_df = len(t_df)
-    len_df_range = np.arange(len_df).astype(int)
-    # short_open_res = np.ones(len_df)
-    # long_open_res = np.ones(len_df)
-
-    data_cols = ['open', 'high', 'low', 'close']
-    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
-    # b1_close = t_df.close.shift(itv_num).to_numpy()
-
-    over_base = close > dc_base_
-    prev_over_base = pd.Series(over_base).rolling(over_period).min().shift(1).to_numpy() == 1  # min = 1 => period's all-over, max = 0
-    prev_under_base = pd.Series(over_base).rolling(over_period).max().shift(1).to_numpy() == 0  # max = 0 => period's all-under,
-
-    # ============ modules ============ #
-    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
-    cu_bool = prev_over_base & ~over_base
-    co_bool = prev_under_base & over_base
-
-    cu_idx = get_index_bybool(cu_bool, len_df_range)
-    co_idx = get_index_bybool(co_bool, len_df_range)
-
-    cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v4(
-        cu_idx, co_idx, len_df, len_df_range)
-
-    # ------ get post_terms ------ #
-    high_post_terms = np.vstack((co_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
-    low_post_terms = np.vstack((cu_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
-
-    high_post_terms_cnt = high_post_terms[:, 1] - high_post_terms[:, 0]
-    low_post_terms_cnt = low_post_terms[:, 1] - low_post_terms[:, 0]
-
-    paired_post_cu_idx = high_post_terms[:, 1]
-    paired_post_co_idx = low_post_terms[:, 1]
-
-    # ------ get prime_terms ------ # # 기본은 아래 logic 으로 수행하고, update_hl 도 해당 term 구간의 hl 이 더 작거나 클경우 적용 가능할 것
-    # high_prime_terms = np.vstack((co_prime_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
-    # low_prime_terms = np.vstack((cu_prime_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
-
-    # high_prime_terms_cnt = high_prime_terms[:, 1] - high_prime_terms[:, 0]
-    # low_prime_terms_cnt = low_prime_terms[:, 1] - low_prime_terms[:, 0]
-
-    # paired_prime_cu_idx = high_prime_terms[:, 1]
-    # paired_prime_co_idx = low_prime_terms[:, 1]
-
-    # ====== get wave_hl & terms ====== #
-    wave_high_ = np.full(len_df, np.nan)
-    wave_low_ = np.full(len_df, np.nan)
-
-    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_post_terms])
-    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_post_terms])
-
-    wave_high_[paired_post_cu_idx] = wave_highs
-    wave_low_[paired_post_co_idx] = wave_lows
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    # # ------ Todo, update_hl 에 대해서, post_terms_hl 적용 ------ #
-    wave_high_terms_low_ = np.full(len_df, np.nan)
-    wave_low_terms_high_ = np.full(len_df, np.nan)
-
-    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_post_terms])  # for point rejection, Todo, min_max 설정 항상 주의
-    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_post_terms])
-
-    wave_high_terms_low_[paired_post_cu_idx] = wave_high_terms_lows
-    wave_low_terms_high_[paired_post_co_idx] = wave_low_terms_highs
-
-    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
-    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    wave_high_terms_cnt_ = np.full(len_df, np.nan)
-    wave_low_terms_cnt_ = np.full(len_df, np.nan)
-
-    wave_high_terms_cnt_[paired_post_cu_idx] = high_post_terms_cnt
-    wave_low_terms_cnt_[paired_post_co_idx] = low_post_terms_cnt
-
-    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
-    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
-
-    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
-    # b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
-    # b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
-    # wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
-    # wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
-    #
-    # high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
-    # low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
-
-    # ============ enlist to df_cols ============ #
-    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
-    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
-    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
-    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
-    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * ~update_low_cu_bool
-    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * ~update_high_co_bool
-    t_df['wave_cu_bool_{}{}'.format(itv, period1)] = cu_bool  # temporary, for plot_check
-    t_df['wave_co_bool_{}{}'.format(itv, period1)] = co_bool
-    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
-    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
-
-    # ------ for roll prev_hl ------ #
-    # high_post_idx 를 위해 co_prime_idx 입력
-    t_df['wave_high_prime_idx_{}{}'.format(itv,
-                                           period1)] = co_prime_idx  # co_prime_idx wave_high_prime_idx  # high 갱신을 고려해, prev_hl 는 prime_idx 기준으로 진행
-    t_df['wave_low_prime_idx_{}{}'.format(itv,
-                                          period1)] = cu_prime_idx  # cu_prime_idx wave_low_prime_idx  # cu_prime_idx's low 를 사용하겠다라는 의미, 즉 roll_prev 임
-
-    # ------ for first_high ------ #
-    t_df['wave_high_prime_idx_fill_{}{}'.format(itv, period1)] = co_prime_fill_idx  # co_prime_fill_idx high_prime_idx_fill_
-    t_df['wave_low_prime_idx_fill_{}{}'.format(itv, period1)] = cu_prime_fill_idx  # cu_prime_fill_idx low_prime_idx_fill_
-
-    if itv != 'T':
-        join_cols = np.arange(-17, 0, 1).astype(int)  # points & donchian_channels
-        res_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
-        try:
-            res_df = res_df.join(to_lower_tf_v3(res_df, t_df, join_cols), how='inner')
-        except Exception as e:
-            print("error in wave_range()'s join() :", e)
-
-        return res_df
-
-    else:
-        return t_df
-
-def wave_range_v11_2(res_df, config, itv='T'):  # v2 for period1 only
-
-    if itv != 'T':
-        offset = '1h' if itv != 'D' else '9h'
-        t_df = to_htf(res_df, itv, offset=offset)
-    else:
-        t_df = res_df
-
-    period1 = config.tr_set.wave_period
-    itv_num = to_itvnum(itv)
-    # print(itv_num)
-
-    t_df = donchian_channel_v4(t_df, period1)
-
-    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
-    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
-
-    len_df = len(t_df)
-    len_df_range = np.arange(len_df).astype(int)
-    # short_open_res = np.ones(len_df)
-    # long_open_res = np.ones(len_df)
-
-    data_cols = ['open', 'high', 'low', 'close']
-    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
-    b1_close = t_df.close.shift(itv_num).to_numpy()
-
-    # ============ modules ============ #
-    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
-    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
-    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
-    cu_idx = get_index_bybool(cu_bool, len_df_range)
-    co_idx = get_index_bybool(co_bool, len_df_range)
-
-    cu_fill_idx = fill_arr(cu_idx)
-    co_fill_idx = fill_arr(co_idx)
-
-    # ------ get co, cu terms ------ #
-    high_bool = cu_fill_idx < co_fill_idx
-    low_bool = co_fill_idx < cu_fill_idx
-
-    high_terms_vec = get_index_bybool(high_bool, len_df_range)
-    low_terms_vec = get_index_bybool(low_bool, len_df_range)  # -> low_terms
-
-    high_terms_list = using_clump(high_terms_vec)
-    low_terms_list = using_clump(low_terms_vec)
-
-    high_terms = np.array([[terms.min(), terms.max() + 1] for terms in high_terms_list])
-    low_terms = np.array([[terms.min(), terms.max() + 1] for terms in low_terms_list])
-
-    high_terms_cnt = high_terms[:, 1] - high_terms[:, 0]
-    low_terms_cnt = low_terms[:, 1] - low_terms[:, 0]
-
-    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])
-    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
-
-    # ------ get valid_idx range (inner len_df) ------ #
-    paired_cu_idx = high_terms[:, 1]
-    paired_co_idx = low_terms[:, 1]
-
-    valid_cu_bool = paired_cu_idx < len_df
-    valid_co_bool = paired_co_idx < len_df
-
-    paired_cu_valid_idx = paired_cu_idx[valid_cu_bool]
-    paired_co_valid_idx = paired_co_idx[valid_co_bool]
-
-    # ------ get wave_hl & terms ------ #
-    wave_high_ = np.full(len_df, np.nan)
-    wave_low_ = np.full(len_df, np.nan)
-
-    wave_high_[paired_cu_valid_idx] = wave_highs[valid_cu_bool]
-    wave_low_[paired_co_valid_idx] = wave_lows[valid_co_bool]
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    wave_high_terms_cnt_ = np.full(len_df, np.nan)
-    wave_low_terms_cnt_ = np.full(len_df, np.nan)
-
-    wave_high_terms_cnt_[paired_cu_valid_idx] = high_terms_cnt[valid_cu_bool]
-    wave_low_terms_cnt_[paired_co_valid_idx] = low_terms_cnt[valid_co_bool]
-
-    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
-    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
-
-    # ------ check update high & low (occurs by point missing) ------ #
-    co_prime_idx = np.full(len_df, np.nan)
-    co_prime_idx[paired_co_valid_idx] = paired_co_valid_idx
-    co_prime_idx_fill_ = fill_arr(co_prime_idx)
-    # valid_idx = co_idx > co_prime_idx_fill_
-    valid_idx = cu_idx > co_prime_idx_fill_
-
-    update_low = np.full(len_df, np.nan)
-    # update_low[valid_idx] = [low[iin:iout + 1].min() for iin, iout in zip(cu_prime_idx_fill_[valid_idx].astype(int), cu_idx[valid_idx].astype(int))]  # include open low
-    # 1. 잘 생각해보면, cu_idx 에는 co_prime_idx_fill_ 을 사용하는게 맞음
-    #   a. cu_idx 에 달려있는 low 가 co_prime_idx_fill_ 기준이니까
-    update_low[valid_idx] = [low[iin:iout + 1].min() for iin, iout in
-                             zip(co_prime_idx_fill_[valid_idx].astype(int), cu_idx[valid_idx].astype(int))]  # high_terms' update_low
-
-    cu_prime_idx = np.full(len_df, np.nan)
-    cu_prime_idx[paired_cu_valid_idx] = paired_cu_valid_idx
-    cu_prime_idx_fill_ = fill_arr(cu_prime_idx)
-    valid_idx = co_idx > cu_prime_idx_fill_
-
-    update_high = np.full(len_df, np.nan)
-    update_high[valid_idx] = [high[iin:iout + 1].max() for iin, iout in zip(cu_prime_idx_fill_[valid_idx].astype(int), co_idx[valid_idx].astype(int))]
-
-    # ============ enlist to df_cols ============ #
-    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
-    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
-    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
-    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
-    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * ~(update_low < wave_low_fill_)  # point_missing 으로 인한 low 갱신 회피
-    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * ~(update_high > wave_high_fill_)
-    t_df['wave_cu_bool_{}{}'.format(itv, period1)] = cu_bool  # temporary, for plot_check
-    t_df['wave_co_bool_{}{}'.format(itv, period1)] = co_bool
-    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
-    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
-
-    # ------ for roll prev_hl ------ #
-    t_df['wave_high_prime_idx_{}{}'.format(itv, period1)] = cu_prime_idx
-    t_df['wave_low_prime_idx_{}{}'.format(itv, period1)] = co_prime_idx
-
-    # ------ for first_high ------ #
-    t_df['wave_high_prime_idx_fill_{}{}'.format(itv, period1)] = cu_prime_idx_fill_
-    t_df['wave_low_prime_idx_fill_{}{}'.format(itv, period1)] = co_prime_idx_fill_
-
-    if itv != 'T':
-        join_cols = np.arange(-17, 0, 1).astype(int)  # points & donchian_channels
-        res_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
-        try:
-            res_df = res_df.join(to_lower_tf_v3(res_df, t_df, join_cols), how='inner')
-        except Exception as e:
-            print("error in wave_range()'s join() :", e)
-
-        return res_df
-
-    else:
-        return t_df
-
-def wave_range_v15(res_df, config, itv='T', term_thresh1=1, term_thresh2=3):  # v2 for period1 only
-
-    # itv = pd.infer_freq(t_df.index)
-    if itv != 'T':
-        offset = '1h' if itv != 'D' else '9h'
-        t_df = to_htf(res_df, itv, offset=offset)
-    else:
-        t_df = res_df
-
-    period1 = config.tr_set.wave_period
-    # print(period1)
-
-    itv_num = to_itvnum(itv)
-    # print(itv_num)
-
-    t_df = donchian_channel_v4(t_df, period1)
-
-    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
-    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
-
-    len_df = len(t_df)
-    len_df_range = np.arange(len_df).astype(int)
-    # short_open_res = np.ones(len_df)
-    # long_open_res = np.ones(len_df)
-
-    data_cols = ['open', 'high', 'low', 'close']
-    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
-    b1_close = t_df.close.shift(itv_num).to_numpy()
-
-    # ============ modules ============ #
-    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
-    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
-    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
-
-    cu_idx = get_index_bybool(cu_bool, len_df_range)  # for marking
-    co_idx = get_index_bybool(co_bool, len_df_range)
-
-    # high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
-    # high_terms, low_terms, high_terms_cnt, low_terms_cnt, cu_idx_term, co_idx_term = get_terms_info_v2(cu_bool, co_bool, len_df_range)
-    high_terms, low_terms, high_terms_cnt, low_terms_cnt, cu_idx_term, co_idx_term = get_terms_info_v3(cu_bool, co_bool, len_df, len_df_range)
-
-    paired_cu_idx1 = high_terms[:, 1]
-    paired_co_idx1 = low_terms[:, 1]
-
-    # ------ 생략 이전 terms' hl ------ #
-    wave_high_terms_low_ = np.full(len_df, np.nan)
-    wave_low_terms_high_ = np.full(len_df, np.nan)
-
-    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])
-    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
-
-    wave_high_terms_low_[paired_cu_idx1] = wave_high_terms_lows
-    wave_low_terms_high_[paired_co_idx1] = wave_low_terms_highs
-
-    # ------ 생략된 cu, co 에 대한 2nd pairing 진행 ------ #
-    # cu_bool[high_terms[:, 1][high_terms_cnt <= term_thresh]] = False
-    # co_bool[low_terms[:, 1][low_terms_cnt <= term_thresh]] = False
-    cu_bool[high_terms[:, 1][(high_terms_cnt <= term_thresh1) & (cu_idx_term <= term_thresh2)]] = False
-    co_bool[low_terms[:, 1][(low_terms_cnt <= term_thresh1) & (co_idx_term <= term_thresh2)]] = False
-
-    # high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
-    # high_terms, low_terms, high_terms_cnt, low_terms_cnt, _, _ = get_terms_info_v2(cu_bool, co_bool, len_df_range)
-    high_post_terms, low_post_terms, high_prime_terms_cnt, low_prime_terms_cnt, high_prime_terms, low_prime_terms, _, _ = get_terms_info_v3(cu_bool,
-                                                                                                                                            co_bool,
-                                                                                                                                            len_df,
-                                                                                                                                            len_df_range,
-                                                                                                                                            True)
-
-    paired_cu_idx2 = high_prime_terms[:, 1]
-    paired_co_idx2 = low_prime_terms[:, 1]
-
-    # ====== get wave_hl & terms ====== #
-    wave_high_ = np.full(len_df, np.nan)
-    wave_low_ = np.full(len_df, np.nan)
-
-    wave_prime_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_prime_terms])
-    wave_prime_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_prime_terms])
-
-    wave_high_[paired_cu_idx2] = wave_prime_highs
-    wave_low_[paired_co_idx2] = wave_prime_lows
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    # ------ Todo, update_hl 에 대해서, post_terms_hl 적용 ------ #
-    wave_post_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])  # 생략전 post_terms_hl 사용
-    wave_post_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
-
-    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
-    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
-
-    update_paired_cu_bool = (cu_bool * update_low_cu_bool)[paired_cu_idx1]
-    update_paired_cu_idx = paired_cu_idx1[update_paired_cu_bool]
-    wave_high_[update_paired_cu_idx] = wave_post_highs[update_paired_cu_bool]
-
-    update_paired_co_bool = (co_bool * update_high_co_bool)[paired_co_idx1]
-    update_paired_co_idx = paired_co_idx1[update_paired_co_bool]
-    wave_low_[update_paired_co_idx] = wave_post_lows[update_paired_co_bool]
-
-    # wave_high_fill2_ = fill_arr(wave_high_)
-    # wave_low_fill2_ = fill_arr(wave_low_)
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    # wave_high_terms_low_ = np.full(len_df, np.nan)
-    # wave_low_terms_high_ = np.full(len_df, np.nan)
-
-    # wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])  # for point rejection, Todo, min_max 설정 항상 주의
-    # wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
-
-    # wave_high_terms_low_[paired_cu_idx] = wave_high_terms_lows
-    # wave_low_terms_high_[paired_co_idx] = wave_low_terms_highs
-
-    wave_high_terms_cnt_ = np.full(len_df, np.nan)
-    wave_low_terms_cnt_ = np.full(len_df, np.nan)
-
-    wave_high_terms_cnt_[paired_cu_idx2] = high_prime_terms_cnt
-    wave_low_terms_cnt_[paired_co_idx2] = low_prime_terms_cnt
-
-    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
-    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
-
-    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
-    b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
-    b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
-    wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
-    wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
-
-    high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
-    low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
-
-    # ============ enlist to df_cols ============ #
-    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
-    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
-    # t_df['wave_high_fill2_{}{}'.format(itv, period1)] = wave_high_fill2_
-    # t_df['wave_low_fill2_{}{}'.format(itv, period1)] = wave_low_fill2_
-
-    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
-    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
-    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * ~update_low_cu_bool
-    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * ~update_high_co_bool
-    t_df['wave_cu_bool_{}{}'.format(itv, period1)] = cu_bool  # temporary, for plot_check
-    t_df['wave_co_bool_{}{}'.format(itv, period1)] = co_bool
-    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
-    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
-
-    # ------ for roll prev_hl ------ #
-    t_df['wave_high_prime_idx_{}{}'.format(itv, period1)] = wave_high_prime_idx  # cu
-    t_df['wave_low_prime_idx_{}{}'.format(itv, period1)] = wave_low_prime_idx
-
-    # ------ for first_high ------ #
-    t_df['wave_high_prime_idx_fill_{}{}'.format(itv, period1)] = high_prime_idx_fill_
-    t_df['wave_low_prime_idx_fill_{}{}'.format(itv, period1)] = low_prime_idx_fill_
-
-    if itv != 'T':
-        join_cols = np.arange(-17, 0, 1).astype(int)  # points & donchian_channels
-        res_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
-        try:
-            res_df = res_df.join(to_lower_tf_v3(res_df, t_df, join_cols), how='inner')
-        except Exception as e:
-            print("error in wave_range()'s join() :", e)
-
-        return res_df
-
-    else:
-        return t_df
-
-def wave_range_v13(t_df, config, ltf_df=None, term_thresh=2):  # v2 for period1 only
-
-    itv = pd.infer_freq(t_df.index)
-    period1 = config.tr_set.wave_period
-    # print(period1)
-
-    itv_num = to_itvnum(itv)
-    # print(itv_num)
-
-    t_df = donchian_channel_v4(t_df, period1)
-
-    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
-    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
-
-    len_df = len(t_df)
-    len_df_range = np.arange(len_df).astype(int)
-    # short_open_res = np.ones(len_df)
-    # long_open_res = np.ones(len_df)
-
-    data_cols = ['open', 'high', 'low', 'close']
-    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
-    b1_close = t_df.close.shift(itv_num).to_numpy()
-
-    # ============ modules ============ #
-    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
-    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
-    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
-
-    cu_idx = get_index_bybool(cu_bool, len_df_range)  # for marking
-    co_idx = get_index_bybool(co_bool, len_df_range)
-
-    high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
-
-    wave_high_terms_low_ = np.full(len_df, np.nan)
-    wave_low_terms_high_ = np.full(len_df, np.nan)
-
-    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])  # 생략 이전 terms' hl
-    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
-
-    wave_high_terms_low_[high_terms[:, 1]] = wave_high_terms_lows
-    wave_low_terms_high_[low_terms[:, 1]] = wave_low_terms_highs
-
-    # ------ 생략된 cu, co 에 대한 2nd pairing 진행 ------ #
-    cu_bool[high_terms[:, 1][high_terms_cnt <= term_thresh]] = False
-    co_bool[low_terms[:, 1][low_terms_cnt <= term_thresh]] = False
-    high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
-
-    paired_cu_idx = high_terms[:, 1]
-    paired_co_idx = low_terms[:, 1]
-
-    # ------ get wave_hl & terms ------ #
-    wave_high_ = np.full(len_df, np.nan)
-    wave_low_ = np.full(len_df, np.nan)
-
-    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])
-    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
-
-    wave_high_[paired_cu_idx] = wave_highs
-    wave_low_[paired_co_idx] = wave_lows
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    # wave_high_terms_low_ = np.full(len_df, np.nan)
-    # wave_low_terms_high_ = np.full(len_df, np.nan)
-
-    # wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])  # for point rejection, Todo, min_max 설정 항상 주의
-    # wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
-
-    # wave_high_terms_low_[paired_cu_idx] = wave_high_terms_lows
-    # wave_low_terms_high_[paired_co_idx] = wave_low_terms_highs
-
-    wave_high_terms_cnt_ = np.full(len_df, np.nan)
-    wave_low_terms_cnt_ = np.full(len_df, np.nan)
-
-    wave_high_terms_cnt_[paired_cu_idx] = high_terms_cnt
-    wave_low_terms_cnt_[paired_co_idx] = low_terms_cnt
-
-    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
-    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
-
-    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
-    b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
-    b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
-    wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
-    wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
-
-    cu_prime_idx = wave_high_prime_idx
-    cu_prime_idx_fill_ = fill_arr(cu_prime_idx)
-
-    co_prime_idx = wave_low_prime_idx
-    co_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
-
-    # ============ enlist to df_cols ============ #
-    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
-    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
-
-    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
-    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
-    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * (wave_high_terms_low_ >= wave_low_fill_)  # co ~ cu’s low 가 wave_low 갱신할 경우 point 에서 제외
-    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * (wave_low_terms_high_ <= wave_high_fill_)
-    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
-    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
-
-    # ------ for roll prev_hl ------ #
-    t_df['wave_cu_prime_idx_{}{}'.format(itv, period1)] = cu_prime_idx
-    t_df['wave_co_prime_idx_{}{}'.format(itv, period1)] = co_prime_idx
-
-    # ------ for first_high ------ #
-    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, period1)] = cu_prime_idx_fill_
-    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, period1)] = co_prime_idx_fill_
-
-    if itv != 'T':
-        assert ltf_df is not None, "assert ltf_df is not None"
-        join_cols = np.arange(-15, 0, 1).astype(int)  # points & donchian_channels
-        ltf_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
-        try:
-            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, t_df, join_cols), how='inner')
-        except Exception as e:
-            print("error in wave_range()'s join() :", e)
-    else:
-        ltf_df = t_df
-
-    return ltf_df
-
-def wave_range_v11(t_df, config, ltf_df=None):  # v2 for period1 only
-
-    itv = pd.infer_freq(t_df.index)
-    period1 = config.tr_set.wave_period
-
-    itv_num = to_itvnum(itv)
-    # print(itv_num)
-
-    t_df = donchian_channel_v4(t_df, period1)
-
-    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
-    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
-
-    len_df = len(t_df)
-    len_df_range = np.arange(len_df).astype(int)
-    # short_open_res = np.ones(len_df)
-    # long_open_res = np.ones(len_df)
-
-    data_cols = ['open', 'high', 'low', 'close']
-    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
-    b1_close = t_df.close.shift(itv_num).to_numpy()
-
-    # ============ modules ============ #
-    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
-    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
-    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
-    cu_idx = get_index_bybool(cu_bool, len_df_range)
-    co_idx = get_index_bybool(co_bool, len_df_range)
-
-    cu_fill_idx = fill_arr(cu_idx)
-    co_fill_idx = fill_arr(co_idx)
-
-    # ------ get co, cu terms ------ #
-    high_bool = cu_fill_idx < co_fill_idx
-    low_bool = co_fill_idx < cu_fill_idx
-
-    high_terms_vec = get_index_bybool(high_bool, len_df_range)
-    low_terms_vec = get_index_bybool(low_bool, len_df_range)  # -> low_terms
-
-    high_terms_list = using_clump(high_terms_vec)
-    low_terms_list = using_clump(low_terms_vec)
-
-    high_terms = np.array([[terms.min(), terms.max() + 1] for terms in high_terms_list])
-    low_terms = np.array([[terms.min(), terms.max() + 1] for terms in low_terms_list])
-
-    high_terms_cnt = high_terms[:, 1] - high_terms[:, 0]
-    low_terms_cnt = low_terms[:, 1] - low_terms[:, 0]
-
-    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])
-    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
-
-    # ------ get valid_idx range (inner len_df) ------ #
-    paired_cu_idx = high_terms[:, 1]
-    paired_co_idx = low_terms[:, 1]
-
-    valid_cu_bool = paired_cu_idx < len_df
-    valid_co_bool = paired_co_idx < len_df
-
-    paired_cu_valid_idx = paired_cu_idx[valid_cu_bool]
-    paired_co_valid_idx = paired_co_idx[valid_co_bool]
-
-    # ------ get wave_hl & terms ------ #
-    wave_high_ = np.full(len_df, np.nan)
-    wave_low_ = np.full(len_df, np.nan)
-
-    wave_high_[paired_cu_valid_idx] = wave_highs[valid_cu_bool]
-    wave_low_[paired_co_valid_idx] = wave_lows[valid_co_bool]
-
-    wave_high_fill_ = fill_arr(wave_high_)
-    wave_low_fill_ = fill_arr(wave_low_)
-
-    wave_high_terms_cnt_ = np.full(len_df, np.nan)
-    wave_low_terms_cnt_ = np.full(len_df, np.nan)
-
-    wave_high_terms_cnt_[paired_cu_valid_idx] = high_terms_cnt[valid_cu_bool]
-    wave_low_terms_cnt_[paired_co_valid_idx] = low_terms_cnt[valid_co_bool]
-
-    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
-    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
-
-    # ------ check update high & low (occurs by point missing) ------ #
-    co_prime_idx = np.full(len_df, np.nan)
-    co_prime_idx[paired_co_valid_idx] = paired_co_valid_idx
-    co_prime_idx_fill_ = fill_arr(co_prime_idx)
-    # valid_idx = co_idx > co_prime_idx_fill_
-    valid_idx = cu_idx > co_prime_idx_fill_
-
-    update_low = np.full(len_df, np.nan)
-    # update_low[valid_idx] = [low[iin:iout + 1].min() for iin, iout in zip(cu_prime_idx_fill_[valid_idx].astype(int), cu_idx[valid_idx].astype(int))]  # include open low
-    # 1. 잘 생각해보면, cu_idx 에는 co_prime_idx_fill_ 을 사용하는게 맞음
-    #   a. cu_idx 에 달려있는 low 가 co_prime_idx_fill_ 기준이니까
-    update_low[valid_idx] = [low[iin:iout + 1].min() for iin, iout in zip(co_prime_idx_fill_[valid_idx].astype(int), cu_idx[valid_idx].astype(int))]  # high_terms' update_low
-
-    cu_prime_idx = np.full(len_df, np.nan)
-    cu_prime_idx[paired_cu_valid_idx] = paired_cu_valid_idx
-    cu_prime_idx_fill_ = fill_arr(cu_prime_idx)
-    valid_idx = co_idx > cu_prime_idx_fill_
-
-    update_high = np.full(len_df, np.nan)
-    update_high[valid_idx] = [high[iin:iout + 1].max() for iin, iout in zip(cu_prime_idx_fill_[valid_idx].astype(int), co_idx[valid_idx].astype(int))]
-
-    # ============ enlist to df_cols ============ #
-    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
-    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
-    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
-    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
-    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * ~(update_low < wave_low_fill_)  # point_missing 으로 인한 low 갱신 회피
-    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * ~(update_high > wave_high_fill_)
-    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
-    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
-
-    # ------ for roll prev_hl ------ #
-    t_df['wave_cu_prime_idx_{}{}'.format(itv, period1)] = cu_prime_idx
-    t_df['wave_co_prime_idx_{}{}'.format(itv, period1)] = co_prime_idx
-
-    # ------ for first_high ------ #
-    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, period1)] = cu_prime_idx_fill_
-    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, period1)] = co_prime_idx_fill_
-
-    if itv != 'T':
-        assert ltf_df is not None, "assert ltf_df is not None"
-        join_cols = np.arange(-17, 0, 1).astype(int)  # points & donchian_channels
-        ltf_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
-        try:
-            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, t_df, join_cols), how='inner')
-        except Exception as e:
-            print("error in wave_range()'s join() :", e)
-    else:
-        ltf_df = t_df
-
-    return ltf_df
 
 def norm_data(res_df, target_data, target_col, minmax_col=None, norm_period=100):
     if minmax_col is None:
@@ -2094,7 +1082,7 @@ def sd_dc(df, period1, period2, ltf_df=None):
 
 def get_line(touch_idx, rtc_):
   touch_idx_copy = touch_idx.copy()
-  # touch_line = np.full_like(rtc_, np.nan)
+  touch_line = np.full_like(rtc_, np.nan)
 
   nan_idx = np.isnan(touch_idx_copy)
   touch_idx_copy[nan_idx] = 0   # for indexing array
@@ -2125,6 +1113,640 @@ def fill_arr(arr_, mode='ffill'):
         return pd.Series(arr_).ffill().to_numpy()
     else:
         return pd.Series(arr_).bfill().to_numpy()
+
+
+def wave_range_v15(t_df, config, ltf_df=None, term_thresh1=1, term_thresh2=3):  # v2 for period1 only
+
+    itv = pd.infer_freq(t_df.index)
+    period1 = config.tr_set.wave_period
+    # print(period1)
+
+    itv_num = to_itvnum(itv)
+    # print(itv_num)
+
+    t_df = donchian_channel_v4(t_df, period1)
+
+    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
+    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
+
+    len_df = len(t_df)
+    len_df_range = np.arange(len_df).astype(int)
+    # short_open_res = np.ones(len_df)
+    # long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low', 'close']
+    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
+    b1_close = t_df.close.shift(itv_num).to_numpy()
+
+    # ============ modules ============ #
+    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
+    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
+    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
+
+    cu_idx = get_index_bybool(cu_bool, len_df_range)  # for marking
+    co_idx = get_index_bybool(co_bool, len_df_range)
+
+    # high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
+    # high_terms, low_terms, high_terms_cnt, low_terms_cnt, cu_idx_term, co_idx_term = get_terms_info_v2(cu_bool, co_bool, len_df_range)
+    high_terms, low_terms, high_terms_cnt, low_terms_cnt, cu_idx_term, co_idx_term = get_terms_info_v3(cu_bool, co_bool, len_df_range)
+
+    paired_cu_idx1 = high_terms[:, 1]
+    paired_co_idx1 = low_terms[:, 1]
+
+    # ------ 생략 이전 terms' hl ------ #
+    wave_high_terms_low_ = np.full(len_df, np.nan)
+    wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])
+    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
+
+    wave_high_terms_low_[paired_cu_idx1] = wave_high_terms_lows
+    wave_low_terms_high_[paired_co_idx1] = wave_low_terms_highs
+
+    # ------ 생략된 cu, co 에 대한 2nd pairing 진행 ------ #
+    # cu_bool[high_terms[:, 1][high_terms_cnt <= term_thresh]] = False
+    # co_bool[low_terms[:, 1][low_terms_cnt <= term_thresh]] = False
+    cu_bool[high_terms[:, 1][(high_terms_cnt <= term_thresh1) & (cu_idx_term <= term_thresh2)]] = False
+    co_bool[low_terms[:, 1][(low_terms_cnt <= term_thresh1) & (co_idx_term <= term_thresh2)]] = False
+
+    # high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
+    # high_terms, low_terms, high_terms_cnt, low_terms_cnt, _, _ = get_terms_info_v2(cu_bool, co_bool, len_df_range)
+    high_post_terms, low_post_terms, high_post_terms_cnt, low_post_terms_cnt, high_prime_terms, low_prime_terms, _, _ = get_terms_info_v3(cu_bool,
+                                                                                                                                          co_bool,
+                                                                                                                                          len_df_range,
+                                                                                                                                          True)
+
+    paired_cu_idx2 = high_prime_terms[:, 1]
+    paired_co_idx2 = low_prime_terms[:, 1]
+
+    # ====== get wave_hl & terms ====== #
+    wave_high_ = np.full(len_df, np.nan)
+    wave_low_ = np.full(len_df, np.nan)
+
+    wave_prime_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_prime_terms])
+    wave_prime_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_prime_terms])
+
+    wave_high_[paired_cu_idx2] = wave_prime_highs
+    wave_low_[paired_co_idx2] = wave_prime_lows
+
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    # ------ Todo, update_hl 에 대해서, post_terms_hl 적용 ------ #
+    wave_post_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])  # 생략전 post_terms_hl 사용
+    wave_post_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
+
+    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
+    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
+
+    update_paired_cu_bool = (cu_bool * update_low_cu_bool)[paired_cu_idx1]
+    update_paired_cu_idx = paired_cu_idx1[update_paired_cu_bool]
+    wave_high_[update_paired_cu_idx] = wave_post_highs[update_paired_cu_bool]
+
+    update_paired_co_bool = (co_bool * update_high_co_bool)[paired_co_idx1]
+    update_paired_co_idx = paired_co_idx1[update_paired_co_bool]
+    wave_low_[update_paired_co_idx] = wave_post_lows[update_paired_co_bool]
+
+    # wave_high_fill2_ = fill_arr(wave_high_)
+    # wave_low_fill2_ = fill_arr(wave_low_)
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    # wave_high_terms_low_ = np.full(len_df, np.nan)
+    # wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    # wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])  # for point rejection, Todo, min_max 설정 항상 주의
+    # wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
+
+    # wave_high_terms_low_[paired_cu_idx] = wave_high_terms_lows
+    # wave_low_terms_high_[paired_co_idx] = wave_low_terms_highs
+
+    wave_high_terms_cnt_ = np.full(len_df, np.nan)
+    wave_low_terms_cnt_ = np.full(len_df, np.nan)
+
+    wave_high_terms_cnt_[paired_cu_idx2] = high_post_terms_cnt
+    wave_low_terms_cnt_[paired_co_idx2] = low_post_terms_cnt
+
+    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
+    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
+
+    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
+    b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
+    b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
+    wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
+    wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
+
+    high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
+    low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
+
+    # ============ enlist to df_cols ============ #
+    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
+    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
+    # t_df['wave_high_fill2_{}{}'.format(itv, period1)] = wave_high_fill2_
+    # t_df['wave_low_fill2_{}{}'.format(itv, period1)] = wave_low_fill2_
+
+    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
+    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
+    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * ~update_low_cu_bool
+    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * ~update_high_co_bool
+    t_df['wave_cu_bool_{}{}'.format(itv, period1)] = cu_bool  # temporary, for plot_check
+    t_df['wave_co_bool_{}{}'.format(itv, period1)] = co_bool
+    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
+    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
+
+    # ------ for roll prev_hl ------ #
+    t_df['wave_high_prime_idx_{}{}'.format(itv, period1)] = wave_high_prime_idx  # cu
+    t_df['wave_low_prime_idx_{}{}'.format(itv, period1)] = wave_low_prime_idx
+
+    # ------ for first_high ------ #
+    t_df['wave_high_prime_idx_fill_{}{}'.format(itv, period1)] = high_prime_idx_fill_
+    t_df['wave_low_prime_idx_fill_{}{}'.format(itv, period1)] = low_prime_idx_fill_
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-15, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, t_df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range()'s join() :", e)
+    else:
+        ltf_df = t_df
+
+    return ltf_df
+
+def wave_range_v13(t_df, config, ltf_df=None, term_thresh=2):  # v2 for period1 only
+
+    itv = pd.infer_freq(t_df.index)
+    period1 = config.tr_set.wave_period
+    # print(period1)
+
+    itv_num = to_itvnum(itv)
+    # print(itv_num)
+
+    t_df = donchian_channel_v4(t_df, period1)
+
+    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
+    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
+
+    len_df = len(t_df)
+    len_df_range = np.arange(len_df).astype(int)
+    # short_open_res = np.ones(len_df)
+    # long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low', 'close']
+    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
+    b1_close = t_df.close.shift(itv_num).to_numpy()
+
+    # ============ modules ============ #
+    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
+    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
+    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
+
+    cu_idx = get_index_bybool(cu_bool, len_df_range)  # for marking
+    co_idx = get_index_bybool(co_bool, len_df_range)
+
+    high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
+
+    wave_high_terms_low_ = np.full(len_df, np.nan)
+    wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])  # 생략 이전 terms' hl
+    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
+
+    wave_high_terms_low_[high_terms[:, 1]] = wave_high_terms_lows
+    wave_low_terms_high_[low_terms[:, 1]] = wave_low_terms_highs
+
+    # ------ 생략된 cu, co 에 대한 2nd pairing 진행 ------ #
+    cu_bool[high_terms[:, 1][high_terms_cnt <= term_thresh]] = False
+    co_bool[low_terms[:, 1][low_terms_cnt <= term_thresh]] = False
+    high_terms, low_terms, high_terms_cnt, low_terms_cnt = get_terms_info(cu_bool, co_bool, len_df_range)
+
+    paired_cu_idx = high_terms[:, 1]
+    paired_co_idx = low_terms[:, 1]
+
+    # ------ get wave_hl & terms ------ #
+    wave_high_ = np.full(len_df, np.nan)
+    wave_low_ = np.full(len_df, np.nan)
+
+    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])
+    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
+
+    wave_high_[paired_cu_idx] = wave_highs
+    wave_low_[paired_co_idx] = wave_lows
+
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    # wave_high_terms_low_ = np.full(len_df, np.nan)
+    # wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    # wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_terms])  # for point rejection, Todo, min_max 설정 항상 주의
+    # wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_terms])
+
+    # wave_high_terms_low_[paired_cu_idx] = wave_high_terms_lows
+    # wave_low_terms_high_[paired_co_idx] = wave_low_terms_highs
+
+    wave_high_terms_cnt_ = np.full(len_df, np.nan)
+    wave_low_terms_cnt_ = np.full(len_df, np.nan)
+
+    wave_high_terms_cnt_[paired_cu_idx] = high_terms_cnt
+    wave_low_terms_cnt_[paired_co_idx] = low_terms_cnt
+
+    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
+    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
+
+    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
+    b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
+    b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
+    wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
+    wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
+
+    cu_prime_idx = wave_high_prime_idx
+    cu_prime_idx_fill_ = fill_arr(cu_prime_idx)
+
+    co_prime_idx = wave_low_prime_idx
+    co_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
+
+    # ============ enlist to df_cols ============ #
+    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
+    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
+
+    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
+    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
+    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * (wave_high_terms_low_ >= wave_low_fill_)  # co ~ cu’s low 가 wave_low 갱신할 경우 point 에서 제외
+    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * (wave_low_terms_high_ <= wave_high_fill_)
+    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
+    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
+
+    # ------ for roll prev_hl ------ #
+    t_df['wave_cu_prime_idx_{}{}'.format(itv, period1)] = cu_prime_idx
+    t_df['wave_co_prime_idx_{}{}'.format(itv, period1)] = co_prime_idx
+
+    # ------ for first_high ------ #
+    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, period1)] = cu_prime_idx_fill_
+    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, period1)] = co_prime_idx_fill_
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-15, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, t_df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range()'s join() :", e)
+    else:
+        ltf_df = t_df
+
+    return ltf_df
+
+def wave_range_v11(t_df, config, ltf_df=None):  # v2 for period1 only
+
+    itv = pd.infer_freq(t_df.index)
+    period1 = config.tr_set.wave_period
+
+    itv_num = to_itvnum(itv)
+    # print(itv_num)
+
+    t_df = donchian_channel_v4(t_df, period1)
+
+    dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].to_numpy()
+    b1_dc_base_ = t_df['dc_base_{}{}'.format(itv, period1)].shift(itv_num).to_numpy()
+
+    len_df = len(t_df)
+    len_df_range = np.arange(len_df).astype(int)
+    # short_open_res = np.ones(len_df)
+    # long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low', 'close']
+    open, high, low, close = [t_df[col_].to_numpy() for col_ in data_cols]
+    b1_close = t_df.close.shift(itv_num).to_numpy()
+
+    # ============ modules ============ #
+    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
+    cu_bool = ((b1_close > b1_dc_base_) & (dc_base_ > close)) | ((b1_close > dc_base_) & (dc_base_ > close))
+    co_bool = (b1_close < b1_dc_base_) & (dc_base_ < close) | ((b1_close < dc_base_) & (dc_base_ < close))
+    cu_idx = get_index_bybool(cu_bool, len_df_range)
+    co_idx = get_index_bybool(co_bool, len_df_range)
+
+    cu_fill_idx = fill_arr(cu_idx)
+    co_fill_idx = fill_arr(co_idx)
+
+    # ------ get co, cu terms ------ #
+    high_bool = cu_fill_idx < co_fill_idx
+    low_bool = co_fill_idx < cu_fill_idx
+
+    high_terms_vec = get_index_bybool(high_bool, len_df_range)
+    low_terms_vec = get_index_bybool(low_bool, len_df_range)  # -> low_terms
+
+    high_terms_list = using_clump(high_terms_vec)
+    low_terms_list = using_clump(low_terms_vec)
+
+    high_terms = np.array([[terms.min(), terms.max() + 1] for terms in high_terms_list])
+    low_terms = np.array([[terms.min(), terms.max() + 1] for terms in low_terms_list])
+
+    high_terms_cnt = high_terms[:, 1] - high_terms[:, 0]
+    low_terms_cnt = low_terms[:, 1] - low_terms[:, 0]
+
+    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_terms])
+    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_terms])
+
+    # ------ get valid_idx range (inner len_df) ------ #
+    paired_cu_idx = high_terms[:, 1]
+    paired_co_idx = low_terms[:, 1]
+
+    valid_cu_bool = paired_cu_idx < len_df
+    valid_co_bool = paired_co_idx < len_df
+
+    paired_cu_valid_idx = paired_cu_idx[valid_cu_bool]
+    paired_co_valid_idx = paired_co_idx[valid_co_bool]
+
+    # ------ get wave_hl & terms ------ #
+    wave_high_ = np.full(len_df, np.nan)
+    wave_low_ = np.full(len_df, np.nan)
+
+    wave_high_[paired_cu_valid_idx] = wave_highs[valid_cu_bool]
+    wave_low_[paired_co_valid_idx] = wave_lows[valid_co_bool]
+
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    wave_high_terms_cnt_ = np.full(len_df, np.nan)
+    wave_low_terms_cnt_ = np.full(len_df, np.nan)
+
+    wave_high_terms_cnt_[paired_cu_valid_idx] = high_terms_cnt[valid_cu_bool]
+    wave_low_terms_cnt_[paired_co_valid_idx] = low_terms_cnt[valid_co_bool]
+
+    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
+    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
+
+    # ------ check update high & low (occurs by point missing) ------ #
+    co_prime_idx = np.full(len_df, np.nan)
+    co_prime_idx[paired_co_valid_idx] = paired_co_valid_idx
+    co_prime_idx_fill_ = fill_arr(co_prime_idx)
+    # valid_idx = co_idx > co_prime_idx_fill_
+    valid_idx = cu_idx > co_prime_idx_fill_
+
+    update_low = np.full(len_df, np.nan)
+    # update_low[valid_idx] = [low[iin:iout + 1].min() for iin, iout in zip(cu_prime_idx_fill_[valid_idx].astype(int), cu_idx[valid_idx].astype(int))]  # include open low
+    # 1. 잘 생각해보면, cu_idx 에는 co_prime_idx_fill_ 을 사용하는게 맞음
+    #   a. cu_idx 에 달려있는 low 가 co_prime_idx_fill_ 기준이니까
+    update_low[valid_idx] = [low[iin:iout + 1].min() for iin, iout in zip(co_prime_idx_fill_[valid_idx].astype(int), cu_idx[valid_idx].astype(int))]
+
+    cu_prime_idx = np.full(len_df, np.nan)
+    cu_prime_idx[paired_cu_valid_idx] = paired_cu_valid_idx
+    cu_prime_idx_fill_ = fill_arr(cu_prime_idx)
+    valid_idx = co_idx > cu_prime_idx_fill_
+
+    update_high = np.full(len_df, np.nan)
+    update_high[valid_idx] = [high[iin:iout + 1].max() for iin, iout in zip(cu_prime_idx_fill_[valid_idx].astype(int), co_idx[valid_idx].astype(int))]
+
+    # ============ enlist to df_cols ============ #
+    t_df['wave_high_fill_{}{}'.format(itv, period1)] = wave_high_fill_
+    t_df['wave_low_fill_{}{}'.format(itv, period1)] = wave_low_fill_
+    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_high_terms_cnt_fill_
+    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, period1)] = wave_low_terms_cnt_fill_
+    t_df['wave_cu_{}{}'.format(itv, period1)] = cu_bool * ~(update_low < wave_low_fill_)  # point_missing 으로 인한 low 갱신 회피
+    t_df['wave_co_{}{}'.format(itv, period1)] = co_bool * ~(update_high > wave_high_fill_)
+    t_df['wave_cu_marker_{}{}'.format(itv, period1)] = get_line(cu_idx, dc_base_)
+    t_df['wave_co_marker_{}{}'.format(itv, period1)] = get_line(co_idx, dc_base_)
+
+    # ------ for roll prev_hl ------ #
+    t_df['wave_cu_prime_idx_{}{}'.format(itv, period1)] = cu_prime_idx
+    t_df['wave_co_prime_idx_{}{}'.format(itv, period1)] = co_prime_idx
+
+    # ------ for first_high ------ #
+    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, period1)] = cu_prime_idx_fill_
+    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, period1)] = co_prime_idx_fill_
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-17, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(t_df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, t_df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range()'s join() :", e)
+    else:
+        ltf_df = t_df
+
+    return ltf_df
+
+def wave_range_v8(df, period1, period2, ltf_df=None, wave_min_bars=20, wave_max_bars=40):  # v2 for period1 only
+
+    itv = pd.infer_freq(df.index)
+
+    donchian_channel_v2(df, period1)
+    donchian_channel_v2(df, period2)
+    dc_lower_, dc_upper_ = df['dc_lower_{}{}'.format(itv, period1)].to_numpy(), df['dc_upper_{}{}'.format(itv, period1)].to_numpy()
+    dc_lower2_, dc_upper2_ = df['dc_lower_{}{}'.format(itv, period2)].to_numpy(), df['dc_upper_{}{}'.format(itv, period2)].to_numpy()
+
+    short_base = (dc_lower_ + dc_upper2_) / 2
+    long_base = (dc_upper_ + dc_lower2_) / 2
+    df['short_base_{}{}{}'.format(itv, period1, period2)] = short_base
+    df['long_base_{}{}{}'.format(itv, period1, period2)] = long_base
+
+    len_df = len(df)
+    short_open_res = np.ones(len_df)
+    long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low']
+    open, high, low = [df[col_].to_numpy() for col_ in data_cols]
+
+    short_upper_touch_idx = pd.Series(np.where(high >= dc_upper2_, np.arange(len_df), np.nan)).rolling(wave_max_bars,
+                                                                                                       min_periods=1).max().to_numpy()  # min -> max
+    short_lower_touch_idx = pd.Series(np.where(low <= dc_lower_, np.arange(len_df), np.nan)).rolling(wave_max_bars,
+                                                                                                     min_periods=1).max().to_numpy()  # min 으로 하면 a 이전에 b 있는건 모두 제외하게됨
+    short_open_res *= (high >= short_base) & (short_base >= open) & (short_upper_touch_idx < short_lower_touch_idx)
+
+    short_valid_idx = (short_lower_touch_idx - short_upper_touch_idx) >= wave_min_bars
+    df['short_wave_high_idx_{}{}{}'.format(itv, period1, period2)] = short_upper_touch_idx
+    df['short_wave_high_{}{}{}'.format(itv, period1, period2)] = get_line(short_upper_touch_idx, dc_upper2_)
+    df['short_wave_low_{}{}{}'.format(itv, period1, period2)] = get_line(short_lower_touch_idx, dc_lower_)
+    df['short_wave_point_{}{}{}'.format(itv, period1, period2)] = short_open_res * short_valid_idx
+
+    long_lower_touch_idx = pd.Series(np.where(low <= dc_lower2_, np.arange(len_df), np.nan)).rolling(wave_max_bars, min_periods=1).max().to_numpy()
+    long_upper_touch_idx = pd.Series(np.where(high >= dc_upper_, np.arange(len_df), np.nan)).rolling(wave_max_bars, min_periods=1).max().to_numpy()
+    long_open_res *= (open >= long_base) & (long_base >= low) & (long_lower_touch_idx < long_upper_touch_idx)
+
+    long_valid_idx = (long_upper_touch_idx - long_lower_touch_idx) >= wave_min_bars
+    df['long_wave_low_idx_{}{}{}'.format(itv, period1, period2)] = long_lower_touch_idx
+    df['long_wave_low_{}{}{}'.format(itv, period1, period2)] = get_line(long_lower_touch_idx, dc_lower2_)
+    df['long_wave_high_{}{}{}'.format(itv, period1, period2)] = get_line(long_upper_touch_idx, dc_upper_)
+    df['long_wave_point_{}{}{}'.format(itv, period1, period2)] = long_open_res * long_valid_idx  # multi selection_id 로, formatting 하는 거임
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-14, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range()'s join() :", e)
+    else:
+        ltf_df = df
+
+    return ltf_df
+
+def wave_range_v7(df, period1, period2, ltf_df=None, touch_period=50):  # v2 for period1 only
+
+    itv = pd.infer_freq(df.index)
+
+    donchian_channel_v2(df, period1)
+    donchian_channel_v2(df, period2)
+    dc_lower_, dc_upper_ = df['dc_lower_{}{}'.format(itv, period1)].to_numpy(), df['dc_upper_{}{}'.format(itv, period1)].to_numpy()
+    dc_lower2_, dc_upper2_ = df['dc_lower_{}{}'.format(itv, period2)].to_numpy(), df['dc_upper_{}{}'.format(itv, period2)].to_numpy()
+
+    short_base = (dc_lower_ + dc_upper2_) / 2
+    long_base = (dc_upper_ + dc_lower2_) / 2
+    df['short_base_{}{}{}'.format(itv, period1, period2)] = short_base
+    df['long_base_{}{}{}'.format(itv, period1, period2)] = long_base
+
+    len_df = len(df)
+    short_open_res = np.ones(len_df)
+    long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low']
+    open, high, low = [df[col_].to_numpy() for col_ in data_cols]
+
+    short_upper_touch_idx = pd.Series(np.where(high >= dc_upper2_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                       min_periods=1).max().to_numpy()  # min -> max
+    short_lower_touch_idx = pd.Series(np.where(low <= dc_lower_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                     min_periods=1).max().to_numpy()  # min 으로 하면 a 이전에 b 있는건 모두 제외하게됨
+    short_open_res *= (high >= short_base) & (short_base >= open) & (short_upper_touch_idx < short_lower_touch_idx)
+    df['short_upper_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_upper_touch_idx
+    df['short_lower_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_lower_touch_idx
+    df['short_upper_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(short_upper_touch_idx, dc_upper2_)
+    df['short_lower_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(short_lower_touch_idx, dc_lower_)
+    df['short_wave_point_{}{}{}'.format(itv, period1, period2)] = short_open_res
+
+    long_lower_touch_idx = pd.Series(np.where(low <= dc_lower2_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_upper_touch_idx = pd.Series(np.where(high >= dc_upper_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_open_res *= (open >= long_base) & (long_base >= low) & (long_lower_touch_idx < long_upper_touch_idx)
+    df['long_lower_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_lower_touch_idx
+    df['long_upper_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_upper_touch_idx
+    df['long_lower_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(long_lower_touch_idx, dc_lower2_)
+    df['long_upper_touch_line_{}{}{}'.format(itv, period1, period2)] = get_line(long_upper_touch_idx, dc_upper_)
+    df['long_wave_point_{}{}{}'.format(itv, period1, period2)] = long_open_res
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-16, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range()'s join() :", e)
+    else:
+        ltf_df = df
+
+    return ltf_df
+
+
+def wave_range_v6(df, period1, period2, ltf_df=None, touch_period=50):  # v2 for period1 only
+
+    itv = pd.infer_freq(df.index)
+
+    donchian_channel_v2(df, period1)
+    donchian_channel_v2(df, period2)
+    dc_lower_, dc_upper_ = df['dc_lower_{}{}'.format(itv, period1)].to_numpy(), df['dc_upper_{}{}'.format(itv, period1)].to_numpy()
+    dc_lower2_, dc_upper2_ = df['dc_lower_{}{}'.format(itv, period2)].to_numpy(), df['dc_upper_{}{}'.format(itv, period2)].to_numpy()
+
+    short_base = (dc_lower_ + dc_upper2_) / 2
+    long_base = (dc_upper_ + dc_lower2_) / 2
+    df['short_base_{}{}{}'.format(itv, period1, period2)] = short_base
+    df['long_base_{}{}{}'.format(itv, period1, period2)] = long_base
+
+    len_df = len(df)
+    short_open_res = np.ones(len_df)
+    long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low']
+    open, high, low = [df[col_].to_numpy() for col_ in data_cols]
+
+    short_a_touch_idx = pd.Series(np.where(high >= dc_upper2_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                   min_periods=1).max().to_numpy()  # min -> max
+    short_b_touch_idx = pd.Series(np.where(low <= dc_lower_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                 min_periods=1).max().to_numpy()  # min 으로 하면 a 이전에 b 있는건 모두 제외하게됨
+    short_open_res *= (high >= short_base) & (short_base >= open) & (short_a_touch_idx < short_b_touch_idx)
+    df['short_a_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_a_touch_idx
+    df['short_b_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_b_touch_idx
+    df['short_a_line_{}{}{}'.format(itv, period1, period2)] = get_line(short_a_touch_idx, dc_upper2_)
+    df['short_b_line_{}{}{}'.format(itv, period1, period2)] = get_line(short_b_touch_idx, dc_lower_)
+    df['short_wave_point_{}{}{}'.format(itv, period1, period2)] = short_open_res
+
+    long_a_touch_idx = pd.Series(np.where(low <= dc_lower2_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_b_touch_idx = pd.Series(np.where(high >= dc_upper_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_open_res *= (open >= long_base) & (long_base >= low) & (long_a_touch_idx < long_b_touch_idx)
+    df['long_a_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_a_touch_idx
+    df['long_b_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_b_touch_idx
+    df['long_a_line_{}{}{}'.format(itv, period1, period2)] = get_line(long_a_touch_idx, dc_lower2_)
+    df['long_b_line_{}{}{}'.format(itv, period1, period2)] = get_line(long_b_touch_idx, dc_upper_)
+    df['long_wave_point_{}{}{}'.format(itv, period1, period2)] = long_open_res
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-16, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, join_cols), how='inner')
+        except Exception as e:
+            print("error in wave_range_v5's join() :", e)
+    else:
+        ltf_df = df
+
+    return ltf_df
+
+def wave_range_v5(df, period1, period2, ltf_df=None, touch_period=50):  # v2 for period1 only
+
+    itv = pd.infer_freq(df.index)
+
+    donchian_channel_v2(df, period1)
+    donchian_channel_v2(df, period2)
+    dc_lower_, dc_upper_ = df['dc_lower_{}{}'.format(itv, period1)].to_numpy(), df['dc_upper_{}{}'.format(itv, period1)].to_numpy()
+    dc_lower2_, dc_upper2_ = df['dc_lower_{}{}'.format(itv, period2)].to_numpy(), df['dc_upper_{}{}'.format(itv, period2)].to_numpy()
+
+    short_base = (dc_lower_ + dc_upper2_) / 2
+    long_base = (dc_upper_ + dc_lower2_) / 2
+    df['short_base_{}{}{}'.format(itv, period1, period2)] = short_base
+    df['long_base_{}{}{}'.format(itv, period1, period2)] = long_base
+
+    len_df = len(df)
+    short_open_res = np.ones(len_df)
+    long_open_res = np.ones(len_df)
+
+    data_cols = ['open', 'high', 'low']
+    open, high, low = [df[col_].to_numpy() for col_ in data_cols]
+
+    short_a_touch_idx = pd.Series(np.where(high >= dc_upper2_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                   min_periods=1).max().to_numpy()  # min -> max
+    short_b_touch_idx = pd.Series(np.where(low <= dc_lower_, np.arange(len_df), np.nan)).rolling(touch_period,
+                                                                                                 min_periods=1).max().to_numpy()  # min 으로 하면 a 이전에 b 있는건 모두 제외하게됨
+    short_open_res *= (high >= short_base) & (short_base >= open) & (short_a_touch_idx < short_b_touch_idx)
+    df['short_a_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_a_touch_idx
+    df['short_b_touch_idx_{}{}{}'.format(itv, period1, period2)] = short_b_touch_idx
+    df['short_wave_point_{}{}{}'.format(itv, period1, period2)] = short_open_res
+
+    long_a_touch_idx = pd.Series(np.where(low <= dc_lower2_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_b_touch_idx = pd.Series(np.where(high >= dc_upper_, np.arange(len_df), np.nan)).rolling(touch_period, min_periods=1).max().to_numpy()
+    long_open_res *= (open >= long_base) & (long_base >= low) & (long_a_touch_idx < long_b_touch_idx)
+    df['long_a_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_a_touch_idx
+    df['long_b_touch_idx_{}{}{}'.format(itv, period1, period2)] = long_b_touch_idx
+    df['long_wave_point_{}{}{}'.format(itv, period1, period2)] = long_open_res
+
+    if itv != 'T':
+        assert ltf_df is not None, "assert ltf_df is not None"
+        join_cols = np.arange(-12, 0, 1).astype(int)  # points & donchian_channels
+        ltf_df.drop(df.columns[join_cols], inplace=True, axis=1, errors='ignore')
+        try:
+            ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, join_cols), how='inner')
+            # ltf_df = ltf_df.merge(to_lower_tf_v2(ltf_df, df, [-7, -6, -5, -4, -3, -2, -1]), how='inner')
+        except Exception as e:
+            print("error in wave_range_v5's join() :", e)
+    else:
+        ltf_df = df
+
+    return ltf_df
 
 
 def dc_line_v4(ltf_df, htf_df, dc_period=20):

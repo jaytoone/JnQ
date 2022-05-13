@@ -170,7 +170,11 @@ def get_streamer(self):
     back_df = pd.read_feather(self.config.trader_set.back_data_path, columns=None, use_threads=True).set_index("index")
 
     if self.config.trader_set.start_datetime != "None":
-        start_idx = np.argwhere(back_df.index == pd.to_datetime(self.config.trader_set.start_datetime)).item()
+        target_datetime = pd.to_datetime(self.config.trader_set.start_datetime)
+        if target_datetime in back_df.index:
+            start_idx = np.argwhere(back_df.index == target_datetime).item()
+        else:
+            start_idx = use_rows
     else:
         start_idx = use_rows
 

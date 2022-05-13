@@ -25,9 +25,9 @@ def step_col_plot(np_col, alpha=1, color='#ffffff', linewidth=2):
   except Exception as e:
     print("error in step_col_plot :", e)
 
-def stepmark_col_plot(np_col, alpha=1, color='#ffffff', markersize=2):
+def stepmark_col_plot(np_col, alpha=1, color='#ffffff', markersize=2, markerstyle='c*'):
   try:
-    plt.step(np.arange(len(np_col)), np_col, 'c*', alpha=alpha, color=color, markersize=markersize)
+    plt.step(np.arange(len(np_col)), np_col, markerstyle, alpha=alpha, color=color, markersize=markersize)
   except Exception as e:
     print("error in stepmark_col_plot :", e)
 
@@ -36,6 +36,19 @@ def fillbw_col_plot(np_col, alpha=1, color='#ffffff', linewidth=2):
     plt.step(np.arange(len(np_col)), np_col, alpha=alpha, color=color, linewidth=linewidth)
   except Exception as e:
     print("error in fillbw_col_plot :", e)
+
+def sort_bypr_v4(pr, obj, arr_list, descending=True):
+
+  pr_ravel = pr.ravel()
+  descend_sort_idx = pr_ravel.argsort()[::-1]
+  if descending:
+    sort_idx = descend_sort_idx
+  else:
+    descend_pr = pr_ravel[descend_sort_idx]
+    true_pr_idx = descend_pr > 1
+    sort_idx = np.hstack((descend_sort_idx[true_pr_idx][::-1], descend_sort_idx[~true_pr_idx][::-1]))
+
+  return pr[sort_idx], [ob[sort_idx] for ob in obj], [arr_[sort_idx] for arr_ in arr_list]
 
 def sort_bypr_v3(pr, obj, arr_list, descending=True):
   if descending:
@@ -60,6 +73,54 @@ def sort_bypr(pr, obj, descending=True):
     sort_idx = pr.argsort()
 
   return pr[sort_idx], [ob[sort_idx] for ob in obj]
+
+
+def whole_plot_check(data, win_idxs, selected_op_idxs, selected_ex_idxs, plot_check_dir=None, **col_idx_dict):
+  # start_0 = time.time()
+  plt.style.use(['dark_background', 'fast'])
+  fig = plt.figure(figsize=(30, 12))
+  nrows, ncols = 1, 1
+  gs = gridspec.GridSpec(nrows=nrows,  # row 부터 index 채우고 col 채우는 순서임 (gs_idx)
+                         ncols=ncols,
+                         # height_ratios=[31, 1]
+                         )
+
+  ax = fig.add_subplot(gs[0])
+
+  # ------------ add_col section ------------ #
+  a_data = data[selected_op_idxs[0]:selected_op_idxs[-1] + 1]
+
+  plot_op_idxs = selected_op_idxs - selected_op_idxs[0]
+  plot_win_op_idxs = plot_op_idxs[win_idxs]
+  plot_loss_op_idxs = plot_op_idxs[~win_idxs]
+
+  plot_ex_idxs = selected_ex_idxs - selected_op_idxs[0]
+  plot_win_ex_idxs = plot_ex_idxs[win_idxs]
+  plot_loss_ex_idxs = plot_ex_idxs[~win_idxs]
+
+  # ------ add cols ------ #
+  [nonstep_col_plot(a_data[:, params[0]], *params[1:]) for params in col_idx_dict['nonstep_col_info']]
+  [step_col_plot(a_data[:, params[0]], *params[1:]) for params in col_idx_dict['step_col_info']]
+  [stepmark_col_plot(a_data[:, params[0]], *params[1:]) for params in col_idx_dict['stepmark_col_info']]
+
+  # [plt.axvline(op_idx, color='#00ff00') for op_idx in plot_win_op_idxs]
+  # [plt.axvline(op_idx, color='#ff0000') for op_idx in plot_loss_op_idxs]
+  [plt.axvspan(op_idx, ex_idx, alpha=0.5, color='#00ff00') for op_idx, ex_idx in zip(plot_win_op_idxs, plot_win_ex_idxs)]
+  [plt.axvspan(op_idx, ex_idx, alpha=0.5, color='#ff0000') for op_idx, ex_idx in zip(plot_loss_op_idxs, plot_loss_ex_idxs)]
+
+  plt.show()
+
+  if plot_check_dir is None:
+    plt.show()
+    print()
+  else:
+    fig_name = plot_check_dir + "/whole_plot_{}.png".format(selected_op_idxs[0])
+    plt.savefig(fig_name)
+    print(fig_name, "saved !")
+  plt.close()
+  # print("elapsed time :", time.time() - start_0)
+
+  return
 
 
 def eptp_hvline_v5(config, en_p, ex_p, entry_idx, exit_idx, open_idx, point1_idx, tp_line, out_line, en_tp1, en_out0,
@@ -96,17 +157,17 @@ def eptp_hvline_v5(config, en_p, ex_p, entry_idx, exit_idx, open_idx, point1_idx
   plt.text(x1, ex_p, 'ex_p :\n {}'.format(ex_p), ha='left', va='center', fontweight='bold', fontsize=15)  # ex_p line label
 
   # ------ tpout_line ------ #
-  plt.axhline(tp_line, 0.05, 1, linewidth=4, linestyle='-', alpha=1, color='#00ff00')  # ep 와 gap 비교 용이하기 위해 ex_xmin -> 0.1 사용
+  plt.axhline(tp_line, 0.05, 1, linewidth=2, linestyle='-', alpha=1, color='#00ff00')  # ep 와 gap 비교 용이하기 위해 ex_xmin -> 0.1 사용
   plt.text(x0, tp_line, 'tpg {}'.format(config.tr_set.tp_gap), ha='right', va='center', fontweight='bold', fontsize=15, color='#00ff00')
-  plt.axhline(out_line, 0.05, 1, linewidth=4, linestyle='-', alpha=1, color='#ff0000')
+  plt.axhline(out_line, 0.05, 1, linewidth=2, linestyle='-', alpha=1, color='#ff0000')
   plt.text(x0, out_line, 'outg {}'.format(config.tr_set.out_gap), ha='right', va='center', fontweight='bold', fontsize=15, color='#ff0000')
 
-  # ------ bias_line ------ #
+  # ------ wave_line ------ #
   text_x_pos = (x0 + x1) * 0.1
-  plt.axhline(en_tp1, 0.2, 1, linewidth=4, linestyle='-', alpha=1, color='#ffffff')
-  plt.text(text_x_pos, en_tp1, ' en_tp1', ha='right', va='bottom', fontweight='bold', fontsize=15)
-  plt.axhline(en_out0, 0.2, 1, linewidth=4, linestyle='-', alpha=1, color='#ffffff')
-  plt.text(text_x_pos, en_out0, ' en_out0', ha='right', va='bottom', fontweight='bold', fontsize=15)
+  plt.axhline(en_tp1, 0.2, 1, linewidth=2, linestyle='-', alpha=1, color='#ffffff')
+  plt.text(text_x_pos, en_tp1, ' wave_1', ha='right', va='bottom', fontweight='bold', fontsize=15)
+  plt.axhline(en_out0, 0.2, 1, linewidth=2, linestyle='-', alpha=1, color='#ffffff')
+  plt.text(text_x_pos, en_out0, ' wave_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
 
   # ------ ylim ------ #
   if front_plot:
@@ -325,6 +386,65 @@ def eptp_hvline(ep, tp, entry_idx, exit_idx, prev_plotsize):
 
   return ep_tick
 
+
+def plot_check_v6(data, config, param_zip, pr_msg, x_max, x_margin_mult, y_margin_mult, front_plot, plot_check_dir=None, **col_idx_dict):
+  # start_0 = time.time()
+  plt.style.use(['dark_background', 'fast'])
+  fig = plt.figure(figsize=(30, 18))
+  nrows, ncols = 2, 2
+  gs = gridspec.GridSpec(nrows=nrows,  # row 부터 index 채우고 col 채우는 순서임 (gs_idx)
+                         ncols=ncols,
+                         height_ratios=[3, 1]
+                         )
+  for gs_idx, params in enumerate(param_zip):
+
+    iin, iout, pr, ep, tp, entry_idx, exit_idx, open_idx, point1_idx, lvrg, fee, tp_line, out_line, en_tp1, en_out0 = params
+
+    # if exit_idx - open_idx < 50:  # temporary
+    #   break
+
+    ax = fig.add_subplot(gs[gs_idx])
+
+    # ------------ add_col section ------------ #
+    a_data = data[int(iin):int(iout + 1)]
+    # a_data = data[iin:iout]
+    # ------ candles ------ #
+    candle_plot(a_data[:, col_idx_dict['ohlc_col_idxs']], ax, alpha=1.0, wickwidth=1.0)
+
+    # ------ add cols ------ #
+    [nonstep_col_plot(a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['nonstep_col_info']]
+    [step_col_plot(a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['step_col_info']]
+    [stepmark_col_plot(a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['stepmark_col_info']]
+
+    # ------ ep, tp + xlim ------ #
+    try:
+      eptp_hvline_v5(config, ep, tp, entry_idx, exit_idx, open_idx, point1_idx, tp_line, out_line, en_tp1, en_out0,
+                     front_plot, iin, iout, x_max, x_margin_mult, y_margin_mult, a_data, **col_idx_dict)
+    except Exception as e:
+      print("error in eptp_hvline_v3 :", e)
+
+    #     Todo    #
+    #     3. outer_price plot 일 경우, gs_idx + nrows 하면 됨
+
+    # ------ trade_info ------ #
+    data_msg_list = ["\n {} : {:.3f}".format(*params_[1:], *data[int(open_idx), params_[0]]) for params_ in
+                     col_idx_dict['data_window_col_info']]  # * for unsupported format for arr
+    ps_msg_expand = pr_msg.format(entry_idx, exit_idx, pr, lvrg, fee) + ''.join(data_msg_list)
+
+    plt.title(ps_msg_expand)
+
+  if plot_check_dir is None:
+    plt.show()
+    print()
+  else:
+    fig_name = plot_check_dir + "/{}.png".format(int(entry_idx))
+    plt.savefig(fig_name)
+    print(fig_name, "saved !")
+  plt.close()
+  # print("elapsed time :", time.time() - start_0)
+
+  return
+
 def plot_check_v5(data, config, param_zip, pr_msg, x_max, x_margin_mult, y_margin_mult, front_plot, plot_check_dir=None, **col_idx_dict):
   # start_0 = time.time()
   plt.style.use(['dark_background', 'fast'])
@@ -369,7 +489,7 @@ def plot_check_v5(data, config, param_zip, pr_msg, x_max, x_margin_mult, y_margi
     plt.show()
     print()
   else:
-    fig_name = plot_check_dir + "/%s.png" % int(entry_idx)
+    fig_name = plot_check_dir + "/{}.png".format(int(entry_idx))
     plt.savefig(fig_name)
     print(fig_name, "saved !")
   plt.close()

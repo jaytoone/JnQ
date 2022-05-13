@@ -31,6 +31,7 @@ class WebsocketRequestImpl(object):
         request = WebsocketRequest()
         request.subscription_handler = subscription_handler
         request.json_parser = json_parse
+        # print("request.json_parser.price :", json_parse.price)
         request.update_callback = callback
         request.error_handler = error_handler
 
