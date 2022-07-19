@@ -32,6 +32,7 @@ __pycache__/
 
 # excluded directories
 df_log/
+sys_log/
 trade_log/
 legacy/
 #back_pr/
