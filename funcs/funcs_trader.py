@@ -273,12 +273,12 @@ def consecutive_df(res_df, itv_num):
 
     return new_res_idx_df
 
-def to_lower_tf_v3(ltf_df, htf_df, column, backing_i=1, show_info=False):
+def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False):
     ltf_itv = pd.infer_freq(ltf_df.index)
     assert ltf_itv == 'T', "currently only -> 'T' allowed.."
-    assert type(column[0]) in [int, np.int64], "column value should be integer"
+    # assert type(column[0]) in [int, np.int64], "column value should be integer"
 
-    cols = htf_df.columns[column]  # to_lower_tf_v1 의 int col 반영
+    # cols = htf_df.columns[column]  # to_lower_tf_v1 의 int col 반영
 
     if show_info:
         print("backing_i :", backing_i)
@@ -287,18 +287,18 @@ def to_lower_tf_v3(ltf_df, htf_df, column, backing_i=1, show_info=False):
     if htf_df.index[-1] != renamed_last_index.index[-1]:  # cannot reindex a non-unique index with a method or limit 방지
         htf_df = htf_df.append(renamed_last_index)
 
-    downsample_df = htf_df[cols].shift(backing_i).resample(ltf_itv).ffill()
+    downsampled_df = htf_df[cols].shift(backing_i).resample(ltf_itv).ffill()
 
-    if len(downsample_df) > len(ltf_df):
-        downsample_df = downsample_df.iloc[-len(ltf_df):]
+    if len(downsampled_df) > len(ltf_df):
+        downsampled_df = downsampled_df.iloc[-len(ltf_df):]
 
-    downsample_df.index = ltf_df.index[-len(downsample_df):]
-    # assert len(ltf_df) <= len(downsample_df), "for join method, assert len(ltf_df) <= len(downsample_df)"
+    downsampled_df.index = ltf_df.index[-len(downsampled_df):]
+    # assert len(ltf_df) <= len(downsampled_df), "for join method, assert len(ltf_df) <= len(downsampled_df)"
 
     # ------ check last row's validity ------ #
-    assert np.sum(~pd.isnull(downsample_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsample_df.iloc[-1].values)) > 0"
+    assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0"
 
-    return downsample_df
+    return downsampled_df
 
 def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
     #       Todo        #

@@ -8,7 +8,7 @@ pkg_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE"  # system e
 os.chdir(pkg_path)
 
 from funcs_binance.binance_futures_modules import *  # math, pandas, bot_config (API_key & clients)
-from funcs_binance.funcs_trader_modules import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
+from funcs_binance.funcs_trader_modules_strat_version import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
     get_new_df, get_new_df_onstream, check_hl_out_onbarclose, check_hl_out, check_signal_out, check_limit_tp_exec_v2, log_sub_tp_exec, get_dynamic_tpout, \
     check_breakout_qty, check_ei_k_v2, check_ei_k_onbarclose_v2, get_balance, get_tpepout, init_set, get_open_side_v2, get_p_tpqty
 from funcs_binance.funcs_order_logger_hedge import limit_order, partial_limit_order_v4, cancel_order_list, market_close_order_v2

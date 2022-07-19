@@ -8,7 +8,7 @@ pkg_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE"  # system e
 os.chdir(pkg_path)
 
 from funcs_binance.binance_futures_modules import *  # math, pandas, bot_config (API_key & clients)
-from funcs_binance.funcs_trader_modules_strat_version import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
+from funcs_binance.funcs_trader_modules import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
     get_new_df, get_new_df_onstream, check_hl_out_onbarclose, check_hl_out, check_signal_out, check_limit_tp_exec_v2, log_sub_tp_exec, get_dynamic_tpout, \
     check_breakout_qty, check_ei_k_v2, check_ei_k_onbarclose_v2, get_balance, get_tpepout, init_set, get_open_side_v2, get_p_tpqty
 from funcs_binance.funcs_order_logger_hedge import limit_order, partial_limit_order_v4, cancel_order_list, market_close_order_v2
@@ -167,13 +167,13 @@ class Trader:
 
                         #        use_point2 사용시, 해당 ID 로만 enlist_ 진행        #
                         if ep_loc_point2:
-                            res_df = self.utils.enlist_rtc(res_df, self.config, np_timeidx)
+                            # res_df = self.utils.enlist_rtc(res_df, self.config, np_timeidx)
                             res_df = self.utils.enlist_tr(res_df, self.config, np_timeidx, show_detail=False)
                         else:
                             for utils_, config_ in zip(self.utils_list, self.config_list):
-                                res_df = utils_.enlist_rtc(res_df, config_, np_timeidx)
+                                # res_df = utils_.enlist_rtc(res_df, config_, np_timeidx)
                                 res_df = utils_.enlist_tr(res_df, config_, np_timeidx, show_detail=False)
-                        sys_log.info('~ enlist_rtc & enlist_tr time : %.5f' % (time.time() - start_ts))
+                        sys_log.info('~ enlist_tr time : %.5f' % (time.time() - start_ts))
                         if not self.config.trader_set.backtrade:
                             sys_log.info('res_df.index[-1] : {}'.format(res_df.index[-1]))
                         else:
@@ -225,13 +225,13 @@ class Trader:
                     #           ii. ei_k check 이 realtime 으로 진행되어야한다는 점
                     #               i. => ei_k check by ID
 
-                    # ------ 3. set strat_version ------ #
-                    strat_version = self.config.strat_version
+                    # ------ 3. set selection_id ------ #
+                    selection_id = self.config.selection_id
 
                     # ------ 4. point2 (+ ei_k) phase ------ #
                     if self.config.ep_set.point2.use_point2:
                         ep_loc_point2 = 1
-                        sys_log.warning("strat_version use_point2 : {}{}".format(strat_version, self.config.ep_set.point2.use_point2))
+                        sys_log.warning("selection_id use_point2 : {}{}".format(selection_id, self.config.ep_set.point2.use_point2))
 
                         #        a. tp_j, res_df_open 으로 고정
                         c_i = self.config.trader_set.complete_index
@@ -296,7 +296,7 @@ class Trader:
             while 1:  # <-- loop for 'check order type change condition'
 
                 # ------ get tr_set x adj precision ------ #
-                tp, ep, out, open_side = get_tpepout(self, open_side, res_df_open, res_df)
+                tp, ep, out, open_side = get_tpepout(self, open_side, res_df_open, res_df)   # Todo, 일단은, ep1 default 로 설정
                 # Todo, 실제로는 precision 조금 달라질 것, 큰 차이없다고 가정 (solved)
                 price_precision, quantity_precision = get_precision(self.config.trader_set.symbol)
                 tp, ep, out = [calc_with_precision(price_, price_precision) for price_ in [tp, ep, out]]  # includes half-dynamic tp
@@ -367,6 +367,7 @@ class Trader:
                             res_df = next(self.streamer)
 
                             c_i = self.config.trader_set.complete_index
+                            # Todo, 일단은 expire_k1 default
                             if check_ei_k_onbarclose_v2(self, res_df_open, res_df, c_i, c_i, open_side):   # e_j, tp_j
                                 break
 
@@ -406,7 +407,8 @@ class Trader:
                 # ------ move to next bar validation - enough time for open_quantity be consumed ------ #
                 if not self.config.trader_set.backtrade:
                     while 1:
-                        if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):
+                        datetime_now = datetime.now()
+                        if datetime_now.timestamp() > datetime.timestamp(res_df.index[-1]):
                             break
                         else:
                             time.sleep(self.config.trader_set.realtime_term)  # <-- for realtime price function
@@ -441,7 +443,14 @@ class Trader:
 
                 # ------ save trade_log ------ #
                 trade_log[str(res_df_open.index[self.config.trader_set.complete_index])] = [open_side, "open"]
-                trade_log[str(res_df.index[self.config.trader_set.complete_index])] = [ep, open_side, "entry"]
+                # Todo, real_trade 의 경우, datetime.now()'s td 로 입력해야하는 것 아닌가
+                #    + backtrade's en_ts log 의 경우, lastest_index 가 complete_index 로 (위에서 c_i 를 사용함)
+                if not self.config.trader_set.backtrade:
+                    str_ts = str(datetime_now)
+                    trade_log[str_ts.replace(str_ts.split(':')[-1], "59.999000")] = [ep, open_side, "entry"]
+                else:
+                    trade_log[str(res_df.index[self.config.trader_set.complete_index])] = [ep, open_side, "entry"]
+
                 # real_trade 의 경우, entry_ts 로 수정 요망이었으나 -> trade_log for backtrade <-> idep only (solved)
 
                 with open(trade_log_fullpath, "wb") as dict_f:
@@ -468,6 +477,14 @@ class Trader:
                 tp_executedPrice_list, out_executedPrice_list = [], []
                 cross_on = 0  # exist for signal_out (early_out)
 
+                limit_done = 0
+                prev_exec_tp_len = 0
+                market_close_on = 0
+                log_out = None
+                load_new_df3 = 1    # 1 is default, use_new_df2 여부에 따라 사용 결정됨
+                all_executed = 0
+                check_time = time.time()    # for tp_execution check_term
+
                 while 1:
                     if use_new_df2:
                         if load_new_df2:  # dynamic_out & tp phase
@@ -480,7 +497,7 @@ class Trader:
                                 res_df = self.utils_public.sync_check(res_df, self.config, order_side="CLOSE")
                                 np_timeidx = np.array([intmin_np(date_) for date_ in res_df.index.to_numpy()])  # should be locate af. row_slice
                                 res_df = self.utils_public.public_indi(res_df, self.config, np_timeidx, order_side="CLOSE")
-                                res_df = self.utils.enlist_rtc(res_df, self.config, np_timeidx)
+                                # res_df = self.utils.enlist_rtc(res_df, self.config, np_timeidx)
                                 res_df = self.utils.enlist_tr(res_df, self.config, np_timeidx, mode="CLOSE", show_detail=False)
 
                             except Exception as e:
@@ -539,11 +556,6 @@ class Trader:
                     # ------------ limit_tp exec. & market_close check ------------ #
                     #            1. limit close (tp) execution check, every minute                 #
                     #            2. check market close signal, simultaneously
-                    limit_done = 0
-                    prev_exec_tp_len = 0
-                    market_close_on = 0
-                    log_out = None
-                    load_new_df3 = 1
                     while 1:
                         # ------ 1. load_new_df3 every minutes ------ #
                         #           a. ohlc data, log_ts, back_pr wait_time 를 위해 필요함
@@ -556,8 +568,11 @@ class Trader:
 
                         # ------ 2. tp execution check ------ #
                         if not self.config.trader_set.backtrade and not fake_order:
-                            all_executed, tp_executedPrice_list = check_limit_tp_exec_v2(self, post_order_res_list, quantity_precision, return_price=True)
-                            # Todo, dynamic_tp 안만듬 - 미예정 (solved)
+                            new_check_time = time.time()
+                            if new_check_time - check_time >= self.config.trader_set.order_term:  # check time
+                                all_executed, tp_executedPrice_list = check_limit_tp_exec_v2(self, post_order_res_list, quantity_precision, return_price=True)
+                                # Todo, dynamic_tp 안만듬 - 미예정 (solved)
+                                check_time = new_check_time
                             exec_tp_len = len(tp_executedPrice_list)
                         else:
                             if open_side == OrderSide.BUY:
@@ -568,13 +583,13 @@ class Trader:
                             tp_executedPrice_list = p_tps[:exec_tp_len]  # 지속적 갱신
                             all_executed = 1 if exec_tp_len == len(p_tps) else 0
 
-                            # ------ a. tp execution logging ------ #
+                        # ------ a. tp execution logging ------ #
                         if prev_exec_tp_len != exec_tp_len:  # logging 기준
                             ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = p_tps[prev_exec_tp_len:exec_tp_len]
                             prev_exec_tp_len = exec_tp_len
                             sys_log.info("ex_dict : {}".format(ex_dict))
 
-                            # ------ b. all_execution ------ #
+                        # ------ b. all_execution ------ #
                         if all_executed:
                             limit_done = 1
                             break
@@ -593,7 +608,10 @@ class Trader:
                                 sys_log.info("market_close_on is True")
                                 # ------ out execution logging ------ #
                                 # market_close_on = True, log_out != None (None 도 logging 가능하긴함)
-                                ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = [log_out]
+                                if not self.config.trader_set.backtrade:    # real_trade 의 경우, realtime_price's ts -> lastest_index 사용
+                                    ex_dict[str(res_df.index[self.config.trader_set.latest_index])] = [log_out]
+                                else:
+                                    ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = [log_out]
                                 sys_log.info("ex_dict : {}".format(ex_dict))
                                 break
 
@@ -609,8 +627,8 @@ class Trader:
                                     break
                                 else:
                                     load_new_df3 = 1  # return to current loop
-                            else:
-                                time.sleep(self.config.trader_set.realtime_term)
+                            # else:  # Todo, realtime_price 를 위해 realtime 으로 진행
+                            #     time.sleep(self.config.trader_set.realtime_term)
                         else:
                             if use_new_df2:
                                 load_new_df2 = 1  # return to outer loop - get df2's data

@@ -25,7 +25,15 @@ pd.set_option('display.max_columns', 2500)
 def sync_check(df, plot_size=45, plotting=False):
 
 
+    df = stoch_v2(df)
+    print(df.tail(40))
+    quit()
+
     # ------ cci ------ #
+    df = macd_hist(df)
+    print(df.tail(40))
+    quit()
+
     df = cci_v2(df, 20)
     print(df.cci_T20.tail(40))
     quit()

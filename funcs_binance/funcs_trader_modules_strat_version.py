@@ -74,22 +74,19 @@ def init_set(self):
         else:
             return limit_leverage, sub_client
 
-def get_open_side_v2(self, res_df, np_timeidx, open_num=1):
+def get_open_side_v2(self, res_df, np_timeidx):
     open_side = None
     for utils_, cfg_ in zip(self.utils_list, self.config_list):
         # ------ 1. point ------ #
         #  여기 왜 latest_index 사용했는지 모르겠음 -> bar_close point 를 고려해 mr_res 와의 index 분리
         #   vecto. 하는 이상, point x ep_loc 의 index 는 sync. 되어야함 => complete_index 사용 (solved)
         #  Todo, 각 phase 분리한 이유 = sys_logging (solved)
-        if res_df['short_open{}_{}'.format(open_num, cfg_.selection_id)].to_numpy()[cfg_.trader_set.complete_index]:
-            sys_log.warning("[ short ] true_point selection_id : {}".format(cfg_.selection_id))
+        if res_df['short_open_{}'.format(cfg_.strat_version)].to_numpy()[cfg_.trader_set.complete_index]:
+            sys_log.warning("[ short ] true_point strat_version : {}".format(cfg_.strat_version))
             # ------ 2. ban ------ #
             if not cfg_.pos_set.short_ban:
                 # ------ 3. mr_res ------ #
-                if open_num == 1:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
-                else:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
+                mr_res, zone_arr = self.utils_public.ep_loc_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
                 sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
                 # ------ assign ------ #
                 if mr_res[cfg_.trader_set.complete_index]:
@@ -102,15 +99,12 @@ def get_open_side_v2(self, res_df, np_timeidx, open_num=1):
 
         # ------ 1. point ------ #
         #       'if' for nested ep_loc.point        #
-        if res_df['long_open{}_{}'.format(open_num, cfg_.selection_id)].to_numpy()[cfg_.trader_set.complete_index]:
-            sys_log.warning("[ long ] true_point selection_id : {}".format(cfg_.selection_id))
+        if res_df['long_open_{}'.format(cfg_.strat_version)].to_numpy()[cfg_.trader_set.complete_index]:
+            sys_log.warning("[ long ] true_point strat_version : {}".format(cfg_.strat_version))
             # ------ 2. ban ------ #
             if not cfg_.pos_set.long_ban:  # additional const. on trader
                 # ------ 3. mr_res ------ #
-                if open_num == 1:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
-                else:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
+                mr_res, zone_arr = self.utils_public.ep_loc_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
                 sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
                 # ------ assign ------ #
                 if mr_res[cfg_.trader_set.complete_index]:
@@ -128,8 +122,8 @@ def get_open_side(self, res_df, np_timeidx):
     open_side = None
     for utils_, cfg_ in zip(self.utils_list, self.config_list):
         #       open_score     #
-        if res_df['short_open_{}'.format(cfg_.selection_id)][cfg_.trader_set.latest_index] == cfg_.ep_set.short_entry_score:
-            sys_log.warning("[ short ] ep_loc.point executed strat_ver : {}".format(cfg_.selection_id))
+        if res_df['short_open_{}'.format(cfg_.strat_version)][cfg_.trader_set.latest_index] == cfg_.ep_set.short_entry_score:
+            sys_log.warning("[ short ] ep_loc.point executed strat_ver : {}".format(cfg_.strat_version))
             #       ban      #
             if not cfg_.pos_set.short_ban:
                 #       ep_loc      #
@@ -147,9 +141,9 @@ def get_open_side(self, res_df, np_timeidx):
 
         #       open_score     #
         #       'if' for nested ep_loc.point        #
-        if res_df['long_open_{}'.format(cfg_.selection_id)][cfg_.trader_set.latest_index] == \
+        if res_df['long_open_{}'.format(cfg_.strat_version)][cfg_.trader_set.latest_index] == \
                 -cfg_.ep_set.short_entry_score:
-            sys_log.warning("[ long ] ep_loc.point executed strat_ver : {}".format(cfg_.selection_id))
+            sys_log.warning("[ long ] ep_loc.point executed strat_ver : {}".format(cfg_.strat_version))
             #       ban      #
             if not cfg_.pos_set.long_ban:  # additional const. on trader
                 #       ep_loc      #
@@ -277,8 +271,8 @@ def get_balance(self, first_iter, cfg_path_list):
 
 def get_eptpout(self, e_j, open_side, res_df_open, res_df):
     sys_log.info('open_side : {}'.format(open_side))
-    selection_id = self.config.selection_id
-    if selection_id in ['v5_2']:
+    strat_version = self.config.strat_version
+    if strat_version in ['v5_2']:
         out_j = e_j
         # ep_j = e_j
     else:
@@ -291,31 +285,31 @@ def get_eptpout(self, e_j, open_side, res_df_open, res_df):
     #           b. --> res_df 사용시, dynamic (pre, whole) 을 허용하겠다는 의미
     #               i. ep_loc_point2 를 사용하지 않는 이상 res_df = res_df_open
     if open_side == OrderSide.BUY:
-        ep = res_df_open['long_ep1_{}'.format(selection_id)].iloc[ep_j]
+        ep = res_df_open['long_ep_{}'.format(strat_version)].iloc[ep_j]
 
         if self.config.pos_set.long_inversion:
             open_side = OrderSide.SELL  # side change (inversion)
-            out = res_df['long_tp_{}'.format(selection_id)].iloc[out_j]
-            tp = res_df_open['long_out_{}'.format(selection_id)].iloc[tp_j]
+            out = res_df['long_tp_{}'.format(strat_version)].iloc[out_j]
+            tp = res_df_open['long_out_{}'.format(strat_version)].iloc[tp_j]
         else:
-            out = res_df['long_out_{}'.format(selection_id)].iloc[out_j]
-            tp = res_df_open['long_tp_{}'.format(selection_id)].iloc[tp_j]
+            out = res_df['long_out_{}'.format(strat_version)].iloc[out_j]
+            tp = res_df_open['long_tp_{}'.format(strat_version)].iloc[tp_j]
     else:
-        ep = res_df_open['short_ep1_{}'.format(selection_id)].iloc[ep_j]
+        ep = res_df_open['short_ep_{}'.format(strat_version)].iloc[ep_j]
 
         if self.config.pos_set.short_inversion:
             open_side = OrderSide.BUY
-            out = res_df['short_tp_{}'.format(selection_id)].iloc[out_j]
-            tp = res_df_open['short_out_{}'.format(selection_id)].iloc[tp_j]
+            out = res_df['short_tp_{}'.format(strat_version)].iloc[out_j]
+            tp = res_df_open['short_out_{}'.format(strat_version)].iloc[tp_j]
         else:
-            out = res_df['short_out_{}'.format(selection_id)].iloc[out_j]
-            tp = res_df_open['short_tp_{}'.format(selection_id)].iloc[tp_j]
+            out = res_df['short_out_{}'.format(strat_version)].iloc[out_j]
+            tp = res_df_open['short_tp_{}'.format(strat_version)].iloc[tp_j]
 
     return ep, tp, out, open_side
 
 def get_tpepout(self, open_side, res_df_open, res_df):
     sys_log.info('open_side : {}'.format(open_side))
-    selection_id = self.config.selection_id
+    strat_version = self.config.strat_version
 
     tp_j = self.config.trader_set.complete_index
     ep_j = self.config.trader_set.complete_index
@@ -323,7 +317,7 @@ def get_tpepout(self, open_side, res_df_open, res_df):
     #  -> use_point2 여부에 따라 다르게 작성할 필요가 없어짐 (solved)
     out_j = self.config.trader_set.complete_index
 
-    # if selection_id in ['v5_2']:
+    # if strat_version in ['v5_2']:
     # if self.config.ep_set.point2.use_point2:
     #     # out_j = self.config.trader_set.complete_index + 1  # Todo, why + 1 ?
     #     out_j = self.config.trader_set.complete_index
@@ -334,25 +328,25 @@ def get_tpepout(self, open_side, res_df_open, res_df):
     #        b. --> res_df 사용시, dynamic (pre, whole) 을 허용하겠다는 의미
     #           i. ep_loc_point2 미사용시, res_df = res_df_open
     if open_side == OrderSide.BUY:
-        ep = res_df_open['long_ep1_{}'.format(selection_id)].to_numpy()[ep_j]
+        ep = res_df_open['long_ep_{}'.format(strat_version)].to_numpy()[ep_j]
 
         if self.config.pos_set.long_inversion:
             open_side = OrderSide.SELL  # side change (inversion)
-            out = res_df['long_tp_{}'.format(selection_id)].to_numpy()[out_j]
-            tp = res_df_open['long_out_{}'.format(selection_id)].to_numpy()[tp_j]
+            out = res_df['long_tp_{}'.format(strat_version)].to_numpy()[out_j]
+            tp = res_df_open['long_out_{}'.format(strat_version)].to_numpy()[tp_j]
         else:
-            out = res_df['long_out_{}'.format(selection_id)].to_numpy()[out_j]
-            tp = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()[tp_j]
+            out = res_df['long_out_{}'.format(strat_version)].to_numpy()[out_j]
+            tp = res_df_open['long_tp_{}'.format(strat_version)].to_numpy()[tp_j]
     else:
-        ep = res_df_open['short_ep1_{}'.format(selection_id)].to_numpy()[ep_j]
+        ep = res_df_open['short_ep_{}'.format(strat_version)].to_numpy()[ep_j]
 
         if self.config.pos_set.short_inversion:
             open_side = OrderSide.BUY
-            out = res_df['short_tp_{}'.format(selection_id)].to_numpy()[out_j]
-            tp = res_df_open['short_out_{}'.format(selection_id)].to_numpy()[tp_j]
+            out = res_df['short_tp_{}'.format(strat_version)].to_numpy()[out_j]
+            tp = res_df_open['short_out_{}'.format(strat_version)].to_numpy()[tp_j]
         else:
-            out = res_df['short_out_{}'.format(selection_id)].to_numpy()[out_j]
-            tp = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()[tp_j]
+            out = res_df['short_out_{}'.format(strat_version)].to_numpy()[out_j]
+            tp = res_df_open['short_tp_{}'.format(strat_version)].to_numpy()[tp_j]
 
     return tp, ep, out, open_side
 
@@ -370,15 +364,14 @@ def check_breakout_qty(self, first_exec_qty_check, check_time, post_order_res, o
 
 def check_ei_k_v2(self, res_df_open, res_df, open_side):
     ep_out = 0
-    selection_id = self.config.selection_id
+    strat_version = self.config.strat_version
 
-    if self.config.tr_set.expire_tick != "None":
+    if self.config.loc_set.zone.ep_out_tick != "None":
         if time.time() - datetime.timestamp(res_df_open.index[self.config.trader_set.latest_index]) \
-                >= self.config.tr_set.expire_tick * 60:
+                >= self.config.loc_set.zone.ep_out_tick * 60:
             ep_out = 1
 
-    # Todo, expire_k2 vs expire_k1, 추후 p2 사용시 재고해야할 것
-    if self.config.tr_set.expire_k1 != "None":  # Todo -> 이거 None 이면 "무한 대기" 발생 가능함
+    if self.config.loc_set.zone.ei_k != "None":  # Todo -> 이거 None 이면 "무한 대기" 발생 가능함
         realtime_price = get_market_price_v2(self.sub_client)
         tp_j = self.config.trader_set.complete_index
         #       Todo        #
@@ -389,14 +382,14 @@ def check_ei_k_v2(self, res_df_open, res_df, open_side):
         #        5. funcs_trader_modules 에서 order_side check 하는 function 모두 inversion 고려해야할 것
         #           a. "단, order_side change 후로만 해당됨
         if open_side == OrderSide.SELL:
-            short_tp_ = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
-            short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(selection_id)].to_numpy()
-            if realtime_price <= short_tp_[tp_j] + short_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+            short_tp_ = res_df_open['short_tp_{}'.format(strat_version)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
+            short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(strat_version)].to_numpy()
+            if realtime_price <= short_tp_[tp_j] + short_tp_gap_[tp_j] * self.config.loc_set.zone.ei_k:
                 ep_out = 1
         else:
-            long_tp_ = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
-            long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(selection_id)].to_numpy()
-            if realtime_price >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+            long_tp_ = res_df_open['long_tp_{}'.format(strat_version)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
+            long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(strat_version)].to_numpy()
+            if realtime_price >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.loc_set.zone.ei_k:
                 ep_out = 1
         time.sleep(self.config.trader_set.realtime_term)  # <-- for realtime price function
 
@@ -407,12 +400,12 @@ def check_ei_k_v2(self, res_df_open, res_df, open_side):
 
 def check_ei_k(self, res_df_open, open_side):
     ep_out = 0
-    selection_id = self.config.selection_id
-    if self.config.tr_set.expire_k1 != "None":  # Todo -> 이거 None 이면 "무한 대기" 발생 가능함
+    strat_version = self.config.strat_version
+    if self.config.loc_set.zone.ei_k != "None":  # Todo -> 이거 None 이면 "무한 대기" 발생 가능함
         #       check tp_done by hl with realtime_price     #
         realtime_price = get_market_price_v2(self.sub_client)
         #        1. tp_j 를 last_index 로 설정해도 갱신되지 않음 (res_df 가 갱신되지 않는한)
-        #        3. ei_k 사용 여부를 결정할 수 있도록, selection_id 에 따라서도 상이해질 것
+        #        3. ei_k 사용 여부를 결정할 수 있도록, strat_version 에 따라서도 상이해질 것
         #       Todo        #
         #        2. 추후, dynamic_tp 사용시 res_df 갱신해야할 것
         #           a. 그에 따른 res_df 종속 변수 check
@@ -427,14 +420,14 @@ def check_ei_k(self, res_df_open, open_side):
         else:
             tp_j = self.config.trader_set.complete_index
             if open_side == OrderSide.SELL:
-                if realtime_price <= res_df_open['h_short_rtc_1_{}'.format(selection_id)].iloc[tp_j] - \
-                        res_df_open['h_short_rtc_gap_{}'.format(selection_id)].iloc[
-                            tp_j] * self.config.tr_set.expire_k1:
+                if realtime_price <= res_df_open['h_short_rtc_1_{}'.format(strat_version)].iloc[tp_j] - \
+                        res_df_open['h_short_rtc_gap_{}'.format(strat_version)].iloc[
+                            tp_j] * self.config.loc_set.zone.ei_k:
                     ep_out = 1
             else:
-                if realtime_price >= res_df_open['h_long_rtc_1_{}'.format(selection_id)].iloc[tp_j] + \
-                        res_df_open['h_long_rtc_gap_{}'.format(selection_id)].iloc[
-                            tp_j] * self.config.tr_set.expire_k1:
+                if realtime_price >= res_df_open['h_long_rtc_1_{}'.format(strat_version)].iloc[tp_j] + \
+                        res_df_open['h_long_rtc_gap_{}'.format(strat_version)].iloc[
+                            tp_j] * self.config.loc_set.zone.ei_k:
                     ep_out = 1
         time.sleep(self.config.trader_set.realtime_term)  # <-- for realtime price function
 
@@ -445,25 +438,25 @@ def check_ei_k(self, res_df_open, open_side):
 
 def check_ei_k_onbarclose_v2(self, res_df_open, res_df, e_j, tp_j, open_side):     # for point2
     ep_out = 0
-    selection_id = self.config.selection_id
+    strat_version = self.config.strat_version
 
-    if self.config.tr_set.expire_tick != "None":
+    if self.config.loc_set.zone.ep_out_tick != "None":
         if datetime.timestamp(res_df.index[-1]) - datetime.timestamp(res_df_open.index[self.config.trader_set.latest_index]) \
-                >= self.config.tr_set.expire_tick * 60:
+                >= self.config.loc_set.zone.ep_out_tick * 60:
             ep_out = 1
 
-    if self.config.tr_set.expire_k1 != "None":  # Todo - onbarclose 에서는, res_df_open 으로 open_index 의 tp 정보를 사용
+    if self.config.loc_set.zone.ei_k != "None":  # Todo - onbarclose 에서는, res_df_open 으로 open_index 의 tp 정보를 사용
         if open_side == OrderSide.SELL:
             low = res_df['low'].to_numpy()
-            short_tp_ = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
-            short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(selection_id)].to_numpy()
-            if low[e_j] <= short_tp_[tp_j] + short_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+            short_tp_ = res_df_open['short_tp_{}'.format(strat_version)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
+            short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(strat_version)].to_numpy()
+            if low[e_j] <= short_tp_[tp_j] + short_tp_gap_[tp_j] * self.config.loc_set.zone.ei_k:
                 ep_out = 1
         else:
             high = res_df['high'].to_numpy()
-            long_tp_ = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
-            long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(selection_id)].to_numpy()
-            if high[e_j] >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+            long_tp_ = res_df_open['long_tp_{}'.format(strat_version)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
+            long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(strat_version)].to_numpy()
+            if high[e_j] >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.loc_set.zone.ei_k:
                 ep_out = 1
 
     if ep_out:
@@ -473,14 +466,14 @@ def check_ei_k_onbarclose_v2(self, res_df_open, res_df, e_j, tp_j, open_side):  
 
 def check_ei_k_onbarclose(self, res_df_open, res_df, open_side, e_j, tp_j):     # for point2
     ep_out = 0
-    selection_id = self.config.selection_id
+    strat_version = self.config.strat_version
     if open_side == OrderSide.SELL:
-        if res_df['low'].iloc[e_j] <= res_df_open['h_short_rtc_1_{}'.format(selection_id)].iloc[tp_j] - \
-                res_df_open['h_short_rtc_gap_{}'.format(selection_id)].iloc[tp_j] * self.config.tr_set.expire_k1:
+        if res_df['low'].iloc[e_j] <= res_df_open['h_short_rtc_1_{}'.format(strat_version)].iloc[tp_j] - \
+                res_df_open['h_short_rtc_gap_{}'.format(strat_version)].iloc[tp_j] * self.config.loc_set.zone.ei_k:
             ep_out = 1
     else:
-        if res_df['high'].iloc[e_j] >= res_df_open['h_long_rtc_1_{}'.format(selection_id)].iloc[tp_j] + \
-                res_df_open['h_long_rtc_gap_{}'.format(selection_id)].iloc[tp_j] * self.config.tr_set.expire_k1:
+        if res_df['high'].iloc[e_j] >= res_df_open['h_long_rtc_1_{}'.format(strat_version)].iloc[tp_j] + \
+                res_df_open['h_long_rtc_gap_{}'.format(strat_version)].iloc[tp_j] * self.config.loc_set.zone.ei_k:
             ep_out = 1
 
     if ep_out:
@@ -490,21 +483,21 @@ def check_ei_k_onbarclose(self, res_df_open, res_df, open_side, e_j, tp_j):     
 
 def get_dynamic_tpout(self, res_df, open_side, tp, out):
     # ------ dynamic & inversion tp_out ------ #
-    selection_id = self.config.selection_id
+    strat_version = self.config.strat_version
     if open_side == OrderSide.BUY:
         if self.config.pos_set.short_inversion:
-            out_series = res_df['short_tp_{}'.format(selection_id)]
-            tp_series = res_df['short_out_{}'.format(selection_id)]
+            out_series = res_df['short_tp_{}'.format(strat_version)]
+            tp_series = res_df['short_out_{}'.format(strat_version)]
         else:
-            out_series = res_df['long_out_{}'.format(selection_id)]
-            tp_series = res_df['long_tp_{}'.format(selection_id)]
+            out_series = res_df['long_out_{}'.format(strat_version)]
+            tp_series = res_df['long_tp_{}'.format(strat_version)]
     else:
         if self.config.pos_set.long_inversion:
-            out_series = res_df['long_tp_{}'.format(selection_id)]
-            tp_series = res_df['long_out_{}'.format(selection_id)]
+            out_series = res_df['long_tp_{}'.format(strat_version)]
+            tp_series = res_df['long_out_{}'.format(strat_version)]
         else:
-            out_series = res_df['short_out_{}'.format(selection_id)]
-            tp_series = res_df['short_tp_{}'.format(selection_id)]
+            out_series = res_df['short_out_{}'.format(strat_version)]
+            tp_series = res_df['short_tp_{}'.format(strat_version)]
 
     if not self.config.tp_set.static_tp:
         tp = tp_series.to_numpy()[self.config.trader_set.complete_index]
@@ -684,7 +677,7 @@ def check_hl_out(self, res_df, market_close_on, log_out, out, open_side):
     return market_close_on, log_out
 
 def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side):
-    selection_id = self.config.selection_id
+    strat_version = self.config.strat_version
 
     #   Todo, inversion 에 대한 고려 진행된건가 - 안된것으로 보임
     close = res_df['close'].to_numpy()
@@ -700,7 +693,7 @@ def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side
                 market_close_on = True
 
         # ------ 2. early_out ------ #
-        if selection_id in ['v5_2']:
+        if strat_version in ['v5_2']:
             bb_lower_5m = res_df['bb_lower_5m'].to_numpy()
             bb_upper_5m = res_df['bb_upper_5m'].to_numpy()
             if close[j] < bb_lower_5m[j] < close[j - 1]:
@@ -722,7 +715,7 @@ def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side
                 market_close_on = True
 
         # ------ 2. early_out ------ #
-        if selection_id in ['v5_2']:
+        if strat_version in ['v5_2']:
             bb_lower_5m = res_df['bb_lower_5m'].to_numpy()
             bb_upper_5m = res_df['bb_upper_5m'].to_numpy()
             if close[j] > bb_upper_5m[j] > close[j - 1]:
@@ -918,7 +911,7 @@ def calc_ideal_profit_v3(self, res_df, open_side, ideal_ep, tp_exec_dict, open_e
 
     # ------ trade_log ------ #
     for k_ts, tps in tp_exec_dict.items():  # tp_exec_dict 의 사용 의미는 ideal / real_pr 계산인건가
-        trade_log[k_ts] = [tps, open_side, "exit"]     # Todo, trade_log 사용하는 phase, list 로 변한 tps 주의
+        trade_log[k_ts] = [tps, "exit"]     # Todo, trade_log 사용하는 phase, list 로 변한 tps 주의
 
     return ideal_profit, real_profit, trade_log
 

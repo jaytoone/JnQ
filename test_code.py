@@ -19,32 +19,20 @@ from ast import literal_eval
 # from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
 from funcs.funcs_trader import load_bin, preproc_bin
 # from funcs_binance.funcs_trader_modules import read_write_cfg_list
-def read_write_cfg_list(cfg_path_list, mode='r', edited_cfg_list=None):
-    try:
-        cfg_file_list = [open(cfg_path, mode) for cfg_path in cfg_path_list]
-        if mode == 'r':
-            cfg_list = [EasyDict(json.load(cfg_)) for cfg_ in cfg_file_list]
-        elif mode == 'w':
-            assert edited_cfg_list is not None, "assert edited_cfg_list is not None"
-            _ = [json.dump(cfg_, cfg_file_, indent=2) for cfg_, cfg_file_ in zip(edited_cfg_list, cfg_file_list)]
-        else:
-            assert mode in ['r', 'w'], "assert mode in ['r', 'w']"
 
-        #       opened files should be closed --> 닫지 않으면 reopen 시 error occurs         #
-        _ = [cfg_.close() for cfg_ in cfg_file_list]
-
-        if mode == 'r':
-            return cfg_list
-        else:
-            return
-    except Exception as e:
-        print("error in read_write_cfg_list :", e)
+# concated_df, end_date = concat_candlestick("ETHUSDT", '1m', days, limit=1500,
+#                                                               end_date=None, show_process=True, timesleep=0.2)
+str_ts = str(datetime.now())
+# str_ts[-9:] = '12.354235'
+# print(str_ts.replace(str_ts[-9:], "59.999000"))
+print(str_ts.split(':')[-1])
+print(str_ts.replace(str_ts.split(':')[-1], "59.999000"))
+# print(concated_df.tail())
 
 # config_list = read_write_cfg_list([r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE\config\0405_wave_config_3_5.json"])
 # p_ranges, p_qty = literal_eval(config_list[0].tp_set.p_ranges), literal_eval(config_list[0].tp_set.p_qty)
 # print(type(p_ranges))
-t_list = [1]
-print(eval("t_list[-1] == 0"))
+
 # short_bin = load_bin("C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\IDE\\res_bin\\ID3_1_all_05_5_ETHUSDT_short.bin")
 # # while 1:
 # #     print(datetime.now().second)
