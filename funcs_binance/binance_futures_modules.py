@@ -255,6 +255,8 @@ if __name__ == '__main__':
     # result = request_client.get_account_trades(t_symbol)
     # # result = request_client.get_account_trades(t_symbol, fromId=1422647525)
     # PrintMix.print_data(result)
+    # result = request_client.change_initial_leverage(symbol=t_symbol, leverage=5)
+    # print(result)
 
     # print(total_income(t_symbol, 1644589260000, 1644589376739))
     # result = request_client.get_exchange_information()
@@ -265,35 +267,38 @@ if __name__ == '__main__':
     #     if data.symbol == symbol_:
     #         print([data.pricePrecision, data.quantityPrecision])
 
-    open_side = OrderSide.BUY
-    # close_side = OrderSide.SELL
-    # print(dir(get_order_info(t_symbol, 8389765520388500621)))
-    # print(total_income(t_symbol, 1650933600000, 1650981660000))
-    # sub_client.unsubscribe_all()
-    start_0 = time.time()
+    # open_side = OrderSide.BUY
+    # # close_side = OrderSide.SELL
+    # # print(dir(get_order_info(t_symbol, 8389765520388500621)))
+    # # print(total_income(t_symbol, 1650933600000, 1650981660000))
+    # # sub_client.unsubscribe_all()
+    # start_0 = time.time()
     sub_client.subscribe_aggregate_trade_event(t_symbol.lower(), callback, error)
-    # sub_client.subscribe_candlestick_event(t_symbol.lower(), '1m', callback, error)
-    # print(dir(sub_client.subscribe_aggregate_trade_event))
-    # quit()
     while 1:
-        # print(dir(sub_client.connections[0]))
-        if 3 > time.time() - start_0 > 2:
-            sub_client.connections[0].on_failure(error)
-            # sub_client.connections[0].close()
-            # sub_client.connections[0].re_connect()
-        # if sub_client.connections[0].price is not None:
-        #     print(time.time() - start_0)
-        #     break
-        print("sub_client.connections[0].price :", sub_client.connections[0].price)
+        print(get_market_price_v2(sub_client))
+        time.sleep(0.1)
 
-        time.sleep(1)
+    # # sub_client.subscribe_candlestick_event(t_symbol.lower(), '1m', callback, error)
+    # # print(dir(sub_client.subscribe_aggregate_trade_event))
+    # # quit()
+    # while 1:
+    #     # print(dir(sub_client.connections[0]))
+    #     if 3 > time.time() - start_0 > 2:
+    #         sub_client.connections[0].on_failure(error)
+    #         # sub_client.connections[0].close()
+    #         # sub_client.connections[0].re_connect()
+    #     # if sub_client.connections[0].price is not None:
+    #     #     print(time.time() - start_0)
+    #     #     break
+    #     print("sub_client.connections[0].price :", sub_client.connections[0].price)
+    #
+    #     time.sleep(1)
 
     # print(dir(sub_client.connections[0].request))
     # print((sub_client.connections[0].request.json_parser.price))
     # print("dir(sub_client.connections[1]) :", dir(sub_client.connections[1]))
     # print(sub_client.connections[0].price)
     # print((sub_client.connections.price))
-    # print(get_market_price_v2(sub_client))
 
     # print(get_precision_by_price(91.823))
     # result = request_client.post_order(timeInForce=TimeInForce.GTC, symbol=t_symbol,

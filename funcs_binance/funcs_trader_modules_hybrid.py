@@ -57,13 +57,16 @@ def init_set(self):
             sys_log.info('leverage type --> isolated')
 
         # ------ 2. confirm limit leverage ------ #
-        try:
-            limit_leverage = get_limit_leverage(symbol_=self.config.trader_set.symbol)
-        except Exception as e:
-            sys_log.error('error in get limit_leverage : {}'.format(e))
-            continue
+        if self.config.lvrg_set.limit_leverage is None:
+            try:
+                limit_leverage = get_limit_leverage(symbol_=self.config.trader_set.symbol)
+            except Exception as e:
+                sys_log.error('error in get limit_leverage : {}'.format(e))
+                continue
+            else:
+                sys_log.info('limit_leverage : {}'.format(limit_leverage))
         else:
-            sys_log.info('limit_leverage : {}'.format(limit_leverage))
+            limit_leverage = self.config.lvrg_set.limit_leverage
 
         # ------ 3. sub_client ------ #
         try:
@@ -682,6 +685,83 @@ def check_hl_out(self, res_df, market_close_on, log_out, out, open_side):
                 sys_log.info("{} : {} {}".format("close <= out", log_out, out))
 
     return market_close_on, log_out
+
+def check_signal_out_v2(self, res_df, market_close_on, log_out, cross_on, open_side):
+    selection_id = self.config.selection_id
+    wave_itv2 = self.config.tr_set.wave_itv2
+    wave_period2 = self.config.tr_set.wave_period2
+
+    #   Todo, inversion 에 대한 고려 진행된건가 - 안된것으로 보임
+    close = res_df['close'].to_numpy()
+    if open_side == OrderSide.SELL:
+        # ------------ market_close ------------ #
+        # ------ short ------ #
+        j = self.config.trader_set.complete_index
+        # ------ 0. cci_exit ------ #
+        if self.config.out_set.cci_exit:
+            if cross_on:
+                cci_ = res_df['cci_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+                if cci_[j] >= 100:
+                    market_close_on = True
+            else:
+                wave_co_ = res_df['wave_co_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+                if wave_co_[j]:
+                    cross_on = 1
+
+        # ------ 1. rsi_exit ------ #
+        if self.config.out_set.rsi_exit:
+            rsi_ = res_df['rsi_%s' % self.config.loc_set.point.exp_itv].to_numpy()
+            osc_band = self.config.loc_set.point.osc_band
+            if (rsi_[j - 1] >= 50 - osc_band) & (rsi_[j] < 50 - osc_band):
+                market_close_on = True
+
+        # ------ 2. early_out ------ #
+        if selection_id in ['v5_2']:
+            bb_lower_5m = res_df['bb_lower_5m'].to_numpy()
+            bb_upper_5m = res_df['bb_upper_5m'].to_numpy()
+            if close[j] < bb_lower_5m[j] < close[j - 1]:
+                cross_on = 1
+            if cross_on == 1 and close[j] > bb_upper_5m[j] > close[j - 1]:
+                market_close_on = True
+
+        if market_close_on:
+            log_out = close[j]
+            sys_log.info("signal out : {}".format(log_out))
+    else:
+        # ------ long ------ #
+        j = self.config.trader_set.complete_index
+        # ------ 0. cci_exit ------ #
+        if self.config.out_set.cci_exit:
+            if cross_on:
+                cci_ = res_df['cci_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+                if cci_[j] <= -100:
+                    market_close_on = True
+            else:
+                wave_cu_ = res_df['wave_cu_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+                if wave_cu_[j]:
+                    cross_on = 1
+
+        # ------ 1. rsi_exit ------ #
+        if self.config.out_set.rsi_exit:
+            rsi_ = res_df['rsi_%s' % self.config.loc_set.point.exp_itv].to_numpy()
+            osc_band = self.config.loc_set.point.osc_band
+            if (rsi_[j - 1] <= 50 + osc_band) & (rsi_[j] > 50 + osc_band):
+                market_close_on = True
+
+        # ------ 2. early_out ------ #
+        if selection_id in ['v5_2']:
+            bb_lower_5m = res_df['bb_lower_5m'].to_numpy()
+            bb_upper_5m = res_df['bb_upper_5m'].to_numpy()
+            if close[j] > bb_upper_5m[j] > close[j - 1]:
+                cross_on = 1
+            if cross_on == 1 and close[j] < bb_lower_5m[j] < close[j - 1]:
+                market_close_on = True
+
+        if market_close_on:
+            log_out = close[j]    # j 때문에 이곳에 배치
+            sys_log.info("signal out : {}".format(log_out))
+
+    return market_close_on, log_out, cross_on
 
 def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side):
     selection_id = self.config.selection_id

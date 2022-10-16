@@ -65,10 +65,11 @@ def limit_order(self, order_type, limit_side, pos_side, limit_price, limit_quant
 
                     #    예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치    #
                     available_balance, leverage_ = order_info
-
                     self.over_balance = available_balance
                     available_balance = max_available_balance * 0.9
-                    #          get available quantity         #
+
+                    # --- get available quantity --- #
+                    _, quantity_precision = get_precision(self.config.trader_set.symbol)
                     quantity = available_balance / limit_price * leverage_
                     quantity = calc_with_precision(quantity, quantity_precision, def_type='floor')
                     sys_log.info('available_balance (temp) : {}'.format(available_balance))

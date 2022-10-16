@@ -16,9 +16,12 @@ pd.set_option('display.max_columns', 2500)
 
 #           1 day = 86399000. (timestamp)       #
 a_day = 3600 * 24 * 1000
+candle_limit = 1500
 
 
-def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_process=False, timesleep=None):
+def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None, show_process=False, timesleep=None):
+
+    assert limit <= candle_limit, "assert limit < candle_limit"
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
@@ -39,7 +42,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
         print(symbol)
         
     if days > 1:    # 1일 이상의 data 가 필요한 경우 limit 없이 모두 가져옴
-        limit = 1500
+        limit = candle_limit
 
     for day_cnt in range(days):
 
@@ -55,7 +58,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
             startTime = int(startTime_)
             endTime = int(endTime)
             #        limit < max_limit, startTime != None 일 경우, last_index 이상하게 나옴        #
-            if limit != 1500:
+            if limit != candle_limit:
                 startTime = None
 
             df = request_client.get_candlestick_data(symbol=symbol,
@@ -99,7 +102,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 if __name__ == '__main__':
 
     days = 300
-    days = 90
+    days = 3
 
     end_date = "2021-04-12"
     end_date = "2020-09-06"

@@ -1,24 +1,29 @@
 import pandas as pd
-from datetime import datetime
-import numpy as np
+# import numpy as np
 # from binance_futures_concat_candlestick import concat_candlestick
 # from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
-from funcs.funcs_trader import intmin
+# from funcs.funcs_trader import intmin
 import os
-import pickle
-import math
-from pathlib import Path
-import json
-from easydict import EasyDict
-import time
+# import pickle
+# import math
+# from pathlib import Path
+# import json
+# from easydict import EasyDict
+# import time
 # import logging
-import logging.config
-from logging.handlers import RotatingFileHandler
-from ast import literal_eval
+# import logging.config
+# from logging.handlers import RotatingFileHandler
+# from ast import literal_eval
+from datetime import datetime
 
-# from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
-from funcs.funcs_trader import load_bin, preproc_bin
+from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
+# from funcs.funcs_trader import load_bin, preproc_bin
 # from funcs_binance.funcs_trader_modules import read_write_cfg_list
+
+
+res_df_ = pd.read_feather(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated\database_bn\2022-07-19\2022-07-19 ETHUSDT_1m.ftr",
+                                       columns=None, use_threads=True).set_index("index")
+print(res_df_.tail())
 
 # concated_df, end_date = concat_candlestick("ETHUSDT", '1m', days, limit=1500,
 #                                                               end_date=None, show_process=True, timesleep=0.2)

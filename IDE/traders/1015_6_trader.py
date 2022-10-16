@@ -8,8 +8,8 @@ pkg_path = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE"  # Todo, sy
 os.chdir(pkg_path)
 
 from funcs_binance.binance_futures_modules import *  # math, pandas, bot_config (API_key & clients)
-from funcs_binance.funcs_trader_modules import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
-    get_new_df, get_new_df_onstream, check_hl_out_onbarclose, check_hl_out, check_signal_out, check_limit_tp_exec_v2, log_sub_tp_exec, get_dynamic_tpout, \
+from funcs_binance.funcs_trader_modules_hybrid import get_streamer, read_write_cfg_list, get_income_info_v2, calc_ideal_profit_v3, \
+    get_new_df, get_new_df_onstream, check_hl_out_onbarclose, check_hl_out, check_signal_out_v2, check_limit_tp_exec_v2, log_sub_tp_exec, get_dynamic_tpout, \
     check_breakout_qty, check_ei_k_v2, check_ei_k_onbarclose_v2, get_balance, get_tpepout, init_set, get_open_side_v2, get_p_tpqty
 from funcs_binance.funcs_order_logger_hedge import limit_order, partial_limit_order_v4, cancel_order_list, market_close_order_v2
 from funcs.funcs_trader import intmin_np
@@ -228,10 +228,10 @@ class Trader:
                     # ------ 3. set selection_id ------ #
                     selection_id = self.config.selection_id
 
-                    # ------ 4. point2 (+ ei_k) phase ------ #
-                    if self.config.ep_set.point2.use_point2:
+                    # ------ 4. point2 (+ ei_k) phase ------ #  Todo - we don't use.
+                    if self.config.loc_set.point2.use_point2:
                         ep_loc_point2 = 1
-                        sys_log.warning("selection_id use_point2 : {}{}".format(selection_id, self.config.ep_set.point2.use_point2))
+                        sys_log.warning("selection_id use_point2 : {}{}".format(selection_id, self.config.loc_set.point2.use_point2))
 
                         #        a. tp_j, res_df_open 으로 고정
                         c_i = self.config.trader_set.complete_index
@@ -295,6 +295,11 @@ class Trader:
             first_iter = True  # 포지션 변경하는 경우, 필요함
             while 1:  # <-- loop for 'check order type change condition'
 
+                self.available_balance, self.over_balance, min_bal_bool = get_balance(self, first_iter, cfg_path_list)
+                if min_bal_bool:
+                    break
+                sys_log.info('~ get balance time : %.5f' % (time.time() - start_ts))
+
                 # ------ get tr_set x adj precision ------ #
                 tp, ep, out, open_side = get_tpepout(self, open_side, res_df_open, res_df)   # Todo, 일단은, ep1 default 로 설정
                 # Todo, 실제로는 precision 조금 달라질 것, 큰 차이없다고 가정 (solved)
@@ -314,13 +319,19 @@ class Trader:
                         fake_order = 1
                     ep = max(open_price, ep)
 
-                leverage = self.utils_public.lvrg_set(res_df, self.config, open_side, ep, out, fee, limit_leverage)
+                leverage = self.utils_public.lvrg_set_v2(self.available_balance, self.config, open_side, tp, out, fee, limit_leverage)
 
                 sys_log.info('tp : {}'.format(tp))
                 sys_log.info('ep : {}'.format(ep))
                 sys_log.info('out : {}'.format(out))
                 sys_log.info('leverage : {}'.format(leverage))
                 sys_log.info('~ tp ep out lvrg set time : %.5f' % (time.time() - start_ts))
+
+                if leverage is None:
+                    sys_log.info("leverage_rejection occured.")
+                    if not self.config.trader_set.backtrade:
+                        time.sleep(60)   # time_term for consecutive retry.
+                    break
 
                 if not self.config.trader_set.backtrade:
                     while 1:
@@ -333,11 +344,6 @@ class Trader:
                         else:
                             sys_log.info('leverage changed --> {}'.format(leverage))
                             break
-
-                self.available_balance, self.over_balance, min_bal_bool = get_balance(self, first_iter, cfg_path_list)
-                if min_bal_bool:
-                    break
-                sys_log.info('~ get balance time : %.5f' % (time.time() - start_ts))
 
                 # ---------- calc. open_quantity ---------- #
                 open_quantity = calc_with_precision(self.available_balance / ep * leverage, quantity_precision)
@@ -433,6 +439,9 @@ class Trader:
             if min_bal_bool:
                 continue
 
+            if leverage is None:
+                continue
+
             if open_executedQty == 0.0:  # open_executedQty 는 분명 정의됨
                 self.income = 0
             else:
@@ -464,9 +473,9 @@ class Trader:
                 # ------ param init. ------ #
                 #   a. 아래의 조건문을 담을 변수가 필요함 - 병합 불가 (latest)
                 #       i. => load_new_df2 는 1 -> 0 으로 변경됨
-                use_new_df2 = 0
-                if not self.config.tp_set.static_tp or not self.config.out_set.static_out:
-                    use_new_df2 = 1    # for signal_out, dynamic_out & tp
+                use_new_df2 = 1
+                # if not self.config.tp_set.static_tp or not self.config.out_set.static_out:
+                #     use_new_df2 = 1    # for signal_out, dynamic_out & tp
                 load_new_df2 = 1
                 limit_tp = 1
                 post_order_res_list = []
@@ -573,19 +582,21 @@ class Trader:
                                 check_time = new_check_time
                             exec_tp_len = len(tp_executedPrice_list)
                         else:
-                            if open_side == OrderSide.BUY:
-                                exec_tp_len = np.sum(res_df['high'].to_numpy()[self.config.trader_set.complete_index] >= np.array(p_tps))
-                            else:
-                                exec_tp_len = np.sum(res_df['low'].to_numpy()[self.config.trader_set.complete_index] <= np.array(p_tps))
+                            if not self.config.tp_set.non_tp:
+                                if open_side == OrderSide.BUY:
+                                    exec_tp_len = np.sum(res_df['high'].to_numpy()[self.config.trader_set.complete_index] >= np.array(p_tps))
+                                else:
+                                    exec_tp_len = np.sum(res_df['low'].to_numpy()[self.config.trader_set.complete_index] <= np.array(p_tps))
 
-                            tp_executedPrice_list = p_tps[:exec_tp_len]  # 지속적 갱신
-                            all_executed = 1 if exec_tp_len == len(p_tps) else 0
+                                tp_executedPrice_list = p_tps[:exec_tp_len]  # 지속적 갱신
+                                all_executed = 1 if exec_tp_len == len(p_tps) else 0
 
                         # ------ a. tp execution logging ------ #
-                        if prev_exec_tp_len != exec_tp_len:  # logging 기준, 체결이 되면 prev_exec_tp_len != exec_tp_len
-                            ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = p_tps[prev_exec_tp_len:exec_tp_len]
-                            prev_exec_tp_len = exec_tp_len
-                            sys_log.info("ex_dict : {}".format(ex_dict))
+                        if not self.config.tp_set.non_tp:
+                            if prev_exec_tp_len != exec_tp_len:  # logging 기준, 체결이 되면 prev_exec_tp_len != exec_tp_len
+                                ex_dict[str(res_df.index[self.config.trader_set.complete_index])] = p_tps[prev_exec_tp_len:exec_tp_len]
+                                prev_exec_tp_len = exec_tp_len
+                                sys_log.info("ex_dict : {}".format(ex_dict))
 
                         # ------ b. all_execution ------ #
                         if all_executed:
@@ -600,7 +611,7 @@ class Trader:
                                 market_close_on, log_out = check_hl_out_onbarclose(self, res_df, market_close_on, log_out, out, open_side)
 
                             if not market_close_on:  # log_out 갱신 방지
-                                market_close_on, log_out, cross_on = check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side)
+                                market_close_on, log_out, cross_on = check_signal_out_v2(self, res_df, market_close_on, log_out, cross_on, open_side)
 
                             if market_close_on:
                                 sys_log.info("market_close_on is True")
@@ -615,7 +626,9 @@ class Trader:
 
                         except Exception as e:
                             sys_log.error('error in checking market_close_on : {}'.format(e))
-                            continue
+                            # continue
+                            load_new_df2 = 1
+                            break   # we need utilized data
 
                         # ------ 3. bar_end phase - loop selection ------ #
                         if not self.config.trader_set.backtrade:

@@ -10,7 +10,7 @@
     "complete_index": -2,
     "limit_fee": 0.0002,
     "market_fee": 0.0004,
-    "initial_asset": 24500,
+    "initial_asset": 3000,
     "asset_changed": 0,
     "symbol": "ETHUSDT",
     "symbol_changed": 0,
@@ -35,9 +35,9 @@
     "short_inversion": 0,
     "long_inversion": 0,
     "short_ban": 0,
-    "long_ban": 0,
+    "long_ban": 1,
     "short_fake": 0,
-    "long_fake": 1
+    "long_fake": 0
   },
   "loc_set": {
     "point1": {
