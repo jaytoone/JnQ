@@ -102,7 +102,7 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 if __name__ == '__main__':
 
     days = 300
-    days = 3
+    # days = 3
 
     end_date = "2021-04-12"
     end_date = "2020-09-06"
@@ -123,9 +123,8 @@ if __name__ == '__main__':
 
     # with open('../ticker_list/binance_futures_20211207.pkl', 'rb') as f:
     #     coin_list = pickle.load(f)
-    # coin_list = ['ETHUSDT', 'BTCUSDT', 'ETCUSDT', 'ADAUSDT', 'XLMUSDT', 'LINKUSDT', 'LTCUSDT', 'EOSUSDT', 'XRPUSDT',
-    #              'BCHUSDT']
-    coin_list = ['ETHUSDT']
+    coin_list = ['FTMUSDT', 'RUNEUSDT']
+    # coin_list = ['ETHUSDT']
     print(coin_list)
 
     for coin in coin_list:

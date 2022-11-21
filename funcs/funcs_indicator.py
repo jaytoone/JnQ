@@ -1436,6 +1436,14 @@ def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line, np_timeidx=None):
     return res_df
 
 
+def get_hhll(res_df, itv):
+    itvnum = to_itvnum(itv)
+
+    res_df['hh_{}'.format(itv)] = res_df['high_{}'.format(itv)].to_numpy() <= res_df['high_{}'.format(itv)].shift(-itvnum).to_numpy()
+    res_df['ll_{}'.format(itv)] = res_df['low_{}'.format(itv)].to_numpy() >= res_df['low_{}'.format(itv)].shift(-itvnum).to_numpy()
+
+    return res_df
+
 def h_candle_v4(ltf_df, htf_df, columns=None):   # v4 는 htf_df 를 입력해야함, colab 상에서 to_htf 를 중복하지 않기 위해 만든걸로 보임
 
     if columns is None:

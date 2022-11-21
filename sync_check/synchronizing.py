@@ -25,6 +25,26 @@ pd.set_option('display.max_columns', 2500)
 def sync_check(df, plot_size=45, plotting=False):
 
 
+    df_5T = to_htf(df, '5T', '1h')
+    df_5T['sar_5T'] = talib.SAREXT(df_5T.high.to_numpy(), df_5T.low.to_numpy(),
+                               startvalue=0.0, offsetonreverse=0,
+                               accelerationinitlong=0.02, accelerationlong=0.02, accelerationmaxlong=0.2,
+                               accelerationinitshort=0.02, accelerationshort=0.02, accelerationmaxshort=0.2)
+    # df_5T['sar_5T'] = talib.SAR(df_5T.high.to_numpy(), df_5T.low.to_numpy(), acceleration=0.02)
+    df = df.join(to_lower_tf_v2(df, df_5T, [-1]), how='inner')
+    # print(df_5T.sar_5T.tail(40))
+    # print(df_5T.tail(40))
+    print(df.tail(40))
+    # print(df.sar_5T.tail(40))
+    quit()
+
+    # df['sar_T'] = talib.SAREXT(df.high.to_numpy(), df.low.to_numpy(),
+    #                                startvalue=0.02, offsetonreverse=0,
+    #                                accelerationinitlong=0.02, accelerationlong=0.02, accelerationmaxlong=0.2,
+    #                                accelerationinitshort=0.02, accelerationshort=0.02, accelerationmaxshort=0.2)
+    # print(df.sar_T.tail(40))
+    # quit()
+
     df = stoch_v2(df)
     print(df.tail(40))
     quit()

@@ -5,7 +5,7 @@ import pandas as pd
 # from funcs.funcs_trader import intmin
 import os
 # import pickle
-# import math
+import math
 # from pathlib import Path
 # import json
 # from easydict import EasyDict
@@ -14,6 +14,7 @@ import os
 # import logging.config
 # from logging.handlers import RotatingFileHandler
 # from ast import literal_eval
+import numpy as np
 from datetime import datetime
 
 from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
@@ -21,18 +22,19 @@ from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlest
 # from funcs_binance.funcs_trader_modules import read_write_cfg_list
 
 
-res_df_ = pd.read_feather(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated\database_bn\2022-07-19\2022-07-19 ETHUSDT_1m.ftr",
-                                       columns=None, use_threads=True).set_index("index")
-print(res_df_.tail())
-
-# concated_df, end_date = concat_candlestick("ETHUSDT", '1m', days, limit=1500,
-#                                                               end_date=None, show_process=True, timesleep=0.2)
-str_ts = str(datetime.now())
-# str_ts[-9:] = '12.354235'
-# print(str_ts.replace(str_ts[-9:], "59.999000"))
-print(str_ts.split(':')[-1])
-print(str_ts.replace(str_ts.split(':')[-1], "59.999000"))
-# print(concated_df.tail())
+print(sum([1, 2, 3]) / len([1, 2, 3]))
+# res_df_ = pd.read_feather(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated\database_bn\2022-07-19\2022-07-19 ETHUSDT_1m.ftr",
+#                                        columns=None, use_threads=True).set_index("index")
+# print(res_df_.tail())
+#
+# # concated_df, end_date = concat_candlestick("ETHUSDT", '1m', days, limit=1500,
+# #                                                               end_date=None, show_process=True, timesleep=0.2)
+# str_ts = str(datetime.now())
+# # str_ts[-9:] = '12.354235'
+# # print(str_ts.replace(str_ts[-9:], "59.999000"))
+# print(str_ts.split(':')[-1])
+# print(str_ts.replace(str_ts.split(':')[-1], "59.999000"))
+# # print(concated_df.tail())
 
 # config_list = read_write_cfg_list([r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE\config\0405_wave_config_3_5.json"])
 # p_ranges, p_qty = literal_eval(config_list[0].tp_set.p_ranges), literal_eval(config_list[0].tp_set.p_qty)

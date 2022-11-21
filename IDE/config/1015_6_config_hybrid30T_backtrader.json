@@ -142,7 +142,7 @@
     "out_onexec": 0,
     "tf_exit": "None",
     "rsi_exit": 0,
-    "cci_exit": 1
+    "cci_exit": 0
   },
   "lvrg_set": {
     "static_lvrg": 0,

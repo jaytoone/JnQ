@@ -871,6 +871,187 @@ def recall(true_idx):   # true_bias / total_entry
 def mr_res(input_data, rpsn_v, inval_v, np_ones):
     return input_data == rpsn_v if rpsn_v > inval_v else np_ones
 
+
+def idep_plot_v16_3(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
+                    fontsize=15, signi=False):  # open_idx, side_arr
+    if not signi:
+        plt.style.use(['dark_background', 'fast'])
+        plt.figure(figsize=(24, 8))
+        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
+                               ncols=3,  # col 몇 개
+                               height_ratios=[10, 1]
+                               # height_ratios=[10, 10, 1]
+                               )
+    gs_idx = 0
+    # plt.suptitle(key)
+
+    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
+    assert np.sum(p_qty_ratio) == 1.0
+    assert len(p_ranges) == len(p_qty_ratio)
+
+    if sample_ratio is not None:
+        sample_len = int(len_df * sample_ratio)
+    else:
+        sample_len = len_df
+
+    # ------ short & long data preparation ------ #
+    # start_0 = time.time()
+
+    net_p1_idx_arr, p1_idx_arr, p2_idx_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
+    assert len(p1_idx_arr) != 0, "assert len(p1_idx_arr) != 0"
+
+    short_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.SELL)[0]]
+    long_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.BUY)[0]]
+
+    short_net_p1_frq = len(short_net_p1_idx_arr)
+    long_net_p1_frq = len(long_net_p1_idx_arr)
+    # print("len(short_net_p1_true_bias_bool) :", len(short_net_p1_idx_arr))
+    # print("len(long_net_p1_true_bias_bool) :", len(long_net_p1_idx_arr))
+
+    short_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.SELL)[0]  # p1_idx_arr 에 대한 idx, # side_arr,
+    long_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.BUY)[0]
+
+    # p1_idx = open_idx[p1_openi_arr].reshape(-1, 1)   # != p1_idx_arr, p1_openi_arr 은 exit_done 기준임
+
+    np_obj = np.hstack((pair_price_arr, pair_idx_arr, p1_idx_arr.reshape(-1, 1)))  # p1_idx_arr is 1d, need to be changed to 2d (for stacking)
+    short_obj = np_obj[short_p1_openi_idx]
+    long_obj = np_obj[long_p1_openi_idx]
+    both_obj = np.vstack((short_obj, long_obj))
+    print("short_obj.shape :", short_obj.shape)
+    print("long_obj.shape :", long_obj.shape)
+
+    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
+
+    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    # print("long_bias_arr.shape :", long_bias_arr.shape)
+    # print("short / long arr setting elapsed time :", time.time() - start_0)
+
+    # start_0 = time.time()
+    # print("passed")
+
+    short_tpbox_hhm, long_tpbox_hhm, short_tpbox_p2exec_hhm, long_tpbox_p2exec_hhm, short_outbox_hhm, long_outbox_hhm, \
+    short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick, short_p2_true_bias_bool, long_p2_true_bias_bool, \
+    short_tp_1, short_tp_0, long_tp_1, long_tp_0, short_out_1, short_out_0, long_out_1, long_out_0, short_ep2_0, long_ep2_0 = \
+        get_wave_bias_v6(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj,
+                         long_obj)
+
+    short_ll = res_df['ll_{}'.format(config.tr_set.wave_itv1)].to_numpy()[short_net_p1_idx_arr]
+    short_ll_odds = np.sum(short_ll) / len(short_ll)
+    long_hh = res_df['hh_{}'.format(config.tr_set.wave_itv1)].to_numpy()[long_net_p1_idx_arr]
+    long_hh_odds = np.sum(long_hh) / len(long_hh)
+    both_odds =  (short_ll_odds + long_hh_odds) /2
+
+    # print("get_wave_bias elapsed time :", time.time() - start_0)
+    # print("short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick :", short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick)
+
+    len_short, len_long = len(short_p1_openi_idx), len(long_p1_openi_idx)
+
+    # ------ plot_data ------ #
+    try:
+        # start_0 = time.time()
+        if len_short == 0:
+            short_pr = []
+            gs_idx += 1
+        else:
+            short_tr = short_tr_arr.mean()
+            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
+                                             p_qty_ratio, inversion)
+            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
+            short_cum_pr = np.cumprod(short_total_pr)
+            short_hlm = hlm(short_pr, short_p2_true_bias_bool)
+            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
+            if signi:
+                short_idep_res_obj = (short_tpbox_p2exec_hhm, short_hlm) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr,
+                                                                                              short_liqd)
+            else:
+                gs_idx = plot_info_v8_1(gs, gs_idx, len_df, sample_len, short_tr, short_ll_odds, short_tpbox_hhm, short_tpbox_p2exec_hhm,
+                                        short_outbox_hhm, short_hlm, short_trade_ticks, short_net_p1_frq, short_pr, short_total_pr,
+                                        short_cum_pr, short_liqd, short_lvrg_arr.mean(), title_position, fontsize)
+        # print("short plot_data elapsed time :", time.time() - start_0)
+
+    except Exception as e:
+        gs_idx += 1
+        print("error in short plot_data :", e)
+
+    try:
+        # start_0 = time.time()
+        if len_long == 0:
+            long_pr = []
+            gs_idx += 1
+        else:
+            long_tr = long_tr_arr.mean()
+            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
+                                           inversion)
+            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
+            long_cum_pr = np.cumprod(long_total_pr)
+            # long_hhm = long_net_p1_hhm
+            long_hlm = hlm(long_pr, long_p2_true_bias_bool)
+            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
+            if signi:
+                long_idep_res_obj = (long_tpbox_p2exec_hhm, long_hlm) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
+            else:
+                gs_idx = plot_info_v8_1(gs, gs_idx, len_df, sample_len, long_tr, long_hh_odds, long_tpbox_hhm, long_tpbox_p2exec_hhm, long_outbox_hhm,
+                                        long_hlm, long_trade_ticks, long_net_p1_frq, long_pr, long_total_pr,
+                                        long_cum_pr, long_liqd, long_lvrg_arr.mean(), title_position, fontsize)
+        # print("long plot_data elapsed time :", time.time() - start_0)
+    except Exception as e:
+        gs_idx += 1
+        print("error in long plot_data :", e)
+
+    try:
+        # start_0 = time.time()
+        if len_short * len_long == 0:
+            both_pr = []
+            gs_idx += 1
+        else:
+            both_tr = (short_tr + long_tr) / 2
+            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
+            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
+            both_cum_pr = np.cumprod(both_total_pr)
+            both_liqd = min(short_liqd, long_liqd)
+            both_p2_true_bias_bool = np.hstack((short_p2_true_bias_bool, long_p2_true_bias_bool))  # hstack for 1d arr, vstack for 2d arr
+            both_tpbox_hhm = (short_tpbox_hhm + long_tpbox_hhm) / 2
+            both_tpbox_p2exec_hhm, both_hlm = (short_tpbox_p2exec_hhm + long_tpbox_p2exec_hhm) / 2, (short_hlm + long_hlm) / 2
+            both_outbox_hhm = (short_outbox_hhm + long_outbox_hhm) / 2
+            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
+            both_net_p1_frq = short_net_p1_frq + long_net_p1_frq
+            if signi:
+                both_idep_res_obj = (both_tpbox_p2exec_hhm, both_hlm) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
+            else:
+                gs_idx = plot_info_v8_1(gs, gs_idx, len_df, sample_len, both_tr, both_odds, both_tpbox_hhm, both_tpbox_p2exec_hhm, both_outbox_hhm,
+                                        both_hlm, both_trade_ticks, both_net_p1_frq, both_pr, both_total_pr,
+                                        both_cum_pr, both_liqd, lvrg_arr.mean(), title_position, fontsize)
+        # print("both plot_data elapsed time :", time.time() - start_0)
+    except Exception as e:
+        gs_idx += 1
+        print("error in both plot_data :", e)
+
+    if not signi:
+        if len_short * len_long > 0:
+            for obj, bias_arr, cum_pr in zip([short_obj, long_obj, both_obj],
+                                             [short_p2_true_bias_bool, long_p2_true_bias_bool, both_p2_true_bias_bool],
+                                             [short_cum_pr, long_cum_pr, both_cum_pr]):
+                try:
+                    # start_0 = time.time()
+                    gs_idx = frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, cum_pr[-1], fontsize)
+                    # print("frq_dev_plot elapsed time :", time.time() - start_0)
+                except Exception as e:
+                    gs_idx += 1
+                    print("error in frq_dev_plot :", e)
+            plt.show()
+            plt.close()
+
+        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_tr_arr, short_p2_true_bias_bool, short_net_p1_bias_tick, short_p2exec_p1_bias_tick, short_net_p1_idx_arr, short_p2_idx_arr, short_tp_1, short_tp_0, short_out_1, short_out_0, short_ep2_0, \
+               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_tr_arr, long_p2_true_bias_bool, long_net_p1_bias_tick, long_p2exec_p1_bias_tick, long_net_p1_idx_arr, long_p2_idx_arr, long_tp_1, long_tp_0, long_out_1, long_out_0, long_ep2_0  # long_net_p1_idx_arr long_p2_idx_arr
+
+    else:
+        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
+
 def idep_plot_v16_2(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
                   fontsize=15, signi=False):  # open_idx, side_arr
     if not signi:
@@ -2096,6 +2277,24 @@ def plot_info_v9(gs, gs_idx, len_df, sample_len, tr, hhm, p2_hhm, out_hhm, mean_
     title_str = "tr : {:.3f}\n tpbox_hhm : {:.3f}\n tpbox_p2exec_hhm : {:.3f}\n outbox_hhm : {:.3f}\n tpbox_mean_low : {:.3f}\n hlm : {:.3f}\n bars_in : {:.3f}\n net_p1_frq : {}\n frq : {}\n dpf : {:.3f}\n wr : {:.3f}\n sr : {:.3f}\n acc_pr : {:.3f}\n sum_pr : {:.3f}\n" +\
               "min_pr : {:.3f}\n liqd : {:.3f}\n acc_mdd : -{:.3f}\n sum_mdd : -{:.3f}\n leverage {:.3f}"
     plt.title(title_str.format(tr, hhm, p2_hhm, out_hhm, mean_low, hlm, bars_in, net_p1_frq, *idep_res_obj[:-1], leverage), position=title_position, fontsize=fontsize)
+  except Exception as e:
+    print("error in plot_info :", e)
+
+  return gs_idx + 1
+
+def plot_info_v8_1(gs, gs_idx, len_df, sample_len, tr, hhll, hhm, p2_hhm, out_hhm, hlm, bars_in, net_p1_frq, pr, total_pr, cum_pr, liqd, leverage, title_position, fontsize):
+  try:
+    plt.subplot(gs[gs_idx])
+    idep_res_obj = get_res_info_nb_v2(sample_len, pr, total_pr, cum_pr, liqd)
+    plt.plot(cum_pr)
+    plt.plot(idep_res_obj[-1], color='gold')
+    if sample_len is not None:
+      plt.axvline(sample_len, alpha=1., linestyle='--', color='#ffeb3b')
+    plt.xlim(0, len_df)
+
+    title_str = "tr : {:.3f}\n hhll : {:.3f}\n tpbox_hhm : {:.3f}\n tpbox_p2exec_hhm : {:.3f}\n outbox_hhm : {:.3f}\n hlm : {:.3f}\n bars_in : {:.3f}\n net_p1_frq : {}\n frq : {}\n dpf : {:.3f}\n wr : {:.3f}\n sr : {:.3f}\n acc_pr : {:.3f}\n sum_pr : {:.3f}\n" +\
+              "min_pr : {:.3f}\n liqd : {:.3f}\n acc_mdd : -{:.3f}\n sum_mdd : -{:.3f}\n leverage {:.3f}"
+    plt.title(title_str.format(tr, hhll, hhm, p2_hhm, out_hhm, hlm, bars_in, net_p1_frq, *idep_res_obj[:-1], leverage), position=title_position, fontsize=fontsize)
   except Exception as e:
     print("error in plot_info :", e)
 
