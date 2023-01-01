@@ -109,7 +109,7 @@ if __name__ == '__main__':
     # intervals = ['5m', '15m', '30m']
     intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
 
-    concat_path = '../candlestick_concated'
+    concat_path = '../database'
 
     #       Todo        #
     #        higher timeframe 에 대해서는 days 를 충분히 할당해야할 것      #
@@ -170,7 +170,7 @@ if __name__ == '__main__':
 
             # try:
                 concated_excel.to_excel(os.path.join(concat_path, '%s/%s %s.xlsx' % (interval, end_date, coin)))
-                # concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+                # concated_excel.to_excel('./database/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
             except Exception as e:
                 print('Error in save to_excel :', e)
                 continue

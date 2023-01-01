@@ -101,7 +101,7 @@ class ARIMA_Bot:
                     # try:
                         temp_time = time.time()
 
-                        df_path = './candlestick_concated/%s/%s_ma7_close_entry_ai_plus.xlsx' % (self.interval, self.symbol)
+                        df_path = './database/%s/%s_ma7_close_entry_ai_plus.xlsx' % (self.interval, self.symbol)
                         if self.stacked_df_on:
 
                             try:

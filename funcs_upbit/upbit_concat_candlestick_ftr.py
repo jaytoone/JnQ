@@ -105,7 +105,7 @@ if __name__ == '__main__':
     intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     # intervals = ['5m', '15m', '30m', '1h', '4h']
 
-    concat_path = '../candlestick_concated/database_ub'
+    concat_path = '../database/database_ub'
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]

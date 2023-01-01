@@ -134,7 +134,7 @@ if __name__ == "__main__":
         #     Todo      #
         #      1. deprecated = load with pickle    #
         #      2. change to feather platfrom
-        # with open("candlestick_concated/res_df/" + dict_name, 'rb') as f:
+        # with open("database/res_df/" + dict_name, 'rb') as f:
         #     res_df_dict = pickle.load(f)
 
         # pd.read_feather(date_path6 + key, columns=None, use_threads=True).set_index("index")

@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
-import mpl_finance as mf
+# import mpl_finance as mf
+from mplfinance.original_flavor import candlestick_ohlc
 from funcs.funcs_idep import get_col_idxs
 from scipy import stats
 # from numba import jit
@@ -18,7 +19,8 @@ def strcol_tonumb(res_df, col_list):
 def candle_plot_v2(ax, ohlc_np, alpha=1.0, wickwidth=1.0):
   index = np.arange(len(ohlc_np))
   candle = np.hstack((np.reshape(index, (-1, 1)), ohlc_np))
-  mf.candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha, wickwidth=wickwidth)
+  # mf.candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha, wickwidth=wickwidth)
+  candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha)
 
 
 def nonstep_col_plot_v2(ax, np_col, alpha=1, color='#ffffff', linewidth=2):
@@ -61,7 +63,7 @@ def sort_bypr_v4(pr, obj, arr_list, descending=True):
 def whole_plot_check(data, win_idxs, selected_op_idxs, selected_ex_idxs, plot_check_dir=None, **col_idx_dict):
   # start_0 = time.time()
   plt.style.use(['dark_background', 'fast'])
-  fig = plt.figure(figsize=(30, 12))
+  fig = plt.figure(figsize=(30, 12), dpi=75)
   nrows, ncols = 1, 1
   gs = gridspec.GridSpec(nrows=nrows,  # row 부터 index 채우고 col 채우는 순서임 (gs_idx)
                          ncols=ncols,
@@ -194,6 +196,7 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
   # ------------ ax2 ------------ #
   # ------ cci_band ------ #
   ax2.axhline(100, color="#ffffff")
+  ax2.axhline(0, color="#ffffff")
   ax2.axhline(-100, color="#ffffff")
 
   # ------ stoch_band ------ #
@@ -234,7 +237,7 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
 def plot_check_v9(res_df, config, param_zip, pr_msg, x_max, x_margin_mult, y_margin_mult, back_plot, plot_check_dir=None, **col_idx_dict):
   # start_0 = time.time()
   plt.style.use(['dark_background', 'fast'])
-  fig = plt.figure(figsize=(30, 18))
+  fig = plt.figure(figsize=(30, 18), dpi=60)
   nrows, ncols = 2, 2
   gs = gridspec.GridSpec(nrows=nrows,  # row 부터 index 채우고 col 채우는 순서임 (gs_idx)
                          ncols=ncols,
@@ -331,7 +334,7 @@ def plot_check_v9(res_df, config, param_zip, pr_msg, x_max, x_margin_mult, y_mar
 def candle_plot(ohlc_np, ax, alpha=1.0, wickwidth=1.0):
   index = np.arange(len(ohlc_np))
   candle = np.hstack((np.reshape(index, (-1, 1)), ohlc_np))
-  mf.candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha, wickwidth=wickwidth)
+  candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha, wickwidth=wickwidth)
 
 
 def hcandle_plot(hcandle_np, alpha=1, square=1, color='#ffffff'):

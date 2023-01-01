@@ -47,14 +47,14 @@ if __name__ == "__main__":
     # print("os.getcwd() :", os.getcwd())
 
     # ----------- history ver. ----------- #
-    # res_df_name = "candlestick_concated/res_df/%s %s_trix_backi2.xlsx" % (date, init_set.symbol)
-    # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
-    # res_df_name = "candlestick_concated/res_df/2021-07-01 ADAUSDT_majorst_backi2.xlsx"
+    # res_df_name = "database/res_df/%s %s_trix_backi2.xlsx" % (date, init_set.symbol)
+    # res_df_name = "database/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
+    # res_df_name = "database/res_df/2021-07-01 ADAUSDT_majorst_backi2.xlsx"
 
     dict_name = "2021-07-01 ETHUSDT_cbline_backi2_res_dfs.pkl"
 
     #     load with pickle    #
-    with open("candlestick_concated/res_df/" + dict_name, 'rb') as f:
+    with open("database/res_df/" + dict_name, 'rb') as f:
         res_df_dict = pickle.load(f)
 
     print(dict_name, "loaded !")
@@ -107,8 +107,8 @@ if __name__ == "__main__":
         new_df3, _ = concat_candlestick(init_set.symbol, init_set.interval3, days=days_2, end_date=end_date, timesleep=0.2, show_process=True)
 
         #       1-1. load saved_df ver. => for pr logic confirmation         #
-        # new_df = pd.read_excel("candlestick_concated/%s/%s %s.xlsx" % (init_set.interval, date, init_set.symbol), index_col=0)
-        # new_df2 = pd.read_excel("candlestick_concated/%s/%s %s.xlsx" % (init_set.interval2, date, init_set.symbol), index_col=0)
+        # new_df = pd.read_excel("database/%s/%s %s.xlsx" % (init_set.interval, date, init_set.symbol), index_col=0)
+        # new_df2 = pd.read_excel("database/%s/%s %s.xlsx" % (init_set.interval2, date, init_set.symbol), index_col=0)
 
         res_df_ = sync_check(new_df, new_df2, new_df3)
 

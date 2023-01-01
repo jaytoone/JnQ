@@ -4,6 +4,7 @@ from funcs.funcs_trader import to_lower_tf_v2, to_lower_tf_v3, intmin, ffill, bf
 import talib
 
 
+# Todo,  nz() deprecated for vectorization, use fillna()
 def nz(x, y=0):
     # print(x)
     if np.isnan(x):
@@ -205,8 +206,11 @@ def stoch_v2(df, fastk_period=13, slowk_period=3, slowd_period=3):
 
     return df
 
-def cci_v2(df, period=20, smooth=None):
-    itv = pd.infer_freq(df.index)
+def cci_v2(df, period=20, smooth=None, itv=None):
+
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
     high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
 
     if smooth is None:
@@ -587,6 +591,26 @@ def imb_ratio(df, itv):
   return
 
 
+def wave_range_bb_v1(t_df, wave_period, multiple=1, itv=None):
+    t_df = bb_width_v3(t_df, wave_period, multiple, itv)
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    bb_upper_ = t_df['bb_upper_{}{}'.format(itv, wave_period)].to_numpy()
+    bb_lower_ = t_df['bb_lower_{}{}'.format(itv, wave_period)].to_numpy()
+
+    data_cols = ['open', 'high', 'low', 'close']
+    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+    open_, high, low, close = ohlc_list
+
+    # ============ modules ============ #
+    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
+    cu_bool = (open_ > bb_lower_) & (bb_lower_ > close)
+    co_bool = (open_ < bb_upper_) & (bb_upper_ < close)
+
+    return wave_publics_v4(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv)
+
 def wave_range_stoch_v1(t_df, wave_period, slowk_period=3, slowd_period=3):
     t_df = stoch_v2(t_df, fastk_period=wave_period)
     itv = pd.infer_freq(t_df.index)
@@ -630,9 +654,13 @@ def wave_range_dc_envel_v1(t_df, wave_period):
 
     return wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period)
 
-def wave_range_cci_v4_1(t_df, wave_period, band_width=100):
-    t_df = cci_v2(t_df, wave_period)
-    itv = pd.infer_freq(t_df.index)
+
+
+def wave_range_cci_v4_1(t_df, wave_period, band_width=100, itv=None):
+    t_df = cci_v2(t_df, wave_period, itv=itv)
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
 
     cci_ = t_df['cci_{}{}'.format(itv, wave_period)].to_numpy()
     b1_cci_ = t_df['cci_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
@@ -650,7 +678,7 @@ def wave_range_cci_v4_1(t_df, wave_period, band_width=100):
     cu_bool = (b1_cci_ > upper_band) & (upper_band > cci_)
     co_bool = (b1_cci_ < lower_band) & (lower_band < cci_)
 
-    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period)
+    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=itv)
 
 def wave_range_cci_v4(t_df, wave_period):
     t_df = cci_v2(t_df, wave_period)
@@ -676,8 +704,156 @@ def wave_range_cci_v4(t_df, wave_period):
     return wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period)
 
 
-def wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period):
-    itv = pd.infer_freq(t_df.index)
+# prime_idx 기준 wave_ high / low 측정
+def wave_publics_v4(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=None):
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    len_df = len(t_df)
+    len_df_range = np.arange(len_df).astype(int)
+
+    cu_idx = get_index_bybool(cu_bool, len_df_range)
+    co_idx = get_index_bybool(co_bool, len_df_range)
+
+    open, high, low, close = ohlc_list
+
+    cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v4(
+        cu_idx, co_idx, len_df, len_df_range)
+    # cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, \
+    #   cu_post_idx, co_post_idx, cu_post_fill_idx, co_post_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v5(cu_idx, co_idx, len_df, len_df_range)
+
+    # ------ get post_terms ------ #
+    high_post_terms = np.vstack((co_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
+    low_post_terms = np.vstack((cu_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
+
+    high_post_terms_cnt = high_post_terms[:, 1] - high_post_terms[:, 0]
+    low_post_terms_cnt = low_post_terms[:, 1] - low_post_terms[:, 0]
+
+    # ------ get post_idx ------ #
+    paired_cu_post_idx = high_post_terms[:, 1]  # Todo, 여기는 cross_idx (위에서 vstack 으로 cross_idx 입력함)
+    paired_co_post_idx = low_post_terms[:, 1]
+
+    cu_post_idx = np.full(len_df, np.nan)  # --> Todo, unavailable : not cross_idx
+    co_post_idx = np.full(len_df, np.nan)
+
+    cu_post_idx[paired_cu_post_idx] = paired_cu_post_idx
+    co_post_idx[paired_co_post_idx] = paired_co_post_idx
+
+    cu_post_fill_idx = fill_arr(cu_post_idx)
+    co_post_fill_idx = fill_arr(co_post_idx)
+
+    # ------ get prime_terms ------ # # 기본은 아래 logic 으로 수행하고, update_hl 도 해당 term 구간의 hl 이 더 작거나 클경우 적용 가능할 것
+    high_prime_terms = np.vstack((co_prime_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
+    low_prime_terms = np.vstack((cu_prime_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
+
+    high_prime_terms_cnt = high_prime_terms[:, 1] - high_prime_terms[:, 0]
+    low_prime_terms_cnt = low_prime_terms[:, 1] - low_prime_terms[:, 0]
+
+    paired_cu_prime_idx = high_prime_terms[:, 1]
+    paired_co_prime_idx = low_prime_terms[:, 1]
+
+    # ====== get wave_hl & terms ====== #
+    wave_high_ = np.full(len_df, np.nan)
+    wave_low_ = np.full(len_df, np.nan)
+
+    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_prime_terms])
+    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_prime_terms])
+
+    wave_high_[paired_cu_prime_idx] = wave_highs
+    wave_low_[paired_co_prime_idx] = wave_lows
+
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    wave_high_idx = np.full(len_df, np.nan)
+    wave_low_idx = np.full(len_df, np.nan)
+
+    wave_highs_idx = np.array([high[iin:iout + 1].argmax() + iin for iin, iout in high_prime_terms])
+    wave_lows_idx = np.array([low[iin:iout + 1].argmin() + iin for iin, iout in low_prime_terms])
+
+    wave_high_idx[paired_cu_prime_idx] = wave_highs_idx
+    wave_low_idx[paired_co_prime_idx] = wave_lows_idx
+
+    wave_high_idx_fill_ = fill_arr(wave_high_idx)
+    wave_low_idx_fill_ = fill_arr(wave_low_idx)
+
+    # ------ Todo, update_hl 에 대해서, prime_terms_hl 적용 ------ #
+    wave_high_terms_low_ = np.full(len_df, np.nan)
+    wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_prime_terms])  # for point rejection, Todo, min_max 설정 항상 주의
+    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_prime_terms])
+
+    wave_high_terms_low_[paired_cu_prime_idx] = wave_high_terms_lows
+    wave_low_terms_high_[paired_co_prime_idx] = wave_low_terms_highs
+
+    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
+    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
+
+    # ------ term cnt ------ #
+    wave_high_terms_cnt_ = np.full(len_df, np.nan)
+    wave_low_terms_cnt_ = np.full(len_df, np.nan)
+
+    wave_high_terms_cnt_[paired_cu_prime_idx] = high_prime_terms_cnt
+    wave_low_terms_cnt_[paired_co_prime_idx] = low_prime_terms_cnt
+
+    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
+    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
+
+    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
+    # b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
+    # b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
+    # wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
+    # wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
+    #
+    # high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
+    # low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
+
+    # ============ enlist to df_cols ============ #
+    t_df['wave_high_fill_{}{}'.format(itv, wave_period)] = wave_high_fill_
+    t_df['wave_low_fill_{}{}'.format(itv, wave_period)] = wave_low_fill_
+    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_high_terms_cnt_fill_
+    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_low_terms_cnt_fill_
+
+    t_df['wave_high_idx_fill_{}{}'.format(itv, wave_period)] = wave_high_idx_fill_
+    t_df['wave_low_idx_fill_{}{}'.format(itv, wave_period)] = wave_low_idx_fill_
+
+    t_df['wave_update_low_cu_bool_{}{}'.format(itv, wave_period)] = update_low_cu_bool  # temporary, for plot_check
+    t_df['wave_update_high_co_bool_{}{}'.format(itv, wave_period)] = update_high_co_bool
+
+    t_df['wave_cu_{}{}'.format(itv, wave_period)] = cu_bool  # * ~update_low_cu_bool
+    t_df['wave_co_{}{}'.format(itv, wave_period)] = co_bool  # * ~update_high_co_bool
+
+    t_df['wave_co_idx_{}{}'.format(itv, wave_period)] = co_idx
+    t_df['wave_cu_idx_{}{}'.format(itv, wave_period)] = cu_idx
+
+    t_df['wave_co_post_idx_{}{}'.format(itv, wave_period)] = co_post_idx  # paired_
+    t_df['wave_cu_post_idx_{}{}'.format(itv, wave_period)] = cu_post_idx  # paired_
+    t_df['wave_co_post_idx_fill_{}{}'.format(itv, wave_period)] = co_post_fill_idx
+    t_df['wave_cu_post_idx_fill_{}{}'.format(itv, wave_period)] = cu_post_fill_idx
+
+    # Todo, idx 저장은 sync. 가 맞는 tf_df 에 대하여 적용하여야함
+    # ------ for roll prev_hl ------ #
+    # high_post_idx 를 위해 co_prime_idx 입력 = 뜻 : high_term's prime co_idx (high_prime_idx = wave_high 를 만들기 위한 가장 앞단의 co_idx)
+    t_df['wave_co_prime_idx_{}{}'.format(itv,
+                                         wave_period)] = co_prime_idx  # co_prime_idx wave_high_prime_idx  # high 갱신을 고려해, prev_hl 는 prime_idx 기준으로 진행
+    t_df['wave_cu_prime_idx_{}{}'.format(itv,
+                                         wave_period)] = cu_prime_idx  # cu_prime_idx wave_low_prime_idx  # cu_prime_idx's low 를 사용하겠다라는 의미, 즉 roll_prev 임
+    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, wave_period)] = co_prime_fill_idx  # co_prime_fill_idx high_prime_idx_fill_
+    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, wave_period)] = cu_prime_fill_idx  # cu_prime_fill_idx low_prime_idx_fill_
+
+    # ------ for plot_checking ------ #
+    t_df['wave_cu_marker_{}{}'.format(itv, wave_period)] = get_line(cu_idx, close)
+    t_df['wave_co_marker_{}{}'.format(itv, wave_period)] = get_line(co_idx, close)
+
+    return t_df
+
+
+# post_idx 기준 wave high / low 측정,
+# v2 보다 df_cols 가 많음.
+def wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=None):
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
 
     len_df = len(t_df)
     len_df_range = np.arange(len_df).astype(int)
@@ -1746,11 +1922,12 @@ def rs_channel_v2(df, period=20, itv='T', type='TP'):
     return
 
 
-def bb_width_v3(df, period, multiple):
-
+def bb_width_v3(df, period, multiple, itv=None):
     upper, base, lower = talib.BBANDS(df.close, timeperiod=period, nbdevup=multiple, nbdevdn=multiple, matype=0)
 
-    itv = pd.infer_freq(df.index)
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
     upper_name = 'bb_upper_{}{}'.format(itv, period)
     lower_name = 'bb_lower_{}{}'.format(itv, period)
     base_name = 'bb_base_{}{}'.format(itv, period)
@@ -2284,8 +2461,28 @@ def atr(df, period):
 
     return atr
 
+# ------ vectorized supertrend ------ #
+def supertrend_v2(df, period, multiplier):
 
-#       Todo - recursive       #
+    hl2 = (df.high.to_numpy() + df.low.to_numpy()) / 2
+
+    atr = talib.ATR(df.high, df.low, df.close, timeperiod=period)
+
+    upperband = hl2 + multiplier * atr
+    lowerband = hl2 - multiplier * atr
+
+    prev_upperband = upperband.shift(1).fillna(0).to_numpy()
+    prev_lowerband = lowerband.shift(1).fillna(0).to_numpy()
+
+    prev_close = df.close.shift(1).to_numpy()
+
+    upperband = np.where((upperband < prev_upperband) | (prev_close > prev_upperband), upperband, prev_upperband)
+    lowerband = np.where((lowerband > prev_lowerband) | (prev_close < prev_lowerband), lowerband, prev_lowerband)
+
+    return upperband, lowerband
+
+
+#       Todo - recursive       #, rma 부터 시작해서 구성요소 모두가 recursive 함.
 def supertrend(df, period, multiplier, cal_st=False):
 
     hl2 = (df['high'] + df['low']) / 2
@@ -2335,13 +2532,15 @@ def supertrend(df, period, multiplier, cal_st=False):
         return np.where(atr_trend == -1, atr_up, atr_down)
 
 
-def st_price_line(ltf_df, htf_df, interval):
+def st_price_line(ltf_df, htf_df):
 
     ha_htf_df = heikinashi(htf_df)
 
-    st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
-    st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
-    st1_trend, st2_trend, st3_trend = 'ST1_Trend_%s' % interval, 'ST2_Trend_%s' % interval, 'ST3_Trend_%s' % interval
+    interval = pd.infer_freq(htf_df.index)
+
+    st1_up, st2_up, st3_up = 'st1_up_%s' % interval, 'st2_up_%s' % interval, 'st3_up_%s' % interval
+    st1_down, st2_down, st3_down = 'st1_down_%s' % interval, 'st2_down_%s' % interval, 'st3_down_%s' % interval
+    st1_trend, st2_trend, st3_trend = 'st1_trend_%s' % interval, 'st2_trend_%s' % interval, 'st3_trend_%s' % interval
 
     htf_df[st1_up], htf_df[st1_down], htf_df[st1_trend] = supertrend(htf_df, 10, 2)
     htf_df[st2_up], htf_df[st2_down], htf_df[st2_trend] = supertrend(ha_htf_df, 7, 2)
@@ -2351,14 +2550,36 @@ def st_price_line(ltf_df, htf_df, interval):
 
     # startTime = time.time()
 
-    joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-9, 0, 1)]), how='inner')
+    columns = [st1_up, st2_up, st3_up, st1_down, st2_down, st3_down, st1_trend, st2_trend, st3_trend]
+    # joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-6, 0, 1)]), how='inner')
+    joined_ltf_df = ltf_df.join(to_lower_tf_v3(ltf_df, htf_df, columns), how='inner')
 
     return joined_ltf_df
+#
+# def st_price_line(ltf_df, htf_df, interval):
+#
+#     ha_htf_df = heikinashi(htf_df)
+#
+#     st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
+#     st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
+#     st1_trend, st2_trend, st3_trend = 'ST1_Trend_%s' % interval, 'ST2_Trend_%s' % interval, 'ST3_Trend_%s' % interval
+#
+#     htf_df[st1_up], htf_df[st1_down], htf_df[st1_trend] = supertrend(htf_df, 10, 2)
+#     htf_df[st2_up], htf_df[st2_down], htf_df[st2_trend] = supertrend(ha_htf_df, 7, 2)
+#     htf_df[st3_up], htf_df[st3_down], htf_df[st3_trend] = supertrend(ha_htf_df, 7, 2.5)
+#     # print(df.head(20))
+#     # quit()
+#
+#     # startTime = time.time()
+#
+#     joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-9, 0, 1)]), how='inner')
+#
+#     return joined_ltf_df
 
 def st_level(ltf_df, interval, st_gap_multiple):
 
-    st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
-    st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
+    st1_up, st2_up, st3_up = 'st1_up_%s' % interval, 'st2_up_%s' % interval, 'st3_up_%s' % interval
+    st1_down, st2_down, st3_down = 'st1_down_%s' % interval, 'st2_down_%s' % interval, 'st3_down_%s' % interval
 
     min_upper, max_lower = 'min_upper_%s' % interval, 'max_lower_%s' % interval
     st_base = 'st_base_%s' % interval
@@ -2374,16 +2595,17 @@ def st_level(ltf_df, interval, st_gap_multiple):
     ltf_df[st_gap] = (ltf_df[min_upper] - ltf_df[st_base]) * st_gap_multiple
 
     # --------------- levels --------------- #
-    ltf_df[st_upper] = ltf_df[st_base] + ltf_df[st_gap]
-    ltf_df[st_lower] = ltf_df[st_base] - ltf_df[st_gap]
+    ltf_df[st_upper] = ltf_df[st_base] + ltf_df[st_gap] * 0.5
+    ltf_df[st_lower] = ltf_df[st_base] - ltf_df[st_gap] * 0.5
 
-    ltf_df[st_upper2] = ltf_df[st_base] + ltf_df[st_gap] * 2
-    ltf_df[st_lower2] = ltf_df[st_base] - ltf_df[st_gap] * 2
+    ltf_df[st_upper2] = ltf_df[st_base] + ltf_df[st_gap]
+    ltf_df[st_lower2] = ltf_df[st_base] - ltf_df[st_gap]
 
-    ltf_df[st_upper3] = ltf_df[st_base] + ltf_df[st_gap] * 3
-    ltf_df[st_lower3] = ltf_df[st_base] - ltf_df[st_gap] * 3
+    ltf_df[st_upper3] = ltf_df[st_base] + ltf_df[st_gap] * 1.5
+    ltf_df[st_lower3] = ltf_df[st_base] - ltf_df[st_gap] * 1.5
 
     return ltf_df
+
 
 # def mmh_st(df, mp1, mp2, pd1=10, pd2=10):   # makemoney_hybrid
 #       Todo - recursive       #

@@ -32,7 +32,7 @@ if __name__ == "__main__":
     if history:
         # date = "2022-11-17"
         date = "2022-01-01"
-        ftr_path = "../candlestick_concated/res_df/concat/cum/{}/{} ETHUSDT.ftr".format(date, date)
+        ftr_path = "../database/res_df/concat/cum/{}/{} ETHUSDT.ftr".format(date, date)
     else:
         log_name = "ETHUSDT_1640263052.pkl"
 
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         print("end_datetime :", end_datetime)
 
         end_date = str(end_datetime).split(" ")[0]
-        save_ftr_dir = "../candlestick_concated/res_df/concat/cum/{}".format(end_date)
+        save_ftr_dir = "../database/res_df/concat/cum/{}".format(end_date)
         save_ftr_name = "{} {}.ftr".format(end_date, config.trader_set.symbol)
 
         # print("end_date :", end_date)

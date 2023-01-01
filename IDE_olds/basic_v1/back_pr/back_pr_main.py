@@ -22,9 +22,9 @@ if __name__ == "__main__":
     history = False
 
     # ----------- history ver. ----------- #
-    # # res_df_name = "candlestick_concated/res_df/%s %s_trix_backi2.xlsx" % (date, symbol)
-    # # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
-    # res_df_name = "candlestick_concated/res_df/2021-07-01 ETHUSDT_majorst_backi2.xlsx"
+    # # res_df_name = "database/res_df/%s %s_trix_backi2.xlsx" % (date, symbol)
+    # # res_df_name = "database/res_df/2021-07-01 ETHUSDT_backi2.xlsx"
+    # res_df_name = "database/res_df/2021-07-01 ETHUSDT_majorst_backi2.xlsx"
     # history = True
 
     # ----------- trade log ver. ----------- #
@@ -72,8 +72,8 @@ if __name__ == "__main__":
         new_df2, _ = concat_candlestick(symbol, interval2, days=days_2, end_date=end_date, timesleep=0.2, show_process=True)
 
         #       1-1. load saved_df ver. => for pr logic confirmation         #
-        # new_df = pd.read_excel("candlestick_concated/%s/%s %s.xlsx" % (interval, date, symbol), index_col=0)
-        # new_df2 = pd.read_excel("candlestick_concated/%s/%s %s.xlsx" % (interval2, date, symbol), index_col=0)
+        # new_df = pd.read_excel("database/%s/%s %s.xlsx" % (interval, date, symbol), index_col=0)
+        # new_df2 = pd.read_excel("database/%s/%s %s.xlsx" % (interval2, date, symbol), index_col=0)
 
         res_df_ = sync_check(new_df, new_df2, cloud_on=True)
 

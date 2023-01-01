@@ -2,7 +2,7 @@ import os
 import pickle
 
 # ------ Todo, check key_abspath ------ #
-key_abspath = r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\private_info\mademerich.pkl"  # ../ 는 상대적이니까 차라리 고정시킴.
+key_abspath = r"D:\Projects\System_Trading\JnQ\private_info\mademerich.pkl"  # ../ 는 상대적이니까 차라리 고정시킴.
 # key_abspath = os.path.abspath("../private_info/mademerich.pkl")
 # key_abspath = os.path.abspath("../private_info/JnQ.pkl")   # restricted IP access
 # key_abspath = os.path.abspath(__file__)

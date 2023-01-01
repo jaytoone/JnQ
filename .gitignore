@@ -1,3 +1,9 @@
+# directory
+private_info/
+database/
+
+# file
+test_code.py
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
@@ -28,62 +34,6 @@ __pycache__/
 
 # exclude h5
 *.h5
-
-
-# excluded directories
-df_log/
-sys_log/
-trade_log/
-legacy/
-#back_pr/
-
-test_set/
-#funcs/
-arima_*/
-arima_data/
-private_info/
-pred_ohlcv/
-Tensorboard_graph/
-trading_bot/
-trading_bot
-ai_model
-ai_model/
-models
-models/
-Made_X
-Made_X/
-labeled_data
-labeled_data/
-invest_stability/
-Figure_trade
-Figure_trade/
-figure_reg
-figure_reg/
-figure_data
-figure_data/
-excel_check
-excel_check/
-example_d
-example_d/
-example
-example/
-chart_check
-chart_check/
-candlestick_concated
-candlestick_concated/
-candlestick
-candlestick/
-Binance_Futures_python
-Binance_Futures_python/
-Binance_Futures_python2
-Binance_Futures_python2/
-# binance_f
-# binance_f/
-binance_d
-binance_d/
-BestSet
-BestSet/
-
 
 # Distribution / packaging
 .Python

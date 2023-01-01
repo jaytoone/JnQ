@@ -634,7 +634,7 @@ def profitage(coin, period1=30, period2=60, period3=120, date='2019-09-25', exce
 if __name__ == "__main__":
 
     home_dir = os.path.expanduser('~')
-    dir = './candlestick_concated/'
+    dir = './database/'
 
     import pickle
     import random

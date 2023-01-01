@@ -466,7 +466,7 @@ if __name__ == '__main__':
     date = '2021-02-11'
 
     # print(calc_train_days('1h', 3000))
-    df = pd.read_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, date, symbol), index_col=0)
+    df = pd.read_excel('./database/%s/%s %s.xlsx' % (interval, date, symbol), index_col=0)
     # print(df.head())
     print(len(df))
 

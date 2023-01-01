@@ -63,8 +63,163 @@ def get_touch_idx_fill(tp_1_touch_idxs, net_p1_pair, net_p1_idx, len_df):
 
     return fill_arr(tp_1_touch_idx)
 
+def get_wave_bias_v7(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj,
+                     long_obj):
+
+    """
+    1. out_, ep2 에 _net_p1_idx 가 입력되어있음. <-> v6 와 다른점
+    2. v7 은, wave_bb 를 위해 만든 get_wave_bias() 임.
+    """
+
+
+    short_net_p1_idx = short_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
+    short_p1_idx = short_obj[-1].astype(int)
+    short_p2_idx = short_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
+    short_en_idx = short_obj[2].astype(int)
+
+    short_tp_1 = ffill_line(res_df['short_tp_1_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)  # net_p1_idx ~ net_p1_idx' 사이에 대한 momentum 조사 (net 이유는 logic's validation)
+    short_tp_0 = ffill_line(res_df['short_tp_0_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)
+    short_out_1 = ffill_line(res_df['short_out_1_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)  # 체결된, p2_idx ~ p2_idx' 사이에 대한 momentum 조사
+    short_out_0 = ffill_line(res_df['short_out_0_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)
+    short_ep2_0 = ffill_line(res_df['short_ep2_0_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)
+    # short_net_wave_1 = ffill_line(res_df['short_wave_1_{}'.format(config.selection_id)].to_numpy(), short_op_idx)  # en_idx 에 sync 된 open_idx 를 사용해야함
+    # short_net_wave_0 = ffill_line(res_df['short_wave_0_{}'.format(config.selection_id)].to_numpy(), short_op_idx)
+
+    long_net_p1_idx = long_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
+    long_p1_idx = long_obj[-1].astype(int)
+    long_p2_idx = long_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
+    long_en_idx = long_obj[2].astype(int)
+
+    long_tp_1 = ffill_line(res_df['long_tp_1_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+    long_tp_0 = ffill_line(res_df['long_tp_0_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+    long_out_1 = ffill_line(res_df['long_out_1_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)  # 체결된, p2_idx ~ p2_idx' 사이에 대한 momentum 조사
+    long_out_0 = ffill_line(res_df['long_out_0_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+    long_ep2_0 = ffill_line(res_df['long_ep2_0_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+
+    short_p2exec_p1_idx = np.unique(short_p1_idx.ravel())  # .reshape(-1, 1)   # 통일성을 위해 2d 로 설정
+    long_p2exec_p1_idx = np.unique(long_p1_idx.ravel())  # .reshape(-1, 1)
+
+    # print("long_net_p1_idx.shape :", long_net_p1_idx.shape)
+    # print("long_en_idx.shape :", long_en_idx.shape)
+
+    # ================== touch idx ================== #
+    # 1. min 에 초점을 맞추는 거니까, touch 없을시 len_df 로 설정
+    # 2. future_data 사용이니까, shift(-bias_info_tick) 설정 --> olds
+    # 3. entry 다음 idx 부터 -> tp & out 체결 logic 이 현재 entry_idx 부터 되어있어서 취소
+    # Todo, high 와 low 중 어디에 먼저닿느냐가 중요함을 key 로 잡고만든 logic 임
+    len_df_range = np.arange(len_df)
+    last_idx = len_df - 1  # nan 발생하면 대소 비교로 hhm 확인이 불가능해짐, np.nan <= np.nan --> false
+
+    # ------------ pair & idxs ------------ #
+    short_net_p1_pair = list(zip(short_net_p1_idx, np.append(short_net_p1_idx[1:], last_idx)))   # p1's 1st & 2nd pair 위해서 last_idx 마지막에 붙여준 것
+    long_net_p1_pair = list(zip(long_net_p1_idx, np.append(long_net_p1_idx[1:], last_idx)))
+
+    short_p2_pair = list(zip(short_p2_idx, np.append(short_p2_idx[1:], last_idx)))
+    long_p2_pair = list(zip(long_p2_idx, np.append(long_p2_idx[1:], last_idx)))
+
+    short_tp_1_touch_idxs = np.where(low <= short_tp_1, len_df_range, last_idx)
+    short_tp_0_touch_idxs = np.where(high >= short_tp_0, len_df_range, last_idx)
+    long_tp_1_touch_idxs = np.where(high >= long_tp_1, len_df_range, last_idx)
+    long_tp_0_touch_idxs = np.where(low <= long_tp_0, len_df_range, last_idx)
+
+    short_out_1_touch_idxs = np.where(low <= short_out_1, len_df_range, last_idx)
+    short_out_0_touch_idxs = np.where(high >= short_out_0, len_df_range, last_idx)
+    long_out_1_touch_idxs = np.where(high >= long_out_1, len_df_range, last_idx)
+    long_out_0_touch_idxs = np.where(low <= long_out_0, len_df_range, last_idx)
+
+    # ------------ min touch_idx ------------ #
+    short_tp_1_touch_idx = get_touch_idx_fill(short_tp_1_touch_idxs, short_net_p1_pair, short_net_p1_idx, len_df)  # pair means 구간
+    short_tp_0_touch_idx = get_touch_idx_fill(short_tp_0_touch_idxs, short_net_p1_pair, short_net_p1_idx, len_df)
+    long_tp_1_touch_idx = get_touch_idx_fill(long_tp_1_touch_idxs, long_net_p1_pair, long_net_p1_idx, len_df)
+    long_tp_0_touch_idx = get_touch_idx_fill(long_tp_0_touch_idxs, long_net_p1_pair, long_net_p1_idx, len_df)
+
+    short_out_1_touch_idx = get_touch_idx_fill(short_out_1_touch_idxs, short_p2_pair, short_p2_idx, len_df)  # pair means 구간
+    short_out_0_touch_idx = get_touch_idx_fill(short_out_0_touch_idxs, short_p2_pair, short_p2_idx, len_df)
+    long_out_1_touch_idx = get_touch_idx_fill(long_out_1_touch_idxs, long_p2_pair, long_p2_idx, len_df)
+    long_out_0_touch_idx = get_touch_idx_fill(long_out_0_touch_idxs, long_p2_pair, long_p2_idx, len_df)
+
+    # ------------ point's touch_idx ------------ #
+    short_tp_1_net_p1_touch_idx = short_tp_1_touch_idx[short_net_p1_idx]  # for tp_box's net_hhm
+    short_tp_0_net_p1_touch_idx = short_tp_0_touch_idx[short_net_p1_idx]
+    long_tp_1_net_p1_touch_idx = long_tp_1_touch_idx[long_net_p1_idx]
+    long_tp_0_net_p1_touch_idx = long_tp_0_touch_idx[long_net_p1_idx]
+    # print("long_tp_1_net_p1_touch_idx :", long_tp_1_net_p1_touch_idx)
+
+    short_tp_1_p2exec_p1_touch_idx = short_tp_1_touch_idx[short_p2exec_p1_idx]  # p2 까지 체결된 p1's hhm (p2 executed p1_hhm)
+    short_tp_0_p2exec_p1_touch_idx = short_tp_0_touch_idx[short_p2exec_p1_idx]
+    long_tp_1_p2exec_p1_touch_idx = long_tp_1_touch_idx[long_p2exec_p1_idx]
+    long_tp_0_p2exec_p1_touch_idx = long_tp_0_touch_idx[long_p2exec_p1_idx]
+
+    short_tp_1_p2_touch_idx = short_tp_1_touch_idx[short_p2_idx]  # hlm 을 위한 hhm (on p2)
+    short_tp_0_p2_touch_idx = short_tp_0_touch_idx[short_p2_idx]
+    long_tp_1_p2_touch_idx = long_tp_1_touch_idx[long_p2_idx]
+    long_tp_0_p2_touch_idx = long_tp_0_touch_idx[long_p2_idx]
+
+    short_out_1_p2_touch_idx = short_out_1_touch_idx[short_p2_idx]  # for out_box's executed_hhm
+    short_out_0_p2_touch_idx = short_out_0_touch_idx[short_p2_idx]
+    long_out_1_p2_touch_idx = long_out_1_touch_idx[long_p2_idx]
+    long_out_0_p2_touch_idx = long_out_0_touch_idx[long_p2_idx]
+
+    # ------------ get wave's bias_tick ------------ #
+    short_tp_1_net_p1_touch_idx2 = np.where(short_tp_1_net_p1_touch_idx == last_idx, np.nan, short_tp_1_net_p1_touch_idx)
+    long_tp_1_net_p1_touch_idx2 = np.where(long_tp_1_net_p1_touch_idx == last_idx, np.nan, long_tp_1_net_p1_touch_idx)
+
+    short_tp_1_p2exec_p1_touch_idx2 = np.where(short_tp_1_p2exec_p1_touch_idx == last_idx, np.nan, short_tp_1_p2exec_p1_touch_idx)
+    long_tp_1_p2exec_p1_touch_idx2 = np.where(long_tp_1_p2exec_p1_touch_idx == last_idx, np.nan, long_tp_1_p2exec_p1_touch_idx)
+
+    short_net_p1_bias_tick = short_tp_1_net_p1_touch_idx2 - short_net_p1_idx
+    long_net_p1_bias_tick = long_tp_1_net_p1_touch_idx2 - long_net_p1_idx
+
+    short_p2exec_p1_bias_tick = short_tp_1_p2exec_p1_touch_idx2 - short_p2exec_p1_idx
+    long_p2exec_p1_bias_tick = long_tp_1_p2exec_p1_touch_idx2 - long_p2exec_p1_idx
+
+    # ------------------ bias_bool & hhm ------------------ #
+    short_net_p1_true_bias_bool = short_tp_1_net_p1_touch_idx < short_tp_0_net_p1_touch_idx  # true_bias 의 조건
+    short_net_p1_false_bias_bool = short_tp_1_net_p1_touch_idx >= short_tp_0_net_p1_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = en_idx
+    long_net_p1_true_bias_bool = long_tp_1_net_p1_touch_idx < long_tp_0_net_p1_touch_idx
+    long_net_p1_false_bias_bool = long_tp_1_net_p1_touch_idx >= long_tp_0_net_p1_touch_idx
+
+    short_p2exec_p1_true_bias_bool = short_tp_1_p2exec_p1_touch_idx < short_tp_0_p2exec_p1_touch_idx  # true_bias 의 조건
+    short_p2exec_p1_false_bias_bool = short_tp_1_p2exec_p1_touch_idx >= short_tp_0_p2exec_p1_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = en_idx
+    long_p2exec_p1_true_bias_bool = long_tp_1_p2exec_p1_touch_idx < long_tp_0_p2exec_p1_touch_idx
+    long_p2exec_p1_false_bias_bool = long_tp_1_p2exec_p1_touch_idx >= long_tp_0_p2exec_p1_touch_idx
+
+    short_p2_true_bias_bool = short_tp_1_p2_touch_idx < short_tp_0_p2_touch_idx
+    # short_p2_false_bias_bool = short_tp_1_p2_touch_idx >= short_tp_0_p2_touch_idx
+    long_p2_true_bias_bool = long_tp_1_p2_touch_idx < long_tp_0_p2_touch_idx
+    # long_p2_false_bias_bool = long_tp_1_p2_touch_idx >= long_tp_0_p2_touch_idx
+
+    short_p2_out_true_bias_bool = short_out_1_p2_touch_idx < short_out_0_p2_touch_idx
+    short_p2_out_false_bias_bool = short_out_1_p2_touch_idx >= short_out_0_p2_touch_idx
+    long_p2_out_true_bias_bool = long_out_1_p2_touch_idx < long_out_0_p2_touch_idx
+    long_p2_out_false_bias_bool = long_out_1_p2_touch_idx >= long_out_0_p2_touch_idx
+
+    short_tpbox_hhm = hhm(short_net_p1_true_bias_bool, short_net_p1_false_bias_bool)
+    long_tpbox_hhm = hhm(long_net_p1_true_bias_bool, long_net_p1_false_bias_bool)
+
+    short_p2exec_tpbox_hhm = hhm(short_p2exec_p1_true_bias_bool, short_p2exec_p1_false_bias_bool)
+    long_p2exec_tpbox_hhm = hhm(long_p2exec_p1_true_bias_bool, long_p2exec_p1_false_bias_bool)
+
+    # short_p2_hhm = hhm(short_p2_true_bias_bool, short_p2_false_bias_bool)
+    # long_p2_hhm = hhm(long_p2_true_bias_bool, long_p2_false_bias_bool)
+
+    short_outbox_hhm = hhm(short_p2_out_true_bias_bool, short_p2_out_false_bias_bool)
+    long_outbox_hhm = hhm(long_p2_out_true_bias_bool, long_p2_out_false_bias_bool)
+
+    # print("short_tpbox_hhm, short_p2_hhm, short_outbox_hhm :", short_tpbox_hhm, short_p2_hhm, short_outbox_hhm)
+
+    return short_tpbox_hhm, long_tpbox_hhm, short_p2exec_tpbox_hhm, long_p2exec_tpbox_hhm, short_outbox_hhm, long_outbox_hhm, \
+           short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick, short_p2_true_bias_bool, long_p2_true_bias_bool, \
+           short_tp_1[short_en_idx], short_tp_0[short_en_idx], long_tp_1[long_en_idx], long_tp_0[long_en_idx], \
+           short_out_1[short_en_idx], short_out_0[short_en_idx], long_out_1[long_en_idx], long_out_0[long_en_idx], short_ep2_0[short_en_idx], long_ep2_0[long_en_idx]  # plot_check 을 위해 en_idx 넣음
+
 def get_wave_bias_v6(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj,
                      long_obj):
+
+    """
+    1. v6 은, wave_cci 기준의 hhm / hlm 파악하기 위한 basic_funciton 이라고보면 됨. (v6 이 가장 안정적인 version 으로 알고있음.)
+    """
+
     short_net_p1_idx = short_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
     short_p1_idx = short_obj[-1].astype(int).ravel()
     short_p2_idx = short_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
@@ -352,277 +507,6 @@ def get_wave_bias_v5(res_df, config, high, low, len_df, short_net_p1_idx_arr, lo
            long_ep2_0[long_en_idx]  # plot_check 을 위해 en_idx 넣음
 
 
-def get_wave_bias_v4(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj,
-                     long_obj):
-    short_net_p1_idx = short_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
-    short_p1_idx = short_obj[-1].astype(int).ravel()
-    short_p2_idx = short_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
-    short_en_idx = short_obj[2].astype(int)
-
-    short_tp_1 = ffill_line(res_df['short_tp_1_{}'.format(config.selection_id)].to_numpy(),
-                            short_net_p1_idx)  # net_p1_idx ~ net_p1_idx' 사이에 대한 momentum 조사 (net 이유는 logic's validation)
-    short_tp_0 = ffill_line(res_df['short_tp_0_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)
-    short_out_1 = ffill_line(res_df['short_out_1_{}'.format(config.selection_id)].to_numpy(),
-                             short_p2_idx)  # 체결된, p2_idx ~ p2_idx' 사이에 대한 momentum 조사
-    short_out_0 = ffill_line(res_df['short_out_0_{}'.format(config.selection_id)].to_numpy(), short_p2_idx)
-    short_ep2_0 = ffill_line(res_df['short_ep2_0_{}'.format(config.selection_id)].to_numpy(), short_p2_idx)
-    # short_net_wave_1 = ffill_line(res_df['short_wave_1_{}'.format(config.selection_id)].to_numpy(), short_op_idx)  # en_idx 에 sync 된 open_idx 를 사용해야함
-    # short_net_wave_0 = ffill_line(res_df['short_wave_0_{}'.format(config.selection_id)].to_numpy(), short_op_idx)
-
-    long_net_p1_idx = long_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
-    long_p1_idx = long_obj[-1].astype(int).ravel()
-    long_p2_idx = long_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
-    long_en_idx = long_obj[2].astype(int)
-
-    long_tp_1 = ffill_line(res_df['long_tp_1_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
-    long_tp_0 = ffill_line(res_df['long_tp_0_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
-    long_out_1 = ffill_line(res_df['long_out_1_{}'.format(config.selection_id)].to_numpy(), long_p2_idx)  # 체결된, p2_idx ~ p2_idx' 사이에 대한 momentum 조사
-    long_out_0 = ffill_line(res_df['long_out_0_{}'.format(config.selection_id)].to_numpy(), long_p2_idx)
-    long_ep2_0 = ffill_line(res_df['long_ep2_0_{}'.format(config.selection_id)].to_numpy(), long_p2_idx)
-
-    short_unq_p1_idx = np.unique(short_p1_idx)  # .reshape(-1, 1)  # 통일성을 위해 2d 로 설정
-    long_unq_p1_idx = np.unique(long_p1_idx)  # .reshape(-1, 1)
-
-    bias_info_tick = config.tr_set.bias_info_tick
-
-    # print("long_net_p1_idx.shape :", long_net_p1_idx.shape)
-    # print("long_en_idx.shape :", long_en_idx.shape)
-
-    # ------------------ touch idx ------------------ #
-    # 1. min 에 초점을 맞추는 거니까, touch 없을시 len_df 로 설정
-    # 2. future_data 사용이니까, shift(-bias_info_tick) 설정
-    # 3. entry 다음 idx 부터 -> tp & out 체결 logic 이 현재 entry_idx 부터 되어있어서 취소
-    # Todo, high 와 low 중 어디에 먼저닿느냐가 중요함을 key 로 잡고만든 logic 임
-    len_df_range = np.arange(len_df)
-    last_idx = len_df - 1
-    shift_range = bias_info_tick - 1  # entry_idx 까지 포함해서 wave_bias check
-
-    short_tp_1_touch_idx = pd.Series(np.where(low <= short_tp_1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-    short_tp_0_touch_idx = pd.Series(np.where(high >= short_tp_0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-    long_tp_1_touch_idx = pd.Series(np.where(high >= long_tp_1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-    long_tp_0_touch_idx = pd.Series(np.where(low <= long_tp_0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-
-    short_out_1_touch_idx = pd.Series(np.where(low <= short_out_1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-    short_out_0_touch_idx = pd.Series(np.where(high >= short_out_0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-    long_out_1_touch_idx = pd.Series(np.where(high >= long_out_1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-    long_out_0_touch_idx = pd.Series(np.where(low <= long_out_0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -shift_range).to_numpy()
-
-    short_tp_1_net_p1_touch_idx = short_tp_1_touch_idx[short_net_p1_idx]  # for tp_box's net_hhm
-    short_tp_0_net_p1_touch_idx = short_tp_0_touch_idx[short_net_p1_idx]
-    long_tp_1_net_p1_touch_idx = long_tp_1_touch_idx[long_net_p1_idx]
-    long_tp_0_net_p1_touch_idx = long_tp_0_touch_idx[long_net_p1_idx]
-
-    short_tp_1_unq_p1_touch_idx = short_tp_1_touch_idx[short_unq_p1_idx]  # p2 까지 체결된 p1's hhm
-    short_tp_0_unq_p1_touch_idx = short_tp_0_touch_idx[short_unq_p1_idx]
-    long_tp_1_unq_p1_touch_idx = long_tp_1_touch_idx[long_unq_p1_idx]
-    long_tp_0_unq_p1_touch_idx = long_tp_0_touch_idx[long_unq_p1_idx]
-
-    # print(np.sum(np.isnan(short_tp_1_unq_p1_touch_idx)))
-    # print(np.sum(np.isnan(short_tp_0_unq_p1_touch_idx)))
-    # print(np.sum(np.isnan(long_tp_1_unq_p1_touch_idx)))
-    # print(np.sum(np.isnan(long_tp_0_unq_p1_touch_idx)))
-
-    short_tp_1_p2_touch_idx = short_tp_1_touch_idx[short_p2_idx]  # hlm 을 위한 hhm (on p2)
-    short_tp_0_p2_touch_idx = short_tp_0_touch_idx[short_p2_idx]
-    long_tp_1_p2_touch_idx = long_tp_1_touch_idx[long_p2_idx]
-    long_tp_0_p2_touch_idx = long_tp_0_touch_idx[long_p2_idx]
-
-    short_out_1_p2_touch_idx = short_out_1_touch_idx[short_p2_idx]  # for out_box's executed_hhm
-    short_out_0_p2_touch_idx = short_out_0_touch_idx[short_p2_idx]
-    long_out_1_p2_touch_idx = long_out_1_touch_idx[long_p2_idx]
-    long_out_0_p2_touch_idx = long_out_0_touch_idx[long_p2_idx]
-
-    # ------------------ bias_bool & hhm ------------------ #
-    short_net_p1_true_bias_bool = short_tp_1_net_p1_touch_idx < short_tp_0_net_p1_touch_idx  # true_bias 의 조건
-    short_net_p1_false_bias_bool = short_tp_1_net_p1_touch_idx >= short_tp_0_net_p1_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = nan value
-    long_net_p1_true_bias_bool = long_tp_1_net_p1_touch_idx < long_tp_0_net_p1_touch_idx
-    long_net_p1_false_bias_bool = long_tp_1_net_p1_touch_idx >= long_tp_0_net_p1_touch_idx
-
-    short_unq_p1_true_bias_bool = short_tp_1_unq_p1_touch_idx < short_tp_0_unq_p1_touch_idx  # true_bias 의 조건
-    short_unq_p1_false_bias_bool = short_tp_1_unq_p1_touch_idx >= short_tp_0_unq_p1_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = nan value
-    long_unq_p1_true_bias_bool = long_tp_1_unq_p1_touch_idx < long_tp_0_unq_p1_touch_idx
-    long_unq_p1_false_bias_bool = long_tp_1_unq_p1_touch_idx >= long_tp_0_unq_p1_touch_idx
-
-    short_p2_true_bias_bool = short_tp_1_p2_touch_idx < short_tp_0_p2_touch_idx
-    # short_p2_false_bias_bool = short_tp_1_p2_touch_idx >= short_tp_0_p2_touch_idx
-    long_p2_true_bias_bool = long_tp_1_p2_touch_idx < long_tp_0_p2_touch_idx
-    # long_p2_false_bias_bool = long_tp_1_p2_touch_idx >= long_tp_0_p2_touch_idx
-
-    short_p2_out_true_bias_bool = short_out_1_p2_touch_idx < short_out_0_p2_touch_idx
-    short_p2_out_false_bias_bool = short_out_1_p2_touch_idx >= short_out_0_p2_touch_idx
-    long_p2_out_true_bias_bool = long_out_1_p2_touch_idx < long_out_0_p2_touch_idx
-    long_p2_out_false_bias_bool = long_out_1_p2_touch_idx >= long_out_0_p2_touch_idx
-
-    short_net_p1_hhm = hhm(short_net_p1_true_bias_bool, short_net_p1_false_bias_bool)
-    long_net_p1_hhm = hhm(long_net_p1_true_bias_bool, long_net_p1_false_bias_bool)
-
-    short_p1_hhm = hhm(short_unq_p1_true_bias_bool, short_unq_p1_false_bias_bool)
-    long_p1_hhm = hhm(long_unq_p1_true_bias_bool, long_unq_p1_false_bias_bool)
-
-    # print("np.sum(short_net_p1_true_bias_bool) :", np.sum(short_net_p1_true_bias_bool))
-    # print("np.sum(long_net_p1_true_bias_bool) :", np.sum(long_net_p1_true_bias_bool))
-
-    # print("np.sum(short_unq_p1_true_bias_bool) :", np.sum(short_unq_p1_true_bias_bool))
-    # print("np.sum(short_unq_p1_false_bias_bool) :", np.sum(short_unq_p1_false_bias_bool))
-    # print("np.sum(long_unq_p1_true_bias_bool) :", np.sum(long_unq_p1_true_bias_bool))
-    # print("np.sum(long_unq_p1_false_bias_bool) :", np.sum(long_unq_p1_false_bias_bool))
-
-    # short_p2_hhm = hhm(short_p2_true_bias_bool, short_p2_false_bias_bool)
-    # long_p2_hhm = hhm(long_p2_true_bias_bool, long_p2_false_bias_bool)
-
-    short_out_hhm = hhm(short_p2_out_true_bias_bool, short_p2_out_false_bias_bool)
-    long_out_hhm = hhm(long_p2_out_true_bias_bool, long_p2_out_false_bias_bool)
-
-    # print("short_net_p1_hhm, short_p2_hhm, short_out_hhm :", short_net_p1_hhm, short_p2_hhm, short_out_hhm)
-
-    return short_net_p1_hhm, long_net_p1_hhm, short_p1_hhm, long_p1_hhm, short_out_hhm, long_out_hhm, short_p2_true_bias_bool, long_p2_true_bias_bool, \
-           short_tp_1[short_en_idx], short_tp_0[short_en_idx], long_tp_1[long_en_idx], long_tp_0[long_en_idx], \
-           short_out_1[short_en_idx], short_out_0[short_en_idx], long_out_1[long_en_idx], long_out_0[long_en_idx], short_ep2_0[short_en_idx], \
-           long_ep2_0[long_en_idx]  # plot_check 을 위해 en_idx 넣음
-
-def get_wave_bias_v3(res_df, config, high, low, len_df, short_obj, long_obj):
-    short_op_idx = short_obj[-1].astype(int)
-    short_en_idx = short_obj[2].astype(int)
-    short_wave_1 = ffill_line(res_df['short_wave_1_{}'.format(config.selection_id)].to_numpy(), short_op_idx)  # en_idx 에 sync 된 open_idx 를 사용해야함
-    short_wave_0 = ffill_line(res_df['short_wave_0_{}'.format(config.selection_id)].to_numpy(), short_op_idx)
-
-    long_op_idx = long_obj[-1].astype(int)
-    long_en_idx = long_obj[2].astype(int)
-    long_wave_1 = ffill_line(res_df['long_wave_1_{}'.format(config.selection_id)].to_numpy(), long_op_idx)
-    long_wave_0 = ffill_line(res_df['long_wave_0_{}'.format(config.selection_id)].to_numpy(), long_op_idx)
-
-    short_unq_op_idx = np.unique(short_op_idx).reshape(-1, 1)   # 통일성을 위해 2d 로 설정
-    long_unq_op_idx = np.unique(long_op_idx).reshape(-1, 1)
-
-    bias_info_tick = config.tr_set.bias_info_tick
-
-    # 1. min 에 초점을 맞추는 거니까, touch 없을시 len_df 로 설정
-    # 2. future_data 사용이니까, shift(-bias_info_tick) 설정
-    # 3. entry 다음 idx 부터 -> tp & out 체결 logic 이 현재 entry_idx 부터 되어있어서 취소
-    # Todo, high 와 low 중 어디에 먼저닿느냐가 중요함을 key 로 잡고만든 logic 임
-    len_df_range = np.arange(len_df)
-    last_idx = len_df - 1
-    shift_range = bias_info_tick - 1  # entry_idx 까지 포함해서 wave_bias check
-
-    short_wave_1_touch_idx = pd.Series(np.where(low <= short_wave_1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()
-    short_wave_0_touch_idx = pd.Series(np.where(high >= short_wave_0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()
-    long_wave_1_touch_idx = pd.Series(np.where(high >= long_wave_1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()
-    long_wave_0_touch_idx = pd.Series(np.where(low <= long_wave_0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()
-
-    short_wave_1_op_touch_idx = short_wave_1_touch_idx[short_unq_op_idx]   # for hhm
-    short_wave_0_op_touch_idx = short_wave_0_touch_idx[short_unq_op_idx]
-    long_wave_1_op_touch_idx = long_wave_1_touch_idx[long_unq_op_idx]
-    long_wave_0_op_touch_idx = long_wave_0_touch_idx[long_unq_op_idx]
-
-    short_wave_1_en_touch_idx = short_wave_1_touch_idx[short_en_idx]   # for hhm2, hlm2
-    short_wave_0_en_touch_idx = short_wave_0_touch_idx[short_en_idx]
-    long_wave_1_en_touch_idx = long_wave_1_touch_idx[long_en_idx]
-    long_wave_0_en_touch_idx = long_wave_0_touch_idx[long_en_idx]
-
-    short_p1_true_bias_bool = short_wave_1_op_touch_idx < short_wave_0_op_touch_idx  # true_bias 의 조건
-    long_p1_true_bias_bool = long_wave_1_op_touch_idx < long_wave_0_op_touch_idx
-    short_p1_false_bias_bool = short_wave_1_op_touch_idx >= short_wave_0_op_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = en_idx
-    long_p1_false_bias_bool = long_wave_1_op_touch_idx >= long_wave_0_op_touch_idx
-
-    short_p2_true_bias_bool = short_wave_1_en_touch_idx < short_wave_0_en_touch_idx  # true_bias 의 조건
-    long_p2_true_bias_bool = long_wave_1_en_touch_idx < long_wave_0_en_touch_idx
-    short_p2_false_bias_bool = short_wave_1_en_touch_idx >= short_wave_0_en_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = en_idx
-    long_p2_false_bias_bool = long_wave_1_en_touch_idx >= long_wave_0_en_touch_idx
-
-    return short_p1_true_bias_bool, long_p1_true_bias_bool, short_p1_false_bias_bool, long_p1_false_bias_bool, \
-          short_p2_true_bias_bool, long_p2_true_bias_bool, short_p2_false_bias_bool, long_p2_false_bias_bool, \
-          short_wave_1[short_en_idx], short_wave_0[short_en_idx], long_wave_1[long_en_idx], long_wave_0[long_en_idx]
-
-def get_wave_bias_v2(res_df, config, high, low, len_df, short_obj, long_obj):
-    short_op_idx = short_obj[-1].astype(int)
-    short_en_idx = short_obj[2].astype(int)
-    short_en_tp1 = ffill_line(res_df['short_wave_1_{}'.format(config.selection_id)].to_numpy(), short_op_idx)  # en_idx 에 sync 된 open_idx 를 사용해야함
-    short_en_out0 = ffill_line(res_df['short_wave_0_{}'.format(config.selection_id)].to_numpy(), short_op_idx)
-
-    long_op_idx = long_obj[-1].astype(int)
-    long_en_idx = long_obj[2].astype(int)
-    long_en_tp1 = ffill_line(res_df['long_wave_1_{}'.format(config.selection_id)].to_numpy(), long_op_idx)
-    long_en_out0 = ffill_line(res_df['long_wave_0_{}'.format(config.selection_id)].to_numpy(), long_op_idx)
-
-    bias_info_tick = config.tr_set.bias_info_tick
-
-    # 1. min 에 초점을 맞추는 거니까, touch 없을시 len_df 로 설정
-    # 2. future_data 사용이니까, shift(-bias_info_tick) 설정
-    # 3. entry 다음 idx 부터 -> tp & out 체결 logic 이 현재 entry_idx 부터 되어있어서 취소
-    len_df_range = np.arange(len_df)
-    last_idx = len_df - 1
-    shift_range = bias_info_tick - 1  # entry_idx 까지 포함해서 wave_bias check
-    short_en_tp1_touch_idx = \
-    pd.Series(np.where(low <= short_en_tp1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()[
-        short_en_idx]
-    short_en_out0_touch_idx = \
-    pd.Series(np.where(high >= short_en_out0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()[
-        short_en_idx]
-
-    long_en_tp1_touch_idx = \
-    pd.Series(np.where(high >= long_en_tp1, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()[
-        long_en_idx]
-    long_en_out0_touch_idx = \
-    pd.Series(np.where(low <= long_en_out0, len_df_range, last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(-shift_range).to_numpy()[
-        long_en_idx]
-
-    short_true_bias_idx = short_en_tp1_touch_idx < short_en_out0_touch_idx  # true_bias 의 조건
-    long_true_bias_idx = long_en_tp1_touch_idx < long_en_out0_touch_idx
-
-    short_false_bias_idx = short_en_tp1_touch_idx >= short_en_out0_touch_idx  # false_bias 의 조건, ~true_bias_idx 와 같지 않음, why ..? = en_idx
-    long_false_bias_idx = long_en_tp1_touch_idx >= long_en_out0_touch_idx
-
-    # return short_true_bias_idx.ravel(), short_false_bias_idx.ravel(), long_true_bias_idx.ravel(), long_false_bias_idx.ravel()
-    return short_true_bias_idx, short_false_bias_idx, long_true_bias_idx, long_false_bias_idx, short_en_tp1[short_en_idx], short_en_out0[
-        short_en_idx], long_en_tp1[long_en_idx], long_en_out0[long_en_idx]
-
-def get_wave_bias(res_df, config, high, low, len_df, short_obj, long_obj):
-    short_op_idx = short_obj[-1].astype(int)
-    short_en_idx = short_obj[2].astype(int)
-    short_en_tp1 = ffill_line(res_df['short_tp_1_{}'.format(config.selection_id)].to_numpy(), short_op_idx)  # en_idx 에 sync 된 open_idx 를 사용해야함
-    short_en_out0 = ffill_line(res_df['short_epout_0_{}'.format(config.selection_id)].to_numpy(), short_op_idx)
-
-    long_op_idx = long_obj[-1].astype(int)
-    long_en_idx = long_obj[2].astype(int)
-    long_en_tp1 = ffill_line(res_df['long_tp_1_{}'.format(config.selection_id)].to_numpy(), long_op_idx)
-    long_en_out0 = ffill_line(res_df['long_epout_0_{}'.format(config.selection_id)].to_numpy(), long_op_idx)
-
-    bias_info_tick = config.tr_set.bias_info_tick
-
-    # 1. min 에 초점을 맞추는 거니까, touch 없을시 len_df 로 설정
-    # 2. future_data 사용이니까, shift(-bias_info_tick) 설정
-    # 3. entry 다음 idx 부터 -> tp & out 체결 logic 이 현재 entry_idx 부터 되어있어서 취소
-    last_idx = len_df - 1
-    short_en_tp1_touch_idx = pd.Series(np.where(low <= short_en_tp1, np.arange(len_df), last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -bias_info_tick).to_numpy()[short_en_idx]
-    short_en_out0_touch_idx = \
-    pd.Series(np.where(high >= short_en_out0, np.arange(len_df), last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -bias_info_tick).to_numpy()[short_en_idx]
-
-    long_en_tp1_touch_idx = pd.Series(np.where(high >= long_en_tp1, np.arange(len_df), last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -bias_info_tick).to_numpy()[long_en_idx]
-    long_en_out0_touch_idx = pd.Series(np.where(low <= long_en_out0, np.arange(len_df), last_idx)).rolling(bias_info_tick, min_periods=1).min().shift(
-        -bias_info_tick).to_numpy()[long_en_idx]
-
-    short_true_bias_idx = short_en_tp1_touch_idx < short_en_out0_touch_idx  # true_bias 의 조건
-    long_true_bias_idx = long_en_tp1_touch_idx < long_en_out0_touch_idx
-
-    short_false_bias_idx = short_en_tp1_touch_idx > short_en_out0_touch_idx  # false_bias 의 조건
-    long_false_bias_idx = long_en_tp1_touch_idx > long_en_out0_touch_idx
-
-    # return short_true_bias_idx.ravel(), short_false_bias_idx.ravel(), long_true_bias_idx.ravel(), long_false_bias_idx.ravel()
-    return short_true_bias_idx, short_false_bias_idx, long_true_bias_idx, long_false_bias_idx, short_en_tp1[short_en_idx], short_en_out0[
-        short_en_idx], long_en_tp1[long_en_idx], long_en_out0[long_en_idx]
-
-
 def kde_plot_v2(v, c, kde_factor=0.15, num_samples=100):
 
   # start_0 = time.time()
@@ -872,11 +756,183 @@ def mr_res(input_data, rpsn_v, inval_v, np_ones):
     return input_data == rpsn_v if rpsn_v > inval_v else np_ones
 
 
-def idep_plot_v16_3(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
-                    fontsize=15, signi=False):  # open_idx, side_arr
+def idep_plot_v18(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
+                  fontsize=15, signi=False):  # open_idx, side_arr
     if not signi:
         plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
+        plt.figure(figsize=(24, 8), dpi=60)
+        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
+                               ncols=3,  # col 몇 개
+                               height_ratios=[10, 1]
+                               # height_ratios=[10, 10, 1]
+                               )
+    gs_idx = 0
+    # plt.suptitle(key)
+
+    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
+    assert np.sum(p_qty_ratio) == 1.0
+    assert len(p_ranges) == len(p_qty_ratio)
+
+    if sample_ratio is not None:
+        sample_len = int(len_df * sample_ratio)
+    else:
+        sample_len = len_df
+
+    # ------ short & long data preparation ------ #
+    # start_0 = time.time()
+
+    net_p1_idx_arr, p1_idx_arr, p2_idx_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
+    assert len(p1_idx_arr) != 0, "assert len(p1_idx_arr) != 0"
+
+    short_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.SELL)[0]]
+    long_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.BUY)[0]]
+
+    short_net_p1_frq = len(short_net_p1_idx_arr)
+    long_net_p1_frq = len(long_net_p1_idx_arr)
+    # print("len(short_net_p1_true_bias_bool) :", len(short_net_p1_idx_arr))
+    # print("len(long_net_p1_true_bias_bool) :", len(long_net_p1_idx_arr))
+
+    short_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.SELL)[0]  # p1_idx_arr 에 대한 idx, # side_arr,
+    long_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.BUY)[0]
+
+    # p1_idx = open_idx[p1_openi_arr].reshape(-1, 1)   # != p1_idx_arr, p1_openi_arr 은 exit_done 기준임
+
+    np_obj = np.hstack((pair_price_arr, pair_idx_arr, p1_idx_arr.reshape(-1, 1)))  # p1_idx_arr is 1d, need to be changed to 2d (for stacking)
+    short_obj = np_obj[short_p1_openi_idx]
+    long_obj = np_obj[long_p1_openi_idx]
+    both_obj = np.vstack((short_obj, long_obj))
+    # print("short_obj.shape :", short_obj.shape)
+    # print("long_obj.shape :", long_obj.shape)
+
+    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
+
+    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    # print("long_bias_arr.shape :", long_bias_arr.shape)
+    # print("short / long arr setting elapsed time :", time.time() - start_0)
+
+    # start_0 = time.time()
+
+    short_tpbox_hhm, long_tpbox_hhm, short_tpbox_p2exec_hhm, long_tpbox_p2exec_hhm, short_outbox_hhm, long_outbox_hhm, \
+          short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick, short_p2_true_bias_bool, long_p2_true_bias_bool, \
+          short_tp_1, short_tp_0, long_tp_1, long_tp_0, short_out_1, short_out_0, long_out_1, long_out_0, short_ep2_0, long_ep2_0 = \
+      get_wave_bias_v7(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj, long_obj)
+
+    # print("get_wave_bias elapsed time :", time.time() - start_0)
+    # print("short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick :", short_net_p1_bias_tick, long_net_p1_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick)
+
+    len_short, len_long = len(short_p1_openi_idx), len(long_p1_openi_idx)
+
+    # ------ plot_data ------ #
+    try:
+        # start_0 = time.time()
+        if len_short == 0:
+            short_pr = []
+            gs_idx += 1
+        else:
+            short_tr = short_tr_arr.mean()
+            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
+                                             p_qty_ratio, inversion)
+            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
+            short_cum_pr = np.cumprod(short_total_pr)
+            short_hlm = hlm(short_pr, short_p2_true_bias_bool)
+            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
+            if signi:
+                short_idep_res_obj = (short_tpbox_p2exec_hhm, short_hlm) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr, short_liqd)
+            else:
+                gs_idx = plot_info_v8(gs, gs_idx, len_df, sample_len, short_tr, short_tpbox_hhm, short_tpbox_p2exec_hhm, short_outbox_hhm, short_hlm, short_trade_ticks, short_net_p1_frq, short_pr, short_total_pr,
+                                      short_cum_pr, short_liqd, short_lvrg_arr.mean(), title_position, fontsize)
+        # print("short plot_data elapsed time :", time.time() - start_0)
+
+    except Exception as e:
+        gs_idx += 1
+        print("error in short plot_data :", e)
+
+    try:
+        # start_0 = time.time()
+        if len_long == 0:
+            long_pr = []
+            gs_idx += 1
+        else:
+            long_tr = long_tr_arr.mean()
+            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
+                                           inversion)
+            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
+            long_cum_pr = np.cumprod(long_total_pr)
+            # long_hhm = long_net_p1_hhm
+            long_hlm = hlm(long_pr, long_p2_true_bias_bool)
+            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
+            if signi:
+                long_idep_res_obj = (long_tpbox_p2exec_hhm, long_hlm) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
+            else:
+                gs_idx = plot_info_v8(gs, gs_idx, len_df, sample_len, long_tr, long_tpbox_hhm, long_tpbox_p2exec_hhm, long_outbox_hhm, long_hlm, long_trade_ticks, long_net_p1_frq, long_pr, long_total_pr,
+                                      long_cum_pr, long_liqd, long_lvrg_arr.mean(), title_position, fontsize)
+        # print("long plot_data elapsed time :", time.time() - start_0)
+    except Exception as e:
+        gs_idx += 1
+        print("error in long plot_data :", e)
+
+    try:
+        # start_0 = time.time()
+        if len_short * len_long == 0:
+            both_pr = []
+            gs_idx += 1
+        else:
+            both_tr = (short_tr + long_tr) / 2
+            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
+            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
+            both_cum_pr = np.cumprod(both_total_pr)
+            both_liqd = min(short_liqd, long_liqd)
+            both_p2_true_bias_bool = np.hstack((short_p2_true_bias_bool, long_p2_true_bias_bool))  # hstack for 1d arr, vstack for 2d arr
+            both_tpbox_hhm = (short_tpbox_hhm + long_tpbox_hhm) / 2
+            both_tpbox_p2exec_hhm, both_hlm = (short_tpbox_p2exec_hhm + long_tpbox_p2exec_hhm) / 2, (short_hlm + long_hlm) / 2
+            both_outbox_hhm = (short_outbox_hhm + long_outbox_hhm) / 2
+            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
+            both_net_p1_frq = short_net_p1_frq + long_net_p1_frq
+            if signi:
+                both_idep_res_obj = (both_tpbox_p2exec_hhm, both_hlm) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
+            else:
+                gs_idx = plot_info_v8(gs, gs_idx, len_df, sample_len, both_tr, both_tpbox_hhm, both_tpbox_p2exec_hhm, both_outbox_hhm, both_hlm, both_trade_ticks, both_net_p1_frq, both_pr, both_total_pr,
+                                      both_cum_pr, both_liqd, lvrg_arr.mean(), title_position, fontsize)
+        # print("both plot_data elapsed time :", time.time() - start_0)
+    except Exception as e:
+        gs_idx += 1
+        print("error in both plot_data :", e)
+
+    if not signi:
+        if len_short * len_long > 0:
+            for obj, bias_arr, cum_pr in zip([short_obj, long_obj, both_obj], [short_p2_true_bias_bool, long_p2_true_bias_bool, both_p2_true_bias_bool],
+                                             [short_cum_pr, long_cum_pr, both_cum_pr]):
+                try:
+                    # start_0 = time.time()
+                    gs_idx = frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, cum_pr[-1], fontsize)
+                    # print("frq_dev_plot elapsed time :", time.time() - start_0)
+                except Exception as e:
+                    gs_idx += 1
+                    print("error in frq_dev_plot :", e)
+            plt.show()
+            plt.close()
+
+        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_tr_arr, short_p2_true_bias_bool, short_net_p1_bias_tick, short_p2exec_p1_bias_tick, short_net_p1_idx_arr, short_p2_idx_arr, short_tp_1, short_tp_0, short_out_1, short_out_0, short_ep2_0, \
+               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_tr_arr, long_p2_true_bias_bool, long_net_p1_bias_tick, long_p2exec_p1_bias_tick, long_net_p1_idx_arr, long_p2_idx_arr, long_tp_1, long_tp_0, long_out_1, long_out_0, long_ep2_0  # long_net_p1_idx_arr long_p2_idx_arr
+
+    else:
+        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
+
+def idep_plot_v16_3(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
+                    fontsize=15, signi=False):  # open_idx, side_arr
+
+    """
+    candle_game 사용했을때, hh/ll_odds 를 plot_check_v8_1 에 포함시킴. <-> v16_2
+    """
+
+    if not signi:
+        plt.style.use(['dark_background', 'fast'])
+        plt.figure(figsize=(24, 8), dpi=60)
         gs = gridspec.GridSpec(nrows=2,  # row 몇 개
                                ncols=3,  # col 몇 개
                                height_ratios=[10, 1]
@@ -1054,9 +1110,15 @@ def idep_plot_v16_3(res_df, len_df, config, high, low, open_info_df1, paired_res
 
 def idep_plot_v16_2(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
                   fontsize=15, signi=False):  # open_idx, side_arr
+
+    """
+    1. v16_2 가 wave_cci 기준, 현재까지 가장 안정적인 (latest) 기능을 제공
+    2. get_wave_bias_v6() 사용
+    """
+
     if not signi:
         plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
+        plt.figure(figsize=(24, 8), dpi=60)
         gs = gridspec.GridSpec(nrows=2,  # row 몇 개
                                ncols=3,  # col 몇 개
                                height_ratios=[10, 1]
@@ -1223,7 +1285,7 @@ def idep_plot_v16_1(res_df, len_df, config, high, low, open_info_df1, paired_res
                   fontsize=15, signi=False):  # open_idx, side_arr
     if not signi:
         plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
+        plt.figure(figsize=(24, 8), dpi=60)
         gs = gridspec.GridSpec(nrows=2,  # row 몇 개
                                ncols=3,  # col 몇 개
                                height_ratios=[10, 1]
@@ -1384,819 +1446,6 @@ def idep_plot_v16_1(res_df, len_df, config, high, low, open_info_df1, paired_res
     else:
         return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
 
-def idep_plot_v17(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
-                  fontsize=15, signi=False):  # open_idx, side_arr
-    if not signi:
-        plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
-        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
-                               ncols=3,  # col 몇 개
-                               height_ratios=[10, 1]
-                               # height_ratios=[10, 10, 1]
-                               )
-    gs_idx = 0
-    # plt.suptitle(key)
-
-    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
-    assert np.sum(p_qty_ratio) == 1.0
-    assert len(p_ranges) == len(p_qty_ratio)
-
-    if sample_ratio is not None:
-        sample_len = int(len_df * sample_ratio)
-    else:
-        sample_len = len_df
-
-    # ------ short & long data preparation ------ #
-    # start_0 = time.time()
-
-    net_p1_idx_arr, p1_idx_arr, p2_idx_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
-    assert len(p1_idx_arr) != 0, "assert len(p1_idx_arr) != 0"
-
-    short_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.SELL)[0]]
-    long_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.BUY)[0]]
-
-    short_net_p1_frq = len(short_net_p1_idx_arr)
-    long_net_p1_frq = len(long_net_p1_idx_arr)
-    # print("short_net_p1_frq :", short_net_p1_frq)
-    # print("long_net_p1_frq :", long_net_p1_frq)
-
-    short_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.SELL)[0]  # p1_idx_arr 에 대한 idx, # side_arr,
-    long_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.BUY)[0]
-
-    # p1_idx = open_idx[p1_openi_arr].reshape(-1, 1)   # != p1_idx_arr, p1_openi_arr 은 exit_done 기준임
-
-    np_obj = np.hstack((pair_price_arr, pair_idx_arr, p1_idx_arr.reshape(-1, 1)))  # p1_idx_arr is 1d, need to be changed to 2d (for stacking)
-    short_obj = np_obj[short_p1_openi_idx]
-    long_obj = np_obj[long_p1_openi_idx]
-    both_obj = np.vstack((short_obj, long_obj))
-    # print("short_obj.shape :", short_obj.shape)
-    # print("long_obj.shape :", long_obj.shape)
-
-    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
-
-    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # print("long_bias_arr.shape :", long_bias_arr.shape)
-    # print("short / long arr setting elapsed time :", time.time() - start_0)
-
-
-    # ------ get hhm ------ #
-    # start_0 = time.time()
-    short_tpbox_hhm, long_tpbox_hhm, short_tpbox_p2exec_hhm, long_tpbox_p2exec_hhm, short_outbox_hhm, long_outbox_hhm, short_p2_true_bias_bool, long_p2_true_bias_bool, \
-          short_tp_1, short_tp_0, long_tp_1, long_tp_0, short_out_1, short_out_0, long_out_1, long_out_0, short_ep2_0, long_ep2_0 = \
-      get_wave_bias_v5(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj, long_obj)
-    # print("get_wave_bias elapsed time :", time.time() - start_0)
-
-
-    # ------ mean_low ------ #
-    # start_0 = time.time()
-    selection_id = config.selection_id
-
-    short_p1_idx = short_obj[-1].astype(int)
-    long_p1_idx = long_obj[-1].astype(int)
-
-    short_open_tp_1 = res_df['short_tp_1_{}'.format(selection_id)].to_numpy()[short_p1_idx] # != short_tp_1
-    long_open_tp_1 = res_df['long_tp_1_{}'.format(selection_id)].to_numpy()[long_p1_idx]
-
-    short_open_tp_0 = res_df['short_tp_0_{}'.format(selection_id)].to_numpy()[short_p1_idx]
-    long_open_tp_0 = res_df['long_tp_0_{}'.format(selection_id)].to_numpy()[long_p1_idx]
-
-    short_open_tp_gap = res_df['short_tp_gap_{}'.format(selection_id)].to_numpy()[short_p1_idx]  # use open_i
-    long_open_tp_gap = res_df['long_tp_gap_{}'.format(selection_id)].to_numpy()[long_p1_idx]
-
-    short_max_outg = get_max_outg_v4(OrderSide.SELL, config, ohlc_list, short_obj, short_tpout_arr, short_open_tp_0, short_open_tp_gap)  # tp_box's mean_low 확인 위해 tp_gap 입력함
-    long_max_outg = get_max_outg_v4(OrderSide.BUY, config, ohlc_list, long_obj, long_tpout_arr, long_open_tp_0, long_open_tp_gap)
-
-    short_mean_low = short_max_outg[short_p2_true_bias_bool].mean()
-    long_mean_low = long_max_outg[long_p2_true_bias_bool].mean()
-    both_mean_low = (short_mean_low + long_mean_low) / 2
-    # print("short_mean_low :", short_mean_low)
-    # print("long_mean_low :", long_mean_low)
-    # print("both_mean_low :", both_mean_low)
-    # print("mean_low elapsed time :", time.time() - start_0)
-
-    # ------ plot_data ------ #
-    len_short, len_long = len(short_p1_openi_idx), len(long_p1_openi_idx)
-
-    try:
-        # start_0 = time.time()
-        if len_short == 0:
-            short_pr = []
-            gs_idx += 1
-        else:
-            short_tr = short_tr_arr.mean()
-            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
-                                             p_qty_ratio, inversion)
-            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
-            short_cum_pr = np.cumprod(short_total_pr)
-            short_hlm = hlm(short_pr, short_p2_true_bias_bool)
-            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
-            if signi:
-                short_idep_res_obj = (short_tpbox_p2exec_hhm, short_hlm) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr, short_liqd)
-            else:
-                gs_idx = plot_info_v9(gs, gs_idx, len_df, sample_len, short_tr, short_tpbox_hhm, short_tpbox_p2exec_hhm, short_outbox_hhm, short_mean_low, short_hlm, short_trade_ticks, short_net_p1_frq, short_pr, short_total_pr,
-                                      short_cum_pr, short_liqd, short_lvrg_arr.mean(), title_position, fontsize)
-        # print("short plot_data elapsed time :", time.time() - start_0)
-
-    except Exception as e:
-        gs_idx += 1
-        print("error in short plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_long == 0:
-            long_pr = []
-            gs_idx += 1
-        else:
-            long_tr = long_tr_arr.mean()
-            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
-                                           inversion)
-            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
-            long_cum_pr = np.cumprod(long_total_pr)
-            # long_hhm = long_net_p1_hhm
-            long_hlm = hlm(long_pr, long_p2_true_bias_bool)
-            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
-            if signi:
-                long_idep_res_obj = (long_tpbox_p2exec_hhm, long_hlm) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
-            else:
-                gs_idx = plot_info_v9(gs, gs_idx, len_df, sample_len, long_tr, long_tpbox_hhm, long_tpbox_p2exec_hhm, long_outbox_hhm, long_mean_low, long_hlm, long_trade_ticks, long_net_p1_frq, long_pr, long_total_pr,
-                                      long_cum_pr, long_liqd, long_lvrg_arr.mean(), title_position, fontsize)
-        # print("long plot_data elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in long plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_short * len_long == 0:
-            both_pr = []
-            gs_idx += 1
-        else:
-            both_tr = (short_tr + long_tr) / 2
-            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
-            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
-            both_cum_pr = np.cumprod(both_total_pr)
-            both_liqd = min(short_liqd, long_liqd)
-            both_p2_true_bias_bool = np.hstack((short_p2_true_bias_bool, long_p2_true_bias_bool))  # hstack for 1d arr, vstack for 2d arr
-            both_tpbox_hhm = (short_tpbox_hhm + long_tpbox_hhm) / 2
-            both_tpbox_p2exec_hhm, both_hlm = (short_tpbox_p2exec_hhm + long_tpbox_p2exec_hhm) / 2, (short_hlm + long_hlm) / 2
-            both_outbox_hhm = (short_outbox_hhm + long_outbox_hhm) / 2
-            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
-            both_net_p1_frq = short_net_p1_frq + long_net_p1_frq
-            if signi:
-                both_idep_res_obj = (both_tpbox_p2exec_hhm, both_hlm) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
-            else:
-                gs_idx = plot_info_v9(gs, gs_idx, len_df, sample_len, both_tr, both_tpbox_hhm, both_tpbox_p2exec_hhm, both_outbox_hhm, both_mean_low, both_hlm, both_trade_ticks, both_net_p1_frq, both_pr, both_total_pr,
-                                      both_cum_pr, both_liqd, lvrg_arr.mean(), title_position, fontsize)
-        # print("both plot_data elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in both plot_data :", e)
-
-    if not signi:
-        if len_short * len_long > 0:
-            for obj, bias_arr, cum_pr in zip([short_obj, long_obj, both_obj], [short_p2_true_bias_bool, long_p2_true_bias_bool, both_p2_true_bias_bool],
-                                             [short_cum_pr, long_cum_pr, both_cum_pr]):
-                try:
-                    # start_0 = time.time()
-                    gs_idx = frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, cum_pr[-1], fontsize)
-                    # print("frq_dev_plot elapsed time :", time.time() - start_0)
-                except Exception as e:
-                    gs_idx += 1
-                    print("error in frq_dev_plot :", e)
-            plt.show()
-            plt.close()
-
-        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_tr_arr, short_p2_true_bias_bool, short_p2_idx_arr, short_tp_1, short_tp_0, short_out_1, short_out_0, short_ep2_0, \
-               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_tr_arr, long_p2_true_bias_bool, long_p2_idx_arr, long_tp_1, long_tp_0, long_out_1, long_out_0, long_ep2_0  # long_net_p1_idx_arr long_p2_idx_arr
-
-    else:
-        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
-
-def idep_plot_v16(res_df, len_df, config, high, low, open_info_df1, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
-                  fontsize=15, signi=False):  # open_idx, side_arr
-    if not signi:
-        plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
-        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
-                               ncols=3,  # col 몇 개
-                               height_ratios=[10, 1]
-                               # height_ratios=[10, 10, 1]
-                               )
-    gs_idx = 0
-    # plt.suptitle(key)
-
-    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
-    assert np.sum(p_qty_ratio) == 1.0
-    assert len(p_ranges) == len(p_qty_ratio)
-
-    if sample_ratio is not None:
-        sample_len = int(len_df * sample_ratio)
-    else:
-        sample_len = len_df
-
-    # ------ short & long data preparation ------ #
-    # start_0 = time.time()
-
-    net_p1_idx_arr, p1_idx_arr, p2_idx_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
-    assert len(p1_idx_arr) != 0, "assert len(p1_idx_arr) != 0"
-
-    short_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.SELL)[0]]
-    long_net_p1_idx_arr = net_p1_idx_arr[np.where(open_info_df1.side.loc[net_p1_idx_arr] == OrderSide.BUY)[0]]
-
-    short_net_p1_frq = len(short_net_p1_idx_arr)
-    long_net_p1_frq = len(long_net_p1_idx_arr)
-    # print("len(short_net_p1_true_bias_bool) :", len(short_net_p1_idx_arr))
-    # print("len(long_net_p1_true_bias_bool) :", len(long_net_p1_idx_arr))
-
-    short_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.SELL)[0]  # p1_idx_arr 에 대한 idx, # side_arr,
-    long_p1_openi_idx = np.where(open_info_df1.side.loc[p1_idx_arr] == OrderSide.BUY)[0]
-
-    # p1_idx = open_idx[p1_openi_arr].reshape(-1, 1)   # != p1_idx_arr, p1_openi_arr 은 exit_done 기준임
-
-    np_obj = np.hstack((pair_price_arr, pair_idx_arr, p1_idx_arr.reshape(-1, 1)))  # p1_idx_arr is 1d, need to be changed to 2d (for stacking)
-    short_obj = np_obj[short_p1_openi_idx]
-    long_obj = np_obj[long_p1_openi_idx]
-    both_obj = np.vstack((short_obj, long_obj))
-    # print("short_obj.shape :", short_obj.shape)
-    # print("long_obj.shape :", long_obj.shape)
-
-    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
-
-    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # print("long_bias_arr.shape :", long_bias_arr.shape)
-    # print("short / long arr setting elapsed time :", time.time() - start_0)
-
-    # start_0 = time.time()
-
-    short_tpbox_hhm, long_tpbox_hhm, short_tpbox_p2exec_hhm, long_tpbox_p2exec_hhm, short_outbox_hhm, long_outbox_hhm, short_p2_true_bias_bool, long_p2_true_bias_bool, \
-          short_tp_1, short_tp_0, long_tp_1, long_tp_0, short_out_1, short_out_0, long_out_1, long_out_0, short_ep2_0, long_ep2_0 = \
-      get_wave_bias_v5(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj, long_obj)
-
-    # print("get_wave_bias elapsed time :", time.time() - start_0)
-
-    len_short, len_long = len(short_p1_openi_idx), len(long_p1_openi_idx)
-
-    # ------ plot_data ------ #
-    try:
-        # start_0 = time.time()
-        if len_short == 0:
-            short_pr = []
-            gs_idx += 1
-        else:
-            short_tr = short_tr_arr.mean()
-            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
-                                             p_qty_ratio, inversion)
-            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
-            short_cum_pr = np.cumprod(short_total_pr)
-            short_hlm = hlm(short_pr, short_p2_true_bias_bool)
-            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
-            if signi:
-                short_idep_res_obj = (short_tpbox_p2exec_hhm, short_hlm) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr, short_liqd)
-            else:
-                gs_idx = plot_info_v8(gs, gs_idx, len_df, sample_len, short_tr, short_tpbox_hhm, short_tpbox_p2exec_hhm, short_outbox_hhm, short_hlm, short_trade_ticks, short_net_p1_frq, short_pr, short_total_pr,
-                                      short_cum_pr, short_liqd, short_lvrg_arr.mean(), title_position, fontsize)
-        # print("short plot_data elapsed time :", time.time() - start_0)
-
-    except Exception as e:
-        gs_idx += 1
-        print("error in short plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_long == 0:
-            long_pr = []
-            gs_idx += 1
-        else:
-            long_tr = long_tr_arr.mean()
-            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
-                                           inversion)
-            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
-            long_cum_pr = np.cumprod(long_total_pr)
-            # long_hhm = long_net_p1_hhm
-            long_hlm = hlm(long_pr, long_p2_true_bias_bool)
-            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
-            if signi:
-                long_idep_res_obj = (long_tpbox_p2exec_hhm, long_hlm) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
-            else:
-                gs_idx = plot_info_v8(gs, gs_idx, len_df, sample_len, long_tr, long_tpbox_hhm, long_tpbox_p2exec_hhm, long_outbox_hhm, long_hlm, long_trade_ticks, long_net_p1_frq, long_pr, long_total_pr,
-                                      long_cum_pr, long_liqd, long_lvrg_arr.mean(), title_position, fontsize)
-        # print("long plot_data elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in long plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_short * len_long == 0:
-            both_pr = []
-            gs_idx += 1
-        else:
-            both_tr = (short_tr + long_tr) / 2
-            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
-            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
-            both_cum_pr = np.cumprod(both_total_pr)
-            both_liqd = min(short_liqd, long_liqd)
-            both_p2_true_bias_bool = np.hstack((short_p2_true_bias_bool, long_p2_true_bias_bool))  # hstack for 1d arr, vstack for 2d arr
-            both_tpbox_hhm = (short_tpbox_hhm + long_tpbox_hhm) / 2
-            both_tpbox_p2exec_hhm, both_hlm = (short_tpbox_p2exec_hhm + long_tpbox_p2exec_hhm) / 2, (short_hlm + long_hlm) / 2
-            both_outbox_hhm = (short_outbox_hhm + long_outbox_hhm) / 2
-            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
-            both_net_p1_frq = short_net_p1_frq + long_net_p1_frq
-            if signi:
-                both_idep_res_obj = (both_tpbox_p2exec_hhm, both_hlm) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
-            else:
-                gs_idx = plot_info_v8(gs, gs_idx, len_df, sample_len, both_tr, both_tpbox_hhm, both_tpbox_p2exec_hhm, both_outbox_hhm, both_hlm, both_trade_ticks, both_net_p1_frq, both_pr, both_total_pr,
-                                      both_cum_pr, both_liqd, lvrg_arr.mean(), title_position, fontsize)
-        # print("both plot_data elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in both plot_data :", e)
-
-    if not signi:
-        if len_short * len_long > 0:
-            for obj, bias_arr, cum_pr in zip([short_obj, long_obj, both_obj], [short_p2_true_bias_bool, long_p2_true_bias_bool, both_p2_true_bias_bool],
-                                             [short_cum_pr, long_cum_pr, both_cum_pr]):
-                try:
-                    # start_0 = time.time()
-                    gs_idx = frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, cum_pr[-1], fontsize)
-                    # print("frq_dev_plot elapsed time :", time.time() - start_0)
-                except Exception as e:
-                    gs_idx += 1
-                    print("error in frq_dev_plot :", e)
-            plt.show()
-            plt.close()
-
-        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_tr_arr, short_p2_true_bias_bool, short_p2_idx_arr, short_tp_1, short_tp_0, short_out_1, short_out_0, short_ep2_0, \
-               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_tr_arr, long_p2_true_bias_bool, long_p2_idx_arr, long_tp_1, long_tp_0, long_out_1, long_out_0, long_ep2_0  # long_net_p1_idx_arr long_p2_idx_arr
-
-    else:
-        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
-
-def idep_plot_v15(res_df, len_df, config, high, low, open_idx, side_arr, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
-                  fontsize=15, signi=False):
-    if not signi:
-        plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
-        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
-                               ncols=3,  # col 몇 개
-                               height_ratios=[10, 1]
-                               # height_ratios=[10, 10, 1]
-                               )
-    gs_idx = 0
-    # plt.suptitle(key)
-
-    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
-    assert np.sum(p_qty_ratio) == 1.0
-    assert len(p_ranges) == len(p_qty_ratio)
-
-    if sample_ratio is not None:
-        sample_len = int(len_df * sample_ratio)
-    else:
-        sample_len = len_df
-
-    # ------ short & long data preparation ------ #
-    # start_0 = time.time()
-    p1_openi_arr, p2_idx_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
-
-    assert len(p1_openi_arr) != 0, "assert len(p1_openi_arr) != 0"
-
-    short_p1_openi_idx = np.where(side_arr[p1_openi_arr] == OrderSide.SELL)[0]  # p1_openi_arr 에 대한 idx, # side_arr,
-    long_p1_openi_idx = np.where(side_arr[p1_openi_arr] == OrderSide.BUY)[0]
-
-    p1_idx = open_idx[p1_openi_arr].reshape(-1, 1)
-
-    short_obj = np.hstack((pair_price_arr, pair_idx_arr, p1_idx))[short_p1_openi_idx]
-    long_obj = np.hstack((pair_price_arr, pair_idx_arr, p1_idx))[long_p1_openi_idx]
-    both_obj = np.vstack((short_obj, long_obj))
-    print("short_obj.shape :", short_obj.shape)
-    print("long_obj.shape :", long_obj.shape)
-
-    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
-
-    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # print("long_bias_arr.shape :", long_bias_arr.shape)
-    # print("elapsed time :", time.time() - start_0)
-
-    short_p1_true_bias_bool, long_p1_true_bias_bool, short_p1_false_bias_bool, long_p1_false_bias_bool, \
-          short_p2_true_bias_bool, long_p2_true_bias_bool, short_p2_false_bias_bool, long_p2_false_bias_bool, \
-          short_en_wave_1, short_en_wave_0, long_en_wave_1, long_en_wave_0 = \
-      get_wave_bias_v3(res_df, config, high, low, len_df, short_obj, long_obj)
-
-    print("len(short_p1_true_bias_bool) :", len(short_p1_true_bias_bool))
-    print("len(long_p1_true_bias_bool) :", len(long_p1_true_bias_bool))
-
-    # short_p2_true_bias_bool, short_p2_false_bias_bool, long_p2_true_bias_bool, long_p2_false_bias_bool, short_en_wave_1, short_en_wave_0, long_en_wave_1, long_en_wave_0 = \
-    #     get_wave_bias_v2(res_df, config, high, low, len_df, short_obj, long_obj)
-
-    len_short, len_long = len(short_p1_openi_idx), len(long_p1_openi_idx)
-
-    # ------ plot_data ------ #
-    try:
-        # start_0 = time.time()
-        if len_short == 0:
-            short_pr = []
-            gs_idx += 1
-        else:
-            short_tr = short_tr_arr.mean()
-            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
-                                             p_qty_ratio, inversion)
-            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
-            short_cum_pr = np.cumprod(short_total_pr)
-            short_hhm = hhm(short_p1_true_bias_bool, short_p1_false_bias_bool)
-            short_hhm2, short_hlm2 = hhm(short_p2_true_bias_bool, short_p2_false_bias_bool), hlm(short_pr, short_p2_true_bias_bool)
-            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
-            if signi:
-                short_idep_res_obj = (short_hhm2, short_hlm2) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr, short_liqd)
-            else:
-                gs_idx = plot_info_v7(gs, gs_idx, len_df, sample_len, short_tr, short_hhm, short_hhm2, short_hlm2, short_trade_ticks, short_pr, short_total_pr,
-                                      short_cum_pr, short_liqd, short_lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-
-    except Exception as e:
-        gs_idx += 1
-        print("error in short plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_long == 0:
-            long_pr = []
-            gs_idx += 1
-        else:
-            long_tr = long_tr_arr.mean()
-            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
-                                           inversion)
-            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
-            long_cum_pr = np.cumprod(long_total_pr)
-            long_hhm = hhm(long_p1_true_bias_bool, long_p1_false_bias_bool)
-            long_hhm2, long_hlm2 = hhm(long_p2_true_bias_bool, long_p2_false_bias_bool), hlm(long_pr, long_p2_true_bias_bool)
-            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
-            if signi:
-                long_idep_res_obj = (long_hhm2, long_hlm2) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
-            else:
-                gs_idx = plot_info_v7(gs, gs_idx, len_df, sample_len, long_tr, long_hhm, long_hhm2, long_hlm2, long_trade_ticks, long_pr, long_total_pr,
-                                      long_cum_pr, long_liqd, long_lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in long plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_short * len_long == 0:
-            both_pr = []
-            gs_idx += 1
-        else:
-            both_tr = (short_tr + long_tr) / 2
-            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
-            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
-            both_cum_pr = np.cumprod(both_total_pr)
-            both_liqd = min(short_liqd, long_liqd)
-            both_p1_true_bias_bool = np.vstack((short_p1_true_bias_bool, long_p1_true_bias_bool))  # vstack for 2d arr
-            both_p1_false_bias_bool = np.vstack((short_p1_false_bias_bool, long_p1_false_bias_bool))  # vstack for 2d arr
-            both_p2_true_bias_bool = np.vstack((short_p2_true_bias_bool, long_p2_true_bias_bool))  # vstack for 2d arr
-            both_p2_false_bias_bool = np.vstack((short_p2_false_bias_bool, long_p2_false_bias_bool))  # vstack for 2d arr
-            both_hhm = hhm(both_p1_true_bias_bool, both_p1_false_bias_bool)
-            both_hhm2, both_hlm2 = hhm(both_p2_true_bias_bool, both_p2_false_bias_bool), hlm(both_pr, both_p2_true_bias_bool)
-            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
-            if signi:
-                both_idep_res_obj = (both_hhm2, both_hlm2) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
-            else:
-                gs_idx = plot_info_v7(gs, gs_idx, len_df, sample_len, both_tr, both_hhm, both_hhm2, both_hlm2, both_trade_ticks, both_pr, both_total_pr,
-                                      both_cum_pr, both_liqd, lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in both plot_data :", e)
-
-    if not signi:
-        if len_short * len_long > 0:
-            for obj, bias_arr, cum_pr in zip([short_obj, long_obj, both_obj], [short_p2_true_bias_bool, long_p2_true_bias_bool, both_p2_true_bias_bool],
-                                             [short_cum_pr, long_cum_pr, both_cum_pr]):
-                try:
-                    # start_0 = time.time()
-                    gs_idx = frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, cum_pr[-1], fontsize)
-                    # print("elapsed time :", time.time() - start_0)
-                except Exception as e:
-                    gs_idx += 1
-                    print("error in frq_dev_plot :", e)
-            plt.show()
-            plt.close()
-
-        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_p2_true_bias_bool, short_p2_idx_arr, short_en_wave_1, short_en_wave_0, \
-               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_p2_true_bias_bool, long_p2_idx_arr, long_en_wave_1, long_en_wave_0
-
-    else:
-        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
-
-def idep_plot_v14(res_df, len_df, config, high, low, open_idx, side_arr, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
-                  fontsize=15, signi=False):
-    if not signi:
-        plt.style.use(['dark_background', 'fast'])
-        plt.figure(figsize=(24, 8))
-        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
-                               ncols=3,  # col 몇 개
-                               height_ratios=[10, 1]
-                               # height_ratios=[10, 10, 1]
-                               )
-    gs_idx = 0
-    # plt.suptitle(key)
-
-    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
-    assert np.sum(p_qty_ratio) == 1.0
-    assert len(p_ranges) == len(p_qty_ratio)
-
-    if sample_ratio is not None:
-        sample_len = int(len_df * sample_ratio)
-    else:
-        sample_len = len_df
-
-    # ------ short & long data preparation ------ #
-    # start_0 = time.time()
-    point1_arr, valid_openi_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
-    assert len(valid_openi_arr) != 0, "assert len(valid_openi_arr) != 0"
-    short_valid_openi_idx = np.where(side_arr[valid_openi_arr] == OrderSide.SELL)[0]  # valid_openi_arr 에 대한 idx, # side_arr,
-    long_valid_openi_idx = np.where(side_arr[valid_openi_arr] == OrderSide.BUY)[0]
-
-    valid_open_idx = open_idx[valid_openi_arr].reshape(-1, 1)
-
-    short_obj = np.hstack((pair_price_arr, pair_idx_arr, valid_open_idx))[short_valid_openi_idx]
-    long_obj = np.hstack((pair_price_arr, pair_idx_arr, valid_open_idx))[long_valid_openi_idx]
-    both_obj = np.vstack((short_obj, long_obj))
-    print("short_obj.shape :", short_obj.shape)
-    print("long_obj.shape :", long_obj.shape)
-
-    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
-
-    short_point1_arr, long_point1_arr = [point1_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    # print("long_bias_arr.shape :", long_bias_arr.shape)
-    # print("elapsed time :", time.time() - start_0)
-
-    short_true_bias_idx, short_false_bias_idx, long_true_bias_idx, long_false_bias_idx, short_en_tp1, short_en_out0, long_en_tp1, long_en_out0 = \
-        get_wave_bias_v2(res_df, config, high, low, len_df, short_obj, long_obj)
-
-    len_short, len_long = len(short_valid_openi_idx), len(long_valid_openi_idx)
-
-    # ------ plot_data ------ #
-    try:
-        # start_0 = time.time()
-        if len_short == 0:
-            short_pr = []
-            gs_idx += 1
-        else:
-            short_tr = short_tr_arr.mean()
-            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
-                                             p_qty_ratio, inversion)
-            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
-            short_cum_pr = np.cumprod(short_total_pr)
-            # short_liqd = liquidation_v2(OrderSide.SELL, h, short_obj[:4], short_lvrg_arr, short_fee_arr)
-            short_prcn, short_rc = precision(short_pr, short_true_bias_idx), wave_bias(short_true_bias_idx, short_false_bias_idx)
-            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
-            if signi:
-                short_idep_res_obj = (short_prcn, short_rc) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr, short_liqd)
-            else:
-                gs_idx = plot_info_v6(gs, gs_idx, len_df, sample_len, short_tr, short_prcn, short_rc, short_trade_ticks, short_pr, short_total_pr,
-                                      short_cum_pr, short_liqd, short_lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-
-    except Exception as e:
-        gs_idx += 1
-        print("error in short plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_long == 0:
-            long_pr = []
-            gs_idx += 1
-        else:
-            long_tr = long_tr_arr.mean()
-            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
-                                           inversion)
-            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
-            long_cum_pr = np.cumprod(long_total_pr)
-            # long_liqd = liquidation_v2(OrderSide.BUY, l, long_obj[:4], long_lvrg_arr, long_fee_arr)
-            long_prcn, long_rc = precision(long_pr, long_true_bias_idx), wave_bias(long_true_bias_idx, long_false_bias_idx)
-            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
-            if signi:
-                long_idep_res_obj = (long_prcn, long_rc) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
-            else:
-                gs_idx = plot_info_v6(gs, gs_idx, len_df, sample_len, long_tr, long_prcn, long_rc, long_trade_ticks, long_pr, long_total_pr,
-                                      long_cum_pr, long_liqd, long_lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in long plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_short * len_long == 0:
-            both_pr = []
-            gs_idx += 1
-        else:
-            both_tr = (short_tr + long_tr) / 2
-            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
-            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
-            both_cum_pr = np.cumprod(both_total_pr)
-            both_liqd = min(short_liqd, long_liqd)
-            both_true_bias_idx = np.vstack((short_true_bias_idx, long_true_bias_idx))  # vstack for 2d arr
-            both_false_bias_idx = np.vstack((short_false_bias_idx, long_false_bias_idx))
-            both_prcn, both_rc = precision(both_pr, both_true_bias_idx), wave_bias(both_true_bias_idx, both_false_bias_idx)
-            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
-            if signi:
-                both_idep_res_obj = (both_prcn, both_rc) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
-            else:
-                gs_idx = plot_info_v6(gs, gs_idx, len_df, sample_len, both_tr, both_prcn, both_rc, both_trade_ticks, both_pr, both_total_pr,
-                                      both_cum_pr, both_liqd, lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in both plot_data :", e)
-
-    if not signi:
-        if len_short * len_long > 0:
-            for obj, bias_arr, cum_pr in zip([short_obj, long_obj, both_obj], [short_true_bias_idx, long_true_bias_idx, both_true_bias_idx],
-                                             [short_cum_pr, long_cum_pr, both_cum_pr]):
-                try:
-                    # start_0 = time.time()
-                    gs_idx = frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, cum_pr[-1], fontsize)
-                    # print("elapsed time :", time.time() - start_0)
-                except Exception as e:
-                    gs_idx += 1
-                    print("error in frq_dev_plot :", e)
-            plt.show()
-            plt.close()
-
-        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_true_bias_idx, short_false_bias_idx, short_point1_arr, short_en_tp1, short_en_out0, \
-               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_true_bias_idx, long_false_bias_idx, long_point1_arr, long_en_tp1, long_en_out0
-
-    else:
-        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
-
-def idep_plot_v13(res_df, len_df, config, high, low, open_idx, side_arr, paired_res, inversion=False, sample_ratio=0.7, title_position=(0.5, 0.5),
-                  fontsize=15, signi=False):
-    if not signi:
-        plt.style.use(['dark_background', 'fast'])
-        fig = plt.figure(figsize=(24, 8))
-        gs = gridspec.GridSpec(nrows=2,  # row 몇 개
-                               ncols=3,  # col 몇 개
-                               height_ratios=[10, 1]
-                               # height_ratios=[10, 10, 1]
-                               )
-    gs_idx = 0
-    # plt.suptitle(key)
-
-    p_ranges, p_qty_ratio = literal_eval(config.tp_set.p_ranges), literal_eval(config.tp_set.p_qty_ratio)
-    assert np.sum(p_qty_ratio) == 1.0
-    assert len(p_ranges) == len(p_qty_ratio)
-
-    if sample_ratio is not None:
-        sample_len = int(len_df * sample_ratio)
-    else:
-        sample_len = len_df
-
-    # ------ short & long data preparation ------ #
-    # start_0 = time.time()
-    point1_arr, valid_openi_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
-    assert len(valid_openi_arr) != 0, "assert len(valid_openi_arr) != 0"
-    short_valid_openi_idx = np.where(side_arr[valid_openi_arr] == OrderSide.SELL)[0]  # valid_openi_arr 에 대한 idx, # side_arr,
-    long_valid_openi_idx = np.where(side_arr[valid_openi_arr] == OrderSide.BUY)[0]
-
-    valid_open_idx = open_idx[valid_openi_arr].reshape(-1, 1)
-
-    short_obj = np.hstack((pair_price_arr, pair_idx_arr, valid_open_idx))[short_valid_openi_idx]
-    long_obj = np.hstack((pair_price_arr, pair_idx_arr, valid_open_idx))[long_valid_openi_idx]
-    both_obj = np.vstack((short_obj, long_obj))
-    print("short_obj.shape :", short_obj.shape)
-    print("long_obj.shape :", long_obj.shape)
-
-    short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
-
-    short_point1_arr, long_point1_arr = [point1_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_valid_openi_idx, long_valid_openi_idx]]
-    # print("long_bias_arr.shape :", long_bias_arr.shape)
-    # print("elapsed time :", time.time() - start_0)
-
-    short_true_bias_idx, short_false_bias_idx, long_true_bias_idx, long_false_bias_idx, short_en_tp1, short_en_out0, long_en_tp1, long_en_out0 = \
-        get_wave_bias_v2(res_df, config, high, low, len_df, short_obj, long_obj)
-
-    len_short, len_long = len(short_valid_openi_idx), len(long_valid_openi_idx)
-
-    # ------ plot_data ------ #
-    try:
-        # start_0 = time.time()
-        if len_short == 0:
-            short_pr = []
-            gs_idx += 1
-        else:
-            short_tr = short_tr_arr.mean()
-            short_pr, short_liqd = get_pr_v4(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr, short_fee_arr, p_ranges,
-                                             p_qty_ratio, inversion)
-            short_total_pr = to_total_pr(len_df, short_pr, short_obj[-2])
-            short_cum_pr = np.cumprod(short_total_pr)
-            # short_liqd = liquidation_v2(OrderSide.SELL, h, short_obj[:4], short_lvrg_arr, short_fee_arr)
-            short_prcn, short_rc = precision(short_pr, short_true_bias_idx), wave_bias(short_true_bias_idx, short_false_bias_idx)
-            short_trade_ticks = np.mean(short_obj[-2] - short_obj[-1])
-            if signi:
-                short_idep_res_obj = (short_prcn, short_rc) + get_res_info_nb_v2(sample_len, short_pr, short_total_pr, short_cum_pr, short_liqd)
-            else:
-                gs_idx = plot_info_v6(gs, gs_idx, sample_len, short_tr, short_prcn, short_rc, short_trade_ticks, short_pr, short_total_pr,
-                                      short_cum_pr, short_liqd, short_lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-
-    except Exception as e:
-        gs_idx += 1
-        print("error in short plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_long == 0:
-            long_pr = []
-            gs_idx += 1
-        else:
-            long_tr = long_tr_arr.mean()
-            long_pr, long_liqd = get_pr_v4(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr, long_fee_arr, p_ranges, p_qty_ratio,
-                                           inversion)
-            long_total_pr = to_total_pr(len_df, long_pr, long_obj[-2])
-            long_cum_pr = np.cumprod(long_total_pr)
-            # long_liqd = liquidation_v2(OrderSide.BUY, l, long_obj[:4], long_lvrg_arr, long_fee_arr)
-            long_prcn, long_rc = precision(long_pr, long_true_bias_idx), wave_bias(long_true_bias_idx, long_false_bias_idx)
-            long_trade_ticks = np.mean(long_obj[-2] - long_obj[-1])
-            if signi:
-                long_idep_res_obj = (long_prcn, long_rc) + get_res_info_nb_v2(sample_len, long_pr, long_total_pr, long_cum_pr, long_liqd)
-            else:
-                gs_idx = plot_info_v6(gs, gs_idx, sample_len, long_tr, long_prcn, long_rc, long_trade_ticks, long_pr, long_total_pr, long_cum_pr,
-                                      long_liqd, long_lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in long plot_data :", e)
-
-    try:
-        # start_0 = time.time()
-        if len_short * len_long == 0:
-            both_pr = []
-            gs_idx += 1
-        else:
-            both_tr = (short_tr + long_tr) / 2
-            both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
-            both_total_pr = to_total_pr(len_df, both_pr, both_obj[-2])
-            both_cum_pr = np.cumprod(both_total_pr)
-            both_liqd = min(short_liqd, long_liqd)
-            both_true_bias_idx = np.vstack((short_true_bias_idx, long_true_bias_idx))  # vstack for 2d arr
-            both_false_bias_idx = np.vstack((short_false_bias_idx, long_false_bias_idx))
-            both_prcn, both_rc = precision(both_pr, both_true_bias_idx), wave_bias(both_true_bias_idx, both_false_bias_idx)
-            both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
-            if signi:
-                both_idep_res_obj = (both_prcn, both_rc) + get_res_info_nb_v2(sample_len, both_pr, both_total_pr, both_cum_pr, both_liqd)
-            else:
-                gs_idx = plot_info_v6(gs, gs_idx, sample_len, both_tr, both_prcn, both_rc, both_trade_ticks, both_pr, both_total_pr, both_cum_pr,
-                                      both_liqd, lvrg_arr[-1], title_position, fontsize)
-        # print("elapsed time :", time.time() - start_0)
-    except Exception as e:
-        gs_idx += 1
-        print("error in both plot_data :", e)
-
-    if not signi:
-        if len_short * len_long > 0:
-            for obj, cum_pr in zip([short_obj, long_obj, both_obj], [short_cum_pr, long_cum_pr, both_cum_pr]):
-                try:
-                    # start_0 = time.time()
-                    gs_idx = frq_dev_plot_v3(gs, gs_idx, len_df, sample_len, obj[-2], cum_pr[-1], fontsize)
-                    # print("elapsed time :", time.time() - start_0)
-                except Exception as e:
-                    gs_idx += 1
-                    print("error in frq_dev_plot_v3 :", e)
-            plt.show()
-            plt.close()
-
-        return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_true_bias_idx, short_false_bias_idx, short_point1_arr, short_en_tp1, short_en_out0, \
-               long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_true_bias_idx, long_false_bias_idx, long_point1_arr, long_en_tp1, long_en_out0
-
-    else:
-        return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
 
 def liquidation_v2(open_side, data_, obj_, lvrg, fee):  # v1 is deprecated
     if type(obj_) == list:

@@ -260,7 +260,7 @@ def profitage(df, second_df, third_df, symbol=None, date=None, excel=0, get_fig=
 if __name__ == "__main__":
 
     home_dir = os.path.expanduser('~')
-    dir = './candlestick_concated/'
+    dir = './database/'
 
     import pickle
     import random

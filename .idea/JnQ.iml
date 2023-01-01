@@ -7,8 +7,9 @@
       <excludeFolder url="file://$MODULE_DIR$/made_x" />
       <excludeFolder url="file://$MODULE_DIR$/test_set" />
       <excludeFolder url="file://$MODULE_DIR$/trader_base" />
+      <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.7" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.8 (python38_1)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="pybithumb" />
     <orderEntry type="module" module-name="JnQ_upbit" />

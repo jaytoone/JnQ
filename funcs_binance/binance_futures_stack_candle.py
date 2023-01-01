@@ -26,12 +26,12 @@ if __name__ == '__main__':
 
         #       concat date exist       #
         try:
-            df1 = pd.read_excel('candlestick_concated/%s/2021-05-07 %s.xlsx' % (interval, symbol), index_col=0)
-            df2 = pd.read_excel('candlestick_concated/%s/2021-05-17 %s.xlsx' % (interval, symbol), index_col=0)
+            df1 = pd.read_excel('database/%s/2021-05-07 %s.xlsx' % (interval, symbol), index_col=0)
+            df2 = pd.read_excel('database/%s/2021-05-17 %s.xlsx' % (interval, symbol), index_col=0)
 
             df3 = df1.append(df2)
             df3 = df3[~df3.index.duplicated(keep='last')]
-            df3.to_excel('candlestick_concated/%s/2021-05-17 %s.xlsx' % (interval, symbol))
+            df3.to_excel('database/%s/2021-05-17 %s.xlsx' % (interval, symbol))
 
             print(symbol, 'concatenated !')
 

@@ -104,14 +104,14 @@ if __name__ == '__main__':
     days = 300
     # days = 3
 
-    end_date = "2021-04-12"
-    end_date = "2020-09-06"
+    # end_date = "2021-04-12"
+    # end_date = "2020-09-06"
     end_date = None
 
     # intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
     intervals = ['1m']
 
-    concat_path = '../candlestick_concated/database_bn'
+    concat_path = '../database/database_bn'
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
@@ -123,8 +123,8 @@ if __name__ == '__main__':
 
     # with open('../ticker_list/binance_futures_20211207.pkl', 'rb') as f:
     #     coin_list = pickle.load(f)
-    coin_list = ['FTMUSDT', 'RUNEUSDT']
-    # coin_list = ['ETHUSDT']
+    # coin_list = ['FTMUSDT', 'RUNEUSDT']
+    coin_list = ['ETHUSDT']
     print(coin_list)
 
     for coin in coin_list:

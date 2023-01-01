@@ -32,7 +32,7 @@ if __name__ == "__main__":
     # date = "2021-11-17"
     date = "2022-01-10"
     ticker = "ETHUSDT"
-    ftr_path = "../candlestick_concated/res_df/concat/cum/{}/{} {}.ftr".format(date, date, ticker)
+    ftr_path = "../database/res_df/concat/cum/{}/{} {}.ftr".format(date, date, ticker)
     # else:
 
     # ----------- trade log ver. ----------- #
@@ -94,7 +94,7 @@ if __name__ == "__main__":
         print("end_datetime :", end_datetime)
 
         end_date = str(end_datetime).split(" ")[0]
-        save_ftr_dir = "../candlestick_concated/res_df/concat/cum/{}".format(end_date)
+        save_ftr_dir = "../database/res_df/concat/cum/{}".format(end_date)
         save_ftr_name = "{} {}.ftr".format(end_date, config.trader_set.symbol)
 
         # print("end_date :", end_date)

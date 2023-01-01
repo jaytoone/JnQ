@@ -948,7 +948,7 @@ def profitage(df, second_df, third_df, fourth_df=None, symbol=None, date=None, s
 if __name__ == "__main__":
 
     home_dir = os.path.expanduser('~')
-    dir = './candlestick_concated/'
+    dir = './database/'
 
     import pickle
 

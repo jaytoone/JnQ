@@ -27,7 +27,7 @@ if __name__ == "__main__":
     date = "2021-06-30"
     show_log = 0
     history = 0     # if you don't want to use trade_log
-    ftr_path = "../candlestick_concated/res_df/concat/cum/2021-11-17/2021-11-17 ETHUSDT.ftr"
+    ftr_path = "../database/res_df/concat/cum/2021-11-17/2021-11-17 ETHUSDT.ftr"
     log_name = "ETHUSDT_1640087069.pkl"
     save_xlsx = 1
 

@@ -104,8 +104,8 @@ if __name__ == "__main__":
         new_df3, _ = concat_candlestick(config.init_set.symbol, config.init_set.interval3, days=days_2, end_date=end_date, timesleep=0.2, show_process=True)
 
         #       1-1. load saved_df ver. => for pr logic confirmation         #
-        # new_df = pd.read_excel("candlestick_concated/%s/%s %s.xlsx" % (config.init_set.interval, date, config.init_set.symbol), index_col=0)
-        # new_df2 = pd.read_excel("candlestick_concated/%s/%s %s.xlsx" % (config.init_set.interval2, date, config.init_set.symbol), index_col=0)
+        # new_df = pd.read_excel("database/%s/%s %s.xlsx" % (config.init_set.interval, date, config.init_set.symbol), index_col=0)
+        # new_df2 = pd.read_excel("database/%s/%s %s.xlsx" % (config.init_set.interval2, date, config.init_set.symbol), index_col=0)
 
         res_df_ = utils_lib.sync_check([new_df, new_df2, new_df3])
 
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     else:  # just for back_strat's validity
 
         #     load with pickle    #
-        with open("candlestick_concated/res_df/" + dict_name, 'rb') as f:
+        with open("database/res_df/" + dict_name, 'rb') as f:
             res_df_dict = pickle.load(f)
 
         # pd.read_feather(date_path6 + key, columns=None, use_threads=True).set_index("index")

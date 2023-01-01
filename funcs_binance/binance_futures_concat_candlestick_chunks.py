@@ -97,7 +97,7 @@ if __name__ == '__main__':
     for interval in intervals:
 
         try:
-            os.makedirs(os.path.join('./candlestick_concated', interval))
+            os.makedirs(os.path.join('./database', interval))
         except Exception as e:
             print('Error in makedirs :', e)
 
@@ -130,7 +130,7 @@ if __name__ == '__main__':
                     concated_excel, end_date = concat_candlestick(coin + 'USDT', interval, days, end_date=end_date, show_process=True, timesleep=0.2)
 
                 # try:
-                    concated_excel.to_excel('./candlestick_concated/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
+                    concated_excel.to_excel('./database/%s/%s %s.xlsx' % (interval, end_date, coin + 'USDT'))
                 except Exception as e:
                     print('Error in to_excel :', e)
                     continue

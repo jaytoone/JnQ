@@ -273,8 +273,10 @@ def consecutive_df(res_df, itv_num):
 
     return new_res_idx_df
 
-def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False):
-    ltf_itv = pd.infer_freq(ltf_df.index)
+
+def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False, ltf_itv=None):
+    if ltf_itv is None:
+        ltf_itv = pd.infer_freq(ltf_df.index)
     assert ltf_itv == 'T', "currently only -> 'T' allowed.."
     # assert type(column[0]) in [int, np.int64], "column value should be integer"
 
@@ -283,20 +285,29 @@ def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False):
     if show_info:
         print("backing_i :", backing_i)
 
+    # 1. 15T 기준 : 1:30 -> ~1:30 까지 downsample 됨 / T 는 1:43 까지 있는데.
+    # 2. 따라서 htf col 형식을 유지하기 위해서 rename 을 사용하고,
+    # 3. 43 까지 downsampling 을 위해서, ltf_df 마지막 행을 추가해줌
     renamed_last_index = htf_df.rename(index={htf_df.index[-1]: ltf_df.index[-1]}, inplace=False).iloc[[-1]]
     if htf_df.index[-1] != renamed_last_index.index[-1]:  # cannot reindex a non-unique index with a method or limit 방지
         htf_df = htf_df.append(renamed_last_index)
 
     downsampled_df = htf_df[cols].shift(backing_i).resample(ltf_itv).ffill()
 
-    if len(downsampled_df) > len(ltf_df):
-        downsampled_df = downsampled_df.iloc[-len(ltf_df):]
+    # Todo. 정확한 timestamp sync. 를 위해서 len 이 아닌 timeindex 로 접근하는게 맞음.
+    intersec_index = sorted(list(set(downsampled_df.index) & set(ltf_df.index)))
+    downsampled_df = downsampled_df.loc[intersec_index]
 
-    downsampled_df.index = ltf_df.index[-len(downsampled_df):]
+    # if len(downsampled_df) > len(ltf_df):
+    #     # downsampled_df = downsampled_df.iloc[-len(ltf_df):]
+    #     downsampled_df = downsampled_df.loc[ltf_df.index]
+
+    # downsampled_df.index = ltf_df.index[-len(downsampled_df):]
     # assert len(ltf_df) <= len(downsampled_df), "for join method, assert len(ltf_df) <= len(downsampled_df)"
 
     # ------ check last row's validity ------ #
-    assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0"
+    assert np.sum(
+        ~pd.isnull(downsampled_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0"
 
     return downsampled_df
 

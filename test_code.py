@@ -23,7 +23,7 @@ from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlest
 
 
 print(sum([1, 2, 3]) / len([1, 2, 3]))
-# res_df_ = pd.read_feather(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\candlestick_concated\database_bn\2022-07-19\2022-07-19 ETHUSDT_1m.ftr",
+# res_df_ = pd.read_feather(r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\database\database_bn\2022-07-19\2022-07-19 ETHUSDT_1m.ftr",
 #                                        columns=None, use_threads=True).set_index("index")
 # print(res_df_.tail())
 #
