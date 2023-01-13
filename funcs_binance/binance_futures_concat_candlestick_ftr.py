@@ -13,24 +13,21 @@ pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', 3000)
 pd.set_option('display.max_columns', 2500)
 
-
 #           1 day = 86399000. (timestamp)       #
 a_day = 3600 * 24 * 1000
 candle_limit = 1500
 
 
 def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None, show_process=False, timesleep=None):
-
     assert limit <= candle_limit, "assert limit < candle_limit"
+
+    """ real_trading 에서 자정 지나면 data 부족해지는 문제로 assert, days >= 2 적용
+    - imit under 1500 으로 cover 가능 (startTime = None 이면, 자정 이전 data load 함)
+    - startTime 을 자정으로 설정해서 자정 이전의 data 를 가져오기 못한 것"""
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
-
     startTime_ = datetime.timestamp(pd.to_datetime('{} 00:00:00'.format(end_date))) * 1000
-    
-    #       1. trader 에서 자정 지나면 data 부족해지는 문제로 days >= 2 적용    #
-    #           1_1. limit under 1500 으로 cover 가능 - starttime = None 이면, 자정 이전 data load 함
-    #           1_2. 본인이 직접 위에 startTime 을 자정으로 설정했으니.
 
     # if interval != '1m':
     if interval == '1d':
@@ -40,47 +37,36 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
     if show_process:
         print(symbol)
-        
-    if days > 1:    # 1일 이상의 data 가 필요한 경우 limit 없이 모두 가져옴
+
+    if days > 1:  # 1일 이상의 data 가 필요한 경우 limit 없이 모두 가져옴
         limit = candle_limit
 
+    # df_records = []
     for day_cnt in range(days):
 
-        if day_cnt != 0:
+        if day_cnt != 0:  # for loop 통해서 하루 이전 데이터를 지속적으로 가져옴
             startTime_ -= a_day
             endTime -= a_day
 
-        # if show_process:
-        #     print(datetime.fromtimestamp(startTime_ / 1000), end=' --> ')
-        #     print(datetime.fromtimestamp(endTime / 1000))
-
         try:
-            startTime = int(startTime_)
-            endTime = int(endTime)
-            #        limit < max_limit, startTime != None 일 경우, last_index 이상하게 나옴        #
+            # ------ limit < max_limit, startTime != None 일 경우, last_index 이상하게 (-> 어떻게..?) 나옴 ------ #
             if limit != candle_limit:
-                startTime = None
-
+                startTime = None  # 변수명 get_candlestick_data 함수 param 이랑 일치시키기 위해 startTime.
+            else:
+                startTime = int(startTime_)
             df = request_client.get_candlestick_data(symbol=symbol,
                                                      interval=interval,
-                                                     startTime=startTime, endTime=endTime, limit=limit)
+                                                     startTime=startTime, endTime=int(endTime), limit=limit)
+            # ------ validation ------ #
             if show_process:
                 print(df.index[0], end=" --> ")
                 print(df.index[-1])
-            # print("endTime :", endTime)
-            # print(df.tail())
-            # quit()
-
             assert len(df) != 0, "len(df) == 0"
 
             if day_cnt == 0:
                 sum_df = df
             else:
-                # print(df.head())
-                # sum_df = pd.concat([sum_df, df])
-                sum_df = df.append(sum_df)  # <-- -a_day 이기 때문에 sum_df 와 df 의 위치가 좌측과 같다.
-                # print(sum_df)
-                # quit()
+                sum_df = pd.concat([df, sum_df])  # <-- -a_day 이기 때문에 sum_df 와 df 의 위치가 좌측과 같음.
 
             if timesleep is not None:
                 time.sleep(timesleep)
@@ -101,17 +87,11 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
 if __name__ == '__main__':
 
-    days = 300
-    # days = 3
+    days = 330  # 330 3
+    end_date = None  # "2023-01-06" "2021-04-12"
+    intervals = ['1m']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
 
-    # end_date = "2021-04-12"
-    # end_date = "2020-09-06"
-    end_date = None
-
-    # intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
-    intervals = ['1m']
-
-    concat_path = '../database/database_bn'
+    concat_path = '../database/binance/non_cum'
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
@@ -139,7 +119,7 @@ if __name__ == '__main__':
 
             try:
                 concated_df, end_date = concat_candlestick(coin, interval, days, limit=1500,
-                                                              end_date=end_date, show_process=True, timesleep=0.2)
+                                                           end_date=end_date, show_process=True, timesleep=0.2)
                 # print(concated_df.tail())
                 # quit()
                 concated_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')

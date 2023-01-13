@@ -1,4 +1,4 @@
-from funcs.funcs_duration import *
+from funcs.olds.funcs_duration import *
 
 
 #       Todo        #

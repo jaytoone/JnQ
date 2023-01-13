@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from funcs.funcs_trader import to_lower_tf_v2, to_lower_tf_v3, intmin, ffill, bfill, to_itvnum, to_htf
+from funcs.funcs_trader import to_lower_tf_v2, to_lower_tf_v3, intmin, ffill, bfill, itv_to_number, to_htf
 import talib
 
 
@@ -385,7 +385,7 @@ def backing_future_data(res_df, future_cols, itv_list):  # itv 자동 조사 가
 
     for col_, itv_ in zip(future_cols, itv_list):
         back_col_ = 'b1_' + col_
-        res_df[back_col_] = res_df[col_].shift(to_itvnum(itv_))
+        res_df[back_col_] = res_df[col_].shift(itv_to_number(itv_))
 
     return res_df
 
@@ -451,7 +451,7 @@ def enough_space(res_df, config, itv, period):
 
 # Todo, future_data
 def candle_range_ratio(res_df, c_itv, bb_itv, bb_period):
-    itv_num = to_itvnum(c_itv)
+    itv_num = itv_to_number(c_itv)
 
     b1_bb_upper_ = res_df['bb_upper_{}{}'.format(bb_itv, bb_period)].shift(itv_num).to_numpy()
     b1_bb_lower_ = res_df['bb_lower_{}{}'.format(bb_itv, bb_period)].shift(itv_num).to_numpy()
@@ -476,7 +476,7 @@ def candle_pattern_pkg(ltf_df, htf_df):
     return h_candle_v4(ltf_df, htf_df, columns)
 
 def body_rel_ratio(res_df, c_itv):
-    itv_num = to_itvnum(c_itv)
+    itv_num = itv_to_number(c_itv)
 
     b1_close_ = res_df['close_{}'.format(c_itv)].shift(itv_num).to_numpy()
     b1_open_ = res_df['open_{}'.format(c_itv)].shift(itv_num).to_numpy()
@@ -519,7 +519,7 @@ def candle_pumping_ratio_v2(res_df, c_itv, dc_itv, period):
 
 # Todo, future_data
 def candle_pumping_ratio(res_df, c_itv, bb_itv, period):
-    itv_num = to_itvnum(c_itv)
+    itv_num = itv_to_number(c_itv)
 
     # 여기에도 v2 처럼 bb_indi. 추가 (자동화)
 
@@ -550,7 +550,7 @@ def pumping_ratio(res_df, config, itv, period1, period2):
 
 def imb_ratio_v2(df, itv):  # watch 3 candle
 
-  itv_num = to_itvnum(itv)
+  itv_num = itv_to_number(itv)
   b2_itv_num = itv_num * 2
 
   b1_high = df['high_{}'.format(itv)].shift(itv_num).to_numpy()
@@ -573,7 +573,7 @@ def imb_ratio_v2(df, itv):  # watch 3 candle
 
 def imb_ratio(df, itv):
 
-  itv_num = to_itvnum(itv)
+  itv_num = itv_to_number(itv)
 
   high = df['high_{}'.format(itv)].to_numpy()
   low = df['low_{}'.format(itv)].to_numpy()
@@ -1409,7 +1409,7 @@ def rel_abs_ratio(res_df, itv, norm_period=120):
     else:
         candle_range = res_df['high_{}'.format(itv)].to_numpy() - res_df['low_{}'.format(itv)].to_numpy()
 
-    res_df['rel_ratio_{}'.format(itv)] = candle_range / pd.Series(candle_range).shift(to_itvnum(itv)).to_numpy()
+    res_df['rel_ratio_{}'.format(itv)] = candle_range / pd.Series(candle_range).shift(itv_to_number(itv)).to_numpy()
 
     norm_max = res_df['high'].rolling(norm_period).max().to_numpy()
     norm_min = res_df['low'].rolling(norm_period).min().to_numpy()
@@ -1613,7 +1613,7 @@ def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line, np_timeidx=None):
 
 
 def get_hhll(res_df, itv):
-    itvnum = to_itvnum(itv)
+    itvnum = itv_to_number(itv)
 
     res_df['hh_{}'.format(itv)] = res_df['high_{}'.format(itv)].to_numpy() <= res_df['high_{}'.format(itv)].shift(-itvnum).to_numpy()
     res_df['ll_{}'.format(itv)] = res_df['low_{}'.format(itv)].to_numpy() >= res_df['low_{}'.format(itv)].shift(-itvnum).to_numpy()

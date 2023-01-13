@@ -209,7 +209,7 @@ def last_datetime_indexing(df, interval):
     return
 
 
-def itv_bn2ub(itv):
+def itv_binance_to_upbit(itv):
     if itv == "1m":
         return "minute1"
     elif itv == "3m":
@@ -225,6 +225,28 @@ def itv_bn2ub(itv):
     elif itv == "4h":
         return "minute240"
 
+
+def itv_to_number(interval):
+
+    if interval in ['1m', 'T']:
+        int_minute = 1
+    elif interval in ['3m', '3T']:
+        int_minute = 3
+    elif interval in ['5m', '5T']:
+        int_minute = 5
+    elif interval in ['15m', '15T']:
+        int_minute = 15
+    elif interval in ['30m', '30T']:
+        int_minute = 30
+    elif interval in ['1h', 'H']:
+        int_minute = 60
+    elif interval in ['4h', '4H']:
+        int_minute = 240
+    else:
+        print("unacceptable interval :", interval)
+        return None
+
+    return int_minute
 
 def limit_by_itv(interval):
     if interval == "1m":
@@ -384,28 +406,6 @@ def to_htf(df, itv_, offset):
 
     return h_res_df
 
-
-def to_itvnum(interval):
-
-    if interval in ['1m', 'T']:
-        int_minute = 1
-    elif interval in ['3m', '3T']:
-        int_minute = 3
-    elif interval in ['5m', '5T']:
-        int_minute = 5
-    elif interval in ['15m', '15T']:
-        int_minute = 15
-    elif interval in ['30m', '30T']:
-        int_minute = 30
-    elif interval in ['1h', 'H']:
-        int_minute = 60
-    elif interval in ['4h', '4H']:
-        int_minute = 240
-    else:
-        print("unacceptable interval :", interval)
-        return None
-
-    return int_minute
 
 
 def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
