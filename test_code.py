@@ -1,11 +1,8 @@
-import pandas as pd
 # import numpy as np
 # from binance_futures_concat_candlestick import concat_candlestick
 # from fishing_prev_close.utils import interval_to_min, calc_train_days, tp_update
 # from funcs.funcs_trader import intmin
-import os
 # import pickle
-import math
 # from pathlib import Path
 # import json
 # from easydict import EasyDict
@@ -14,10 +11,7 @@ import math
 # import logging.config
 # from logging.handlers import RotatingFileHandler
 # from ast import literal_eval
-import numpy as np
-from datetime import datetime
 
-from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
 # from funcs.funcs_trader import load_bin, preproc_bin
 # from funcs_binance.funcs_trader_modules import read_write_cfg_list
 
@@ -36,11 +30,11 @@ print(sum([1, 2, 3]) / len([1, 2, 3]))
 # print(str_ts.replace(str_ts.split(':')[-1], "59.999000"))
 # # print(concated_df.tail())
 
-# config_list = read_write_cfg_list([r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\banking\config\0405_wave_config_3_5.json"])
+# config_list = read_write_cfg_list([r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\Bank\config\0405_wave_config_3_5.json"])
 # p_ranges, p_qty = literal_eval(config_list[0].tp_set.p_ranges), literal_eval(config_list[0].tp_set.p_qty)
 # print(type(p_ranges))
 
-# short_bin = load_bin("C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\banking\\res_bin\\ID3_1_all_05_5_ETHUSDT_short.bin")
+# short_bin = load_bin("C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\Bank\\res_bin\\ID3_1_all_05_5_ETHUSDT_short.bin")
 # # while 1:
 # #     print(datetime.now().second)
 # #     print(datetime.now().minute)

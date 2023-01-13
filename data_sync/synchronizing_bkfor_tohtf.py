@@ -9,11 +9,11 @@
 # from binance_f.model import *
 # from binance_f.base.printobject import *
 
-from funcs_binance.binance_futures_concat_candlestick_ftr import concat_candlestick
+from funcs.binance.futures_concat_candlestick_ftr import concat_candlestick
 
 import matplotlib.pyplot as plt
 
-from funcs.funcs_trader import *
+from funcs.public.broker import *
 from funcs.olds.funcs_indicator_candlescore import *
 import mpl_finance as mf
 

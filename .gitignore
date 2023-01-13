@@ -1,7 +1,7 @@
 # directory
 private_info/
 database/
-idep/
+IDEP/
 
 # file
 test_code.py

@@ -7,7 +7,7 @@ from easydict import EasyDict
 
 #            Initialize Part by Symbol           #
 #            First Configuration       #
-with open('binance_futures_bot_config.json', 'r') as cfg:
+with open('futures_bot_config.json', 'r') as cfg:
     config = EasyDict(json.load(cfg))
 fundamental = config.FUNDMTL
 accumulated_income = fundamental.accumulated_income
@@ -37,7 +37,7 @@ m = -1
 while 1:
 
     #       Configuration       #
-    with open('binance_futures_bot_config.json', 'r') as cfg:
+    with open('futures_bot_config.json', 'r') as cfg:
         config = EasyDict(json.load(cfg))
 
     fundamental = config.FUNDMTL
