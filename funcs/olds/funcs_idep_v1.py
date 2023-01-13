@@ -943,7 +943,7 @@ def adj_mr_nb(obj, mr_res_idx):
     return result
 
 
-def get_exc_info(res_df, config, short_ep, short_tp, long_ep, long_tp, np_timeidx, mode="IDE"):
+def get_exc_info(res_df, config, short_ep, short_tp, long_ep, long_tp, np_timeidx, mode="banking"):
     strat_version = config.strat_version
 
     #   open & close init   #

@@ -36,11 +36,11 @@ print(sum([1, 2, 3]) / len([1, 2, 3]))
 # print(str_ts.replace(str_ts.split(':')[-1], "59.999000"))
 # # print(concated_df.tail())
 
-# config_list = read_write_cfg_list([r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\IDE\config\0405_wave_config_3_5.json"])
+# config_list = read_write_cfg_list([r"C:\Users\Lenovo\PycharmProjects\System_Trading\JnQ\banking\config\0405_wave_config_3_5.json"])
 # p_ranges, p_qty = literal_eval(config_list[0].tp_set.p_ranges), literal_eval(config_list[0].tp_set.p_qty)
 # print(type(p_ranges))
 
-# short_bin = load_bin("C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\IDE\\res_bin\\ID3_1_all_05_5_ETHUSDT_short.bin")
+# short_bin = load_bin("C:\\Users\\Lenovo\\PycharmProjects\\System_Trading\\JnQ\\banking\\res_bin\\ID3_1_all_05_5_ETHUSDT_short.bin")
 # # while 1:
 # #     print(datetime.now().second)
 # #     print(datetime.now().minute)
