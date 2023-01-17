@@ -4,20 +4,18 @@
 
 
 # directory
-IDEP/legacy
-database/*
+IDEP/
+database/
+Bank/df_log/
+Bank/trade_log/
+Bank/api_keys/
+Bank/sys_log/
+!Bank/sys_log/base_cfg.json
 
 
 # files
-IDEP/*.*
-
-Bank/sys_log/*
-!Bank/sys_log/base_cfg.json
-Bank/df_log/*
-Bank/trade_log/*
-Bank/api_keys/*
-
 test_code.py
+
 
 # ------------ public ------------  #
 
