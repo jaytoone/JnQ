@@ -1,5 +1,9 @@
 import importlib
 
+"""
+0. Trader version 관리를 위해, traders/ 하위에 배치시킴. 
+1. list 형식의 utils & configuration 을 다루기 위해 importlib 형식을 도입함.
+"""
 
 # ------- input params ------- #
 strat_pkg = 'Bank'

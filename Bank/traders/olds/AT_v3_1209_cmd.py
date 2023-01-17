@@ -11,7 +11,7 @@ pkg_path = os.path.abspath('./../')
 print("pkg_path :", pkg_path)
 # quit()
 
-os.chdir(pkg_path)      # go to AT, because constant.test use ../private_info/mademerich.pkl
+os.chdir(pkg_path)      # go to AT, because constant.test use ../api_keys/binance_mademerich.pkl
 
 from funcs.binance.futures_modules import *
 from funcs.binance.futures_concat_candlestick import concat_candlestick

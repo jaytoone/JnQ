@@ -57,13 +57,16 @@ def init_set(self):
             sys_log.info('leverage type --> isolated')
 
         # ------ 2. confirm limit leverage ------ #
-        try:
-            limit_leverage = get_limit_leverage(symbol_=self.config.trader_set.symbol)
-        except Exception as e:
-            sys_log.error('error in get limit_leverage : {}'.format(e))
-            continue
+        if self.config.lvrg_set.limit_leverage == "None":
+            try:
+                limit_leverage = get_limit_leverage(symbol_=self.config.trader_set.symbol)
+            except Exception as e:
+                sys_log.error('error in get limit_leverage : {}'.format(e))
+                continue
+            else:
+                sys_log.info('limit_leverage : {}'.format(limit_leverage))
         else:
-            sys_log.info('limit_leverage : {}'.format(limit_leverage))
+            limit_leverage = self.config.lvrg_set.limit_leverage
 
         # ------ 3. sub_client ------ #
         try:
@@ -598,8 +601,14 @@ def log_sub_tp_exec(self, res_df, tp_list, post_order_res_list, quantity_precisi
 
     return tp_list, tp_exec_dict
 
+
 def check_hl_out_onbarclose(self, res_df, market_close_on, log_out, out, open_side):
-    #    Todo - inversion 고려 아직임
+
+    """
+    1. close_out 임시적으로 중지 : 사용 의미 모르겠음.
+    2. inversion 에 대해서는 고려되지 않은 logic 이나, inversion 을 사용할 경우가 적을 것이라고 보아서 보류함.
+    """
+
     close = res_df['close'].to_numpy()
     c_i = self.config.trader_set.complete_index
     # ------------ open_side 기준 ------------ #
@@ -614,12 +623,12 @@ def check_hl_out_onbarclose(self, res_df, market_close_on, log_out, out, open_si
                 log_out = out
                 sys_log.info("{} : {} {}".format(const_str, high, out))
 
-        # ------ short - close_out ------ #
-        if self.config.out_set.close_out:
-            if close[c_i] >= out:
-                market_close_on = True
-                log_out = close[c_i]
-                sys_log.info("{} : {} {}".format("close >= out", log_out, out))
+        # # ------ short - close_out ------ #
+        # if self.config.out_set.close_out:
+        #     if close[c_i] >= out:
+        #         market_close_on = True
+        #         log_out = close[c_i]
+        #         sys_log.info("{} : {} {}".format("close >= out", log_out, out))
     else:
         # ------------ out ------------ #
         # ------ long - hl_out ------ #
@@ -631,12 +640,12 @@ def check_hl_out_onbarclose(self, res_df, market_close_on, log_out, out, open_si
                 log_out = out
                 sys_log.info("{} : {} {}".format(const_str, low, out))
 
-        # ------ long - close_out ------ #
-        if self.config.out_set.close_out:
-            if close[c_i] <= out:
-                market_close_on = True
-                log_out = close[c_i]
-                sys_log.info("{} : {} {}".format("close <= out", log_out, out))
+        # # ------ long - close_out ------ #
+        # if self.config.out_set.close_out:
+        #     if close[c_i] <= out:
+        #         market_close_on = True
+        #         log_out = close[c_i]
+        #         sys_log.info("{} : {} {}".format("close <= out", log_out, out))
 
     return market_close_on, log_out
 
@@ -683,10 +692,12 @@ def check_hl_out(self, res_df, market_close_on, log_out, out, open_side):
 
     return market_close_on, log_out
 
+
 def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side):
+
     selection_id = self.config.selection_id
-    wave_itv1 = self.config.tr_set.wave_itv1
-    wave_period1 = self.config.tr_set.wave_period1
+    # wave_itv1 = self.config.tr_set.wave_itv1
+    # wave_period1 = self.config.tr_set.wave_period1
 
     #   Todo, inversion 에 대한 고려 진행된건가 - 안된것으로 보임
     close = res_df['close'].to_numpy()
@@ -695,10 +706,10 @@ def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side
         # ------ short ------ #
         j = self.config.trader_set.complete_index
         # ------ 0. cci_exit ------ #
-        if self.config.out_set.cci_exit:
-            wave_co_ = res_df['wave_co_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-            if wave_co_[j]:
-                market_close_on = True
+        # if self.config.out_set.cci_exit:
+        #     wave_co_ = res_df['wave_co_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+        #     if wave_co_[j]:
+        #         market_close_on = True
 
         # ------ 1. rsi_exit ------ #
         if self.config.out_set.rsi_exit:
@@ -723,10 +734,10 @@ def check_signal_out(self, res_df, market_close_on, log_out, cross_on, open_side
         # ------ long ------ #
         j = self.config.trader_set.complete_index
         # ------ 0. cci_exit ------ #
-        if self.config.out_set.cci_exit:
-            wave_cu_ = res_df['wave_cu_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-            if wave_cu_[j]:
-                market_close_on = True
+        # if self.config.out_set.cci_exit:
+        #     wave_cu_ = res_df['wave_cu_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+        #     if wave_cu_[j]:
+        #         market_close_on = True
 
         # ------ 1. rsi_exit ------ #
         if self.config.out_set.rsi_exit:

@@ -1,7 +1,7 @@
 import pickle
 import os
 
-target_file_path = "./private_info/JnQ2.txt"
+target_file_path = "./api_keys/JnQ2.txt"
 target_file_path = "./ticker_list/binance_futures_20211207.pkl"
 key_abspath = os.path.abspath(target_file_path)
 

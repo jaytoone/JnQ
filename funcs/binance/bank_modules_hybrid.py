@@ -686,7 +686,12 @@ def check_hl_out(self, res_df, market_close_on, log_out, out, open_side):
 
     return market_close_on, log_out
 
+
 def check_signal_out_v2(self, res_df, market_close_on, log_out, cross_on, open_side):
+
+    """
+    cci_exit added to version1
+    """
     selection_id = self.config.selection_id
     wave_itv2 = self.config.tr_set.wave_itv2
     wave_period2 = self.config.tr_set.wave_period2

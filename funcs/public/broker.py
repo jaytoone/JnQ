@@ -410,7 +410,7 @@ def to_htf(df, itv_, offset):
 
 def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
 
-    itv_arr = np.array([to_itvnum(itv_) for itv_ in itv_list])
+    itv_arr = np.array([itv_to_number(itv_) for itv_ in itv_list])
     row_arr = np.maximum(np.array(row_list), np.array(rec_row_list))
 
     max_rows = np.max(itv_arr * row_arr)
