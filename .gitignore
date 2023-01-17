@@ -1,10 +1,25 @@
-# directory
-Bank/api_keys
-database/
-IDEP/
+# ------------ custom ------------  #
+# git 목적
+# version 관리 / portable / 
 
-# file
+
+# directory
+IDEP/legacy
+database/*
+
+
+# files
+IDEP/*.*
+
+Bank/sys_log/*
+!Bank/sys_log/base_cfg.json
+Bank/df_log/*
+Bank/trade_log/*
+Bank/api_keys/*
+
 test_code.py
+
+# ------------ public ------------  #
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
