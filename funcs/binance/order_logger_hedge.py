@@ -45,7 +45,7 @@ def limit_order(self, order_type, limit_side, pos_side, limit_price, limit_quant
                 return None, self.over_balance, res_code
 
             sys_log.error('error in limit open order : {}'.format(e))
-            # ------ price precision validation ------ #
+            # ------ -4014 : price precision validation ------ #
             if '-4014' in str(e):
                 try:
                     realtime_price = get_market_price_v2(self.sub_client)
@@ -112,7 +112,7 @@ def partial_limit_order_v4(self, p_tps, p_qtys, close_side, pos_side, open_execu
         post_order_res_list.append(post_order_res)
 
         # ------ 2. check success ------ #
-        if not res_code:  # if succeed, res_code = 0
+        if not res_code:  # if succeeded, res_code = 0
             p_tp_idx += 1
 
         # ------ 3. errors ------ #
@@ -125,7 +125,8 @@ def partial_limit_order_v4(self, p_tps, p_qtys, close_side, pos_side, open_execu
             sys_log.info('p_qtys : {}'.format(p_qtys))
             continue
 
-        # ------ -4003 : quantity less than zero ------ # Todo -> openQty 가 잘못되면 그러지 않을까, outer_scope 에서 진행해야할 것
+        # ------ -4003 : quantity less than zero ------ #
+        # Todo -> open_executedQty 가 잘못되면 그러지 않을까, 그렇다면, outer_scope 에서 진행해야할 것
         elif res_code == -4003:
             continue
 

@@ -87,8 +87,8 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
 if __name__ == '__main__':
 
-    days = 330  # 330 3
-    end_date = None  # "2023-01-06" "2021-04-12"
+    days = 700  # 330 3
+    end_date = None  # "2023-01-06" "2021-04-12" "2021-03-23"
     intervals = ['1m']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
 
     concat_path = '../../database/binance/non_cum'
@@ -101,25 +101,25 @@ if __name__ == '__main__':
 
     exist_files = os.listdir(save_dir)
 
-    # with open('../ticker_list/binance_futures_20211207.pkl', 'rb') as f:
-    #     coin_list = pickle.load(f)
-    # coin_list = ['FTMUSDT', 'RUNEUSDT']
-    coin_list = ['ETHUSDT']
-    print(coin_list)
+    # with open('../symbol_list/binance_futures_20211207.pkl', 'rb') as f:
+    #     symbol_list = pickle.load(f)
+    symbol_list = [data.symbol for data in request_client.get_exchange_information().symbols if data.symbol not in ['BTCUSDT', 'ETHUSDT']]  # Binance all exchange symbol list
+    # symbol_list = ['GALBUSD'] #, 'DOGEUSDT', 'XRPUSDT', 'ADAUSDT', 'GMTUSDT', 'ADAUSDT']
+    print(symbol_list)
 
-    for coin in coin_list:
+    for symbol in symbol_list:
         for interval in intervals:
             #       check existing file     #
             #       Todo        #
             #        1. this phase require valid end_date       #
-            save_name = '%s %s_%s.ftr' % (end_date, coin, interval)
+            save_name = '%s %s_%s.ftr' % (end_date, symbol, interval)
             # if save_name in exist_files:
             #     print(save_name, 'exist !')
             #     continue
 
             try:
-                concated_df, end_date = concat_candlestick(coin, interval, days, limit=1500,
-                                                           end_date=end_date, show_process=True, timesleep=0.2)
+                concated_df, end_date = concat_candlestick(symbol, interval, days, limit=1500,
+                                                           end_date=end_date, show_process=True, timesleep=0.4)
                 # print(concated_df.tail())
                 # quit()
                 concated_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')

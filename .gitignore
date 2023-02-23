@@ -6,11 +6,9 @@
 # directory
 IDEP/
 database/
-Bank/df_log/
-Bank/trade_log/
+Bank/logs/
+!Bank/logs/sys_log/base_cfg.json
 Bank/api_keys/
-Bank/sys_log/
-!Bank/sys_log/base_cfg.json
 
 
 # files

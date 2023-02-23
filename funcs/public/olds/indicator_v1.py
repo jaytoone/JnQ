@@ -43,6 +43,7 @@ def tozero(fst, snd):
 
 
 def tozero_v2(result):
+
     eps = 1e-10
 
     if iszero(result, eps):
@@ -74,6 +75,7 @@ def stdev(df, period):
 
 
 def dev(data, period):
+
     mean_ = data.rolling(period).mean()
     dev_ = pd.Series(index=data.index)
 
@@ -89,24 +91,24 @@ def dev(data, period):
 
     return dev_
 
-
 def get_wave_time_ratio(res_df, wave_itv1, wave_period1):
-    wave_cu_prime_idx_fill_ = res_df['wave_cu_prime_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
-    wave_co_prime_idx_fill_ = res_df['wave_co_prime_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
 
-    wave_cu_post_idx_fill_ = res_df['wave_cu_post_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
-    wave_co_post_idx_fill_ = res_df['wave_co_post_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
+  wave_cu_prime_idx_fill_ = res_df['wave_cu_prime_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
+  wave_co_prime_idx_fill_ = res_df['wave_co_prime_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
 
-    wave_cu_idx_ = res_df['wave_cu_idx_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-    wave_co_idx_ = res_df['wave_co_idx_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+  wave_cu_post_idx_fill_ = res_df['wave_cu_post_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
+  wave_co_post_idx_fill_ = res_df['wave_co_post_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
 
-    res_df['short_wave_time_ratio_{}{}'.format(wave_itv1, wave_period1)] = (wave_co_post_idx_fill_ - wave_cu_prime_idx_fill_) / (wave_cu_idx_ - wave_co_post_idx_fill_)
-    res_df['long_wave_time_ratio_{}{}'.format(wave_itv1, wave_period1)] = (wave_cu_post_idx_fill_ - wave_co_prime_idx_fill_) / (wave_co_idx_ - wave_cu_post_idx_fill_)
+  wave_cu_idx_ = res_df['wave_cu_idx_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+  wave_co_idx_ = res_df['wave_co_idx_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
 
-    return res_df
+  res_df['short_wave_time_ratio_{}{}'.format(wave_itv1, wave_period1)] = (wave_co_post_idx_fill_ - wave_cu_prime_idx_fill_) / (wave_cu_idx_- wave_co_post_idx_fill_)
+  res_df['long_wave_time_ratio_{}{}'.format(wave_itv1, wave_period1)] = (wave_cu_post_idx_fill_ - wave_co_prime_idx_fill_) / (wave_co_idx_- wave_cu_post_idx_fill_)
 
+  return res_df
 
 def add_roll_idx(res_df, valid_prime_idx, roll_idx_arr, data_col, roll_hl_cnt):
+
     # data = res_df[data_col].to_numpy()
     len_res_df = len(res_df)
     roll_cols = [data_col + '_-{}'.format(cnt_ + 1) for cnt_ in reversed(range(roll_hl_cnt))]
@@ -119,12 +121,7 @@ def add_roll_idx(res_df, valid_prime_idx, roll_idx_arr, data_col, roll_hl_cnt):
     return res_df
 
 
-def tc_cci_v2(t_df, wave_period):
-    """
-    v1 -> v2
-        1. higher_bias confirmation
-            a. b1_cci, cci & band 의 부호를 변경함으로써 higher_bias 를 공략해봄.
-    """
+def tc_cci_v2(t_df, wave_period):  # high_confirmation
     t_df = cci_v2(t_df, wave_period)
     itv = pd.infer_freq(t_df.index)
 
@@ -144,7 +141,6 @@ def tc_cci_v2(t_df, wave_period):
     t_df['long_tc_{}{}'.format(itv, wave_period)] = (b1_cci_ > upper_band) & (upper_band > cci_)
 
     return t_df
-
 
 def tc_cci(t_df, wave_period):
     t_df = cci_v2(t_df, wave_period)
@@ -167,7 +163,6 @@ def tc_cci(t_df, wave_period):
 
     return t_df
 
-
 def tc_dc_base(t_df, dc_period):
     t_df = donchian_channel_v4(t_df, dc_period)
     itv = pd.infer_freq(t_df.index)
@@ -182,7 +177,6 @@ def tc_dc_base(t_df, dc_period):
 
     return t_df
 
-
 def ma(df, period=30):
     itv = pd.infer_freq(df.index)
     close = df['close'].to_numpy()
@@ -190,7 +184,6 @@ def ma(df, period=30):
     df['ma_{}{}'.format(itv, period)] = talib.MA(close, timeperiod=period)
 
     return df
-
 
 def macd_hist(df, short=5, long=35, signal=5):
     itv = pd.infer_freq(df.index)
@@ -203,7 +196,6 @@ def macd_hist(df, short=5, long=35, signal=5):
 
     return df
 
-
 def stoch_v2(df, fastk_period=13, slowk_period=3, slowd_period=3):
     itv = pd.infer_freq(df.index)
     high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
@@ -214,8 +206,8 @@ def stoch_v2(df, fastk_period=13, slowk_period=3, slowd_period=3):
 
     return df
 
-
 def cci_v2(df, period=20, smooth=None, itv=None):
+
     if itv is None:
         itv = pd.infer_freq(df.index)
 
@@ -241,12 +233,7 @@ def get_wave_length(res_df, valid_co_prime_idx, valid_cu_prime_idx, roll_co_idx_
 
     return res_df
 
-
 def wave_range_ratio_v4_3(res_df, wave_itv, wave_period, roll_hl_cnt=4):
-    """
-    v4_2 -> v4_3
-        1. wrr_10 까지 추가함.
-    """
 
     wave_high_fill_ = res_df['wave_high_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
     wave_low_fill_ = res_df['wave_low_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
@@ -255,12 +242,12 @@ def wave_range_ratio_v4_3(res_df, wave_itv, wave_period, roll_hl_cnt=4):
     roll_lows = [res_df['wave_low_fill_{}{}_-{}'.format(wave_itv, wave_period, cnt_ + 1)].to_numpy() for cnt_ in reversed(range(roll_hl_cnt))]
 
     cu_wave0_range = roll_highs[-2] - roll_lows[-2]
-    cu_wave1_range = roll_highs[-1] - roll_lows[-2]  # cu's roll_high_[:, -1] = prev_high & cu's roll_low_[:, -1] = current_low
-    cu_wave2_range = roll_highs[-1] - wave_low_fill_  # for short, cu
+    cu_wave1_range = roll_highs[-1] - roll_lows[-2]   # cu's roll_high_[:, -1] = prev_high & cu's roll_low_[:, -1] = current_low
+    cu_wave2_range = roll_highs[-1] - wave_low_fill_     # for short, cu
 
-    co_wave0_range = roll_highs[-2] - roll_lows[-2]  # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
-    co_wave1_range = roll_highs[-2] - roll_lows[-1]  # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
-    co_wave2_range = wave_high_fill_ - roll_lows[-1]  # for long, co
+    co_wave0_range = roll_highs[-2] - roll_lows[-2]   # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
+    co_wave1_range = roll_highs[-2] - roll_lows[-1]   # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
+    co_wave2_range = wave_high_fill_ - roll_lows[-1]     # for long, co
 
     wave3_range = wave_high_fill_ - wave_low_fill_
 
@@ -274,18 +261,18 @@ def wave_range_ratio_v4_3(res_df, wave_itv, wave_period, roll_hl_cnt=4):
 
     return res_df
 
-
 def wave_range_ratio_v4_2(res_df, wave_itv, wave_period, roll_hl_cnt=3):
+
     wave_high_fill_ = res_df['wave_high_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
     wave_low_fill_ = res_df['wave_low_fill_{}{}'.format(wave_itv, wave_period)].to_numpy()
 
     roll_highs = [res_df['wave_high_fill_{}{}_-{}'.format(wave_itv, wave_period, cnt_ + 1)].to_numpy() for cnt_ in reversed(range(roll_hl_cnt))]
     roll_lows = [res_df['wave_low_fill_{}{}_-{}'.format(wave_itv, wave_period, cnt_ + 1)].to_numpy() for cnt_ in reversed(range(roll_hl_cnt))]
 
-    cu_wave1_range = roll_highs[-1] - roll_lows[-2]  # cu's roll_high_[:, -1] = prev_high & cu's roll_low_[:, -1] = current_low
-    cu_wave2_range = roll_highs[-1] - wave_low_fill_  # for short, cu
-    co_wave1_range = roll_highs[-2] - roll_lows[-1]  # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
-    co_wave2_range = wave_high_fill_ - roll_lows[-1]  # for long, co
+    cu_wave1_range = roll_highs[-1] - roll_lows[-2]   # cu's roll_high_[:, -1] = prev_high & cu's roll_low_[:, -1] = current_low
+    cu_wave2_range = roll_highs[-1] - wave_low_fill_     # for short, cu
+    co_wave1_range = roll_highs[-2] - roll_lows[-1]   # co's roll_low_[:, -1] = prev_low & co's roll_high_[:, -1] = current_high
+    co_wave2_range = wave_high_fill_ - roll_lows[-1]     # for long, co
     wave3_range = wave_high_fill_ - wave_low_fill_
 
     res_df['cu_wrr_21_{}{}'.format(wave_itv, wave_period)] = cu_wave2_range / cu_wave1_range
@@ -298,6 +285,7 @@ def wave_range_ratio_v4_2(res_df, wave_itv, wave_period, roll_hl_cnt=3):
 
 
 def get_terms_info_v4(cu_idx, co_idx, len_df, len_df_range):
+
     cu_fill_idx = fill_arr(cu_idx)
     co_fill_idx = fill_arr(co_idx)
 
@@ -354,6 +342,7 @@ def get_terms_info_v4(cu_idx, co_idx, len_df, len_df_range):
 
 
 def get_roll_wave_data_v2(res_df, valid_prime_idx, roll_idx_arr, data_col, roll_hl_cnt):
+
     data = res_df[data_col].to_numpy()
     len_res_df = len(res_df)
     roll_cols = [data_col + '_-{}'.format(cnt_ + 1) for cnt_ in reversed(range(roll_hl_cnt))]
@@ -442,19 +431,22 @@ def wave_loc_pct(res_df, config, itv, period):
     return res_df
 
 
+
+
 def enough_space(res_df, config, itv, period):
-    dc_upper_ = res_df['dc_upper_{}{}'.format(itv, period)].to_numpy()
-    dc_base_ = res_df['dc_base_{}{}'.format(itv, period)].to_numpy()
-    dc_lower_ = res_df['dc_lower_{}{}'.format(itv, period)].to_numpy()
-    high_ = res_df['high_{}'.format(config.loc_set.point.tf_entry)].to_numpy()
-    low_ = res_df['low_{}'.format(config.loc_set.point.tf_entry)].to_numpy()
 
-    half_dc_gap = dc_upper_ - dc_base_
+  dc_upper_ = res_df['dc_upper_{}{}'.format(itv, period)].to_numpy()
+  dc_base_ = res_df['dc_base_{}{}'.format(itv, period)].to_numpy()
+  dc_lower_ = res_df['dc_lower_{}{}'.format(itv, period)].to_numpy()
+  high_ = res_df['high_{}'.format(config.loc_set.point.tf_entry)].to_numpy()
+  low_ = res_df['low_{}'.format(config.loc_set.point.tf_entry)].to_numpy()
 
-    res_df['cu_es_{}{}'.format(itv, period)] = (low_ - dc_lower_) / half_dc_gap
-    res_df['co_es_{}{}'.format(itv, period)] = (dc_upper_ - high_) / half_dc_gap
+  half_dc_gap = dc_upper_ - dc_base_
 
-    return res_df
+  res_df['cu_es_{}{}'.format(itv, period)] = (low_ - dc_lower_) / half_dc_gap
+  res_df['co_es_{}{}'.format(itv, period)] = (dc_upper_ - high_) / half_dc_gap
+
+  return res_df
 
 
 # Todo, future_data
@@ -473,16 +465,15 @@ def candle_range_ratio(res_df, c_itv, bb_itv, bb_period):
 
     return res_df
 
-
 def candle_pattern_pkg(ltf_df, htf_df):
+
     columns = talib.get_function_groups()['Pattern Recognition']
     for col in columns:
-        func_ = eval("talib.{}".format(col))
-        htf_df[col] = func_(htf_df.open, htf_df.high, htf_df.low, htf_df.close)
-        # print(col, 'succeed')
+      func_ = eval("talib.{}".format(col))
+      htf_df[col] = func_(htf_df.open, htf_df.high, htf_df.low, htf_df.close)
+      # print(col, 'succeed')
 
     return h_candle_v4(ltf_df, htf_df, columns)
-
 
 def body_rel_ratio(res_df, c_itv):
     itv_num = itv_to_number(c_itv)
@@ -497,7 +488,6 @@ def body_rel_ratio(res_df, c_itv):
 
     res_df['body_rel_ratio_{}'.format(c_itv)] = body_range / b1_body_range
 
-
 def dc_over_body_ratio(res_df, c_itv, dc_itv, dc_period):
     close_ = res_df['close_{}'.format(c_itv)].to_numpy()
     open_ = res_df['open_{}'.format(c_itv)].to_numpy()
@@ -510,7 +500,6 @@ def dc_over_body_ratio(res_df, c_itv, dc_itv, dc_period):
     res_df['dc_lower_body_ratio'] = (close_ - dc_lower_) / body_range
 
     return res_df
-
 
 def candle_pumping_ratio_v2(res_df, c_itv, dc_itv, period):
     res_df = dc_line_v3(res_df, dc_itv, dc_period=period)
@@ -546,7 +535,6 @@ def candle_pumping_ratio(res_df, c_itv, bb_itv, period):
 
     return res_df
 
-
 def pumping_ratio(res_df, config, itv, period1, period2):
     bb_lower_5T = res_df['bb_lower_5T'].to_numpy()
     bb_upper_5T = res_df['bb_upper_5T'].to_numpy()
@@ -562,45 +550,45 @@ def pumping_ratio(res_df, config, itv, period1, period2):
 
 def imb_ratio_v2(df, itv):  # watch 3 candle
 
-    itv_num = itv_to_number(itv)
-    b2_itv_num = itv_num * 2
+  itv_num = itv_to_number(itv)
+  b2_itv_num = itv_num * 2
 
-    b1_high = df['high_{}'.format(itv)].shift(itv_num).to_numpy()
-    b1_low = df['low_{}'.format(itv)].shift(itv_num).to_numpy()
-    b1_candle_range = b1_high - b1_low
+  b1_high = df['high_{}'.format(itv)].shift(itv_num).to_numpy()
+  b1_low = df['low_{}'.format(itv)].shift(itv_num).to_numpy()
+  b1_candle_range = b1_high - b1_low
 
-    high = df['high_{}'.format(itv)].to_numpy()
-    low = df['low_{}'.format(itv)].to_numpy()
-    b2_high = df['high_{}'.format(itv)].shift(b2_itv_num).to_numpy()
-    b2_low = df['low_{}'.format(itv)].shift(b2_itv_num).to_numpy()
+  high = df['high_{}'.format(itv)].to_numpy()
+  low = df['low_{}'.format(itv)].to_numpy()
+  b2_high = df['high_{}'.format(itv)].shift(b2_itv_num).to_numpy()
+  b2_low = df['low_{}'.format(itv)].shift(b2_itv_num).to_numpy()
 
-    open = df['open_{}'.format(itv)].to_numpy()
-    close = df['close_{}'.format(itv)].to_numpy()
+  open = df['open_{}'.format(itv)].to_numpy()
+  close = df['close_{}'.format(itv)].to_numpy()
 
-    # 추후에 통계 측정해야함 -> bir 에 따른 개별 trader 의 epout / tpep 이라던가 => short 에 양봉은 취급안함 (why use np.nan)
-    df['short_ir_{}'.format(itv)] = np.where(close < open, (b2_low - high) / b1_candle_range, np.nan)  # close < open & close < b1_low
-    df['long_ir_{}'.format(itv)] = np.where(close > open, (low - b2_high) / b1_candle_range, np.nan)  # close > open & close > b1_high
+  # 추후에 통계 측정해야함 -> bir 에 따른 개별 trader 의 epout / tpep 이라던가 => short 에 양봉은 취급안함 (why use np.nan)
+  df['short_ir_{}'.format(itv)] = np.where(close < open, (b2_low - high) / b1_candle_range, np.nan)  # close < open & close < b1_low
+  df['long_ir_{}'.format(itv)] = np.where(close > open, (low - b2_high) / b1_candle_range, np.nan)  # close > open & close > b1_high
 
-    return
-
+  return
 
 def imb_ratio(df, itv):
-    itv_num = itv_to_number(itv)
 
-    high = df['high_{}'.format(itv)].to_numpy()
-    low = df['low_{}'.format(itv)].to_numpy()
-    candle_range = high - low
+  itv_num = itv_to_number(itv)
 
-    open = df['open_{}'.format(itv)].to_numpy()
-    close = df['close_{}'.format(itv)].to_numpy()
-    b1_high = df['high_{}'.format(itv)].shift(itv_num).to_numpy()
-    b1_low = df['low_{}'.format(itv)].shift(itv_num).to_numpy()
+  high = df['high_{}'.format(itv)].to_numpy()
+  low = df['low_{}'.format(itv)].to_numpy()
+  candle_range = high - low
 
-    # 추후에 통계 측정해야함 -> bir 에 따른 개별 trader 의 epout / tpep 이라던가 => short 에 양봉은 취급안함 (why use np.nan)
-    df['short_ir_{}'.format(itv)] = np.where(close < open, (b1_low - close) / candle_range, np.nan)  # close < open & close < b1_low
-    df['long_ir_{}'.format(itv)] = np.where(close > open, (close - b1_high) / candle_range, np.nan)  # close > open & close > b1_high
+  open = df['open_{}'.format(itv)].to_numpy()
+  close = df['close_{}'.format(itv)].to_numpy()
+  b1_high = df['high_{}'.format(itv)].shift(itv_num).to_numpy()
+  b1_low = df['low_{}'.format(itv)].shift(itv_num).to_numpy()
 
-    return
+  # 추후에 통계 측정해야함 -> bir 에 따른 개별 trader 의 epout / tpep 이라던가 => short 에 양봉은 취급안함 (why use np.nan)
+  df['short_ir_{}'.format(itv)] = np.where(close < open, (b1_low - close) / candle_range, np.nan)  # close < open & close < b1_low
+  df['long_ir_{}'.format(itv)] = np.where(close > open, (close - b1_high) / candle_range, np.nan)  # close > open & close > b1_high
+
+  return
 
 
 def wave_range_bb_v1(t_df, wave_period, multiple=1, itv=None):
@@ -622,7 +610,6 @@ def wave_range_bb_v1(t_df, wave_period, multiple=1, itv=None):
     co_bool = (open_ < bb_upper_) & (bb_upper_ < close)
 
     return wave_publics_v4(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv)
-
 
 def wave_range_stoch_v1(t_df, wave_period, slowk_period=3, slowd_period=3):
     t_df = stoch_v2(t_df, fastk_period=wave_period)
@@ -647,8 +634,8 @@ def wave_range_stoch_v1(t_df, wave_period, slowk_period=3, slowd_period=3):
 
     return wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period)
 
-
 def wave_range_dc_envel_v1(t_df, wave_period):
+
     t_df = donchian_channel_v4(t_df, wave_period)
     itv = pd.infer_freq(t_df.index)
 
@@ -666,6 +653,7 @@ def wave_range_dc_envel_v1(t_df, wave_period):
     co_bool = high >= dc_upper_
 
     return wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period)
+
 
 
 def wave_range_cci_v4_1(t_df, wave_period, band_width=100, itv=None):
@@ -692,7 +680,6 @@ def wave_range_cci_v4_1(t_df, wave_period, band_width=100, itv=None):
 
     return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=itv)
 
-
 def wave_range_cci_v4(t_df, wave_period):
     t_df = cci_v2(t_df, wave_period)
     itv = pd.infer_freq(t_df.index)
@@ -717,12 +704,8 @@ def wave_range_cci_v4(t_df, wave_period):
     return wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period)
 
 
+# prime_idx 기준 wave_ high / low 측정
 def wave_publics_v4(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=None):
-    """
-    v3 -> v4
-        1. prime_idx 기준 wave_ high / low 측정
-    """
-
     if itv is None:
         itv = pd.infer_freq(t_df.index)
 
@@ -866,12 +849,9 @@ def wave_publics_v4(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=None):
     return t_df
 
 
+# post_idx 기준 wave high / low 측정,
+# v2 보다 df_cols 가 많음.
 def wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=None):
-    """
-    1. post_idx 기준 wave high / low 측정,
-    2. v2 보다 df_cols 가 많음.
-    """
-
     if itv is None:
         itv = pd.infer_freq(t_df.index)
 
@@ -1014,6 +994,257 @@ def wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=None):
 
     return t_df
 
+def wave_publics_v2(t_df, cu_bool, co_bool, ohlc_list, wave_period):
+    itv = pd.infer_freq(t_df.index)
+
+    len_df = len(t_df)
+    len_df_range = np.arange(len_df).astype(int)
+
+    cu_idx = get_index_bybool(cu_bool, len_df_range)
+    co_idx = get_index_bybool(co_bool, len_df_range)
+
+    open, high, low, close = ohlc_list
+
+    cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v4(
+        cu_idx, co_idx, len_df, len_df_range)
+    # cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, \
+    #   cu_post_idx, co_post_idx, cu_post_fill_idx, co_post_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v5(cu_idx, co_idx, len_df, len_df_range)
+
+    # ------ get post_terms ------ #
+    high_post_terms = np.vstack((co_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
+    low_post_terms = np.vstack((cu_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
+
+    high_post_terms_cnt = high_post_terms[:, 1] - high_post_terms[:, 0]
+    low_post_terms_cnt = low_post_terms[:, 1] - low_post_terms[:, 0]
+
+    # ------ get post_idx ------ #
+    paired_cu_post_idx = high_post_terms[:, 1]  # Todo, 여기는 cross_idx (위에서 vstack 으로 cross_idx 입력함)
+    paired_co_post_idx = low_post_terms[:, 1]
+
+    cu_post_idx = np.full(len_df, np.nan)  # --> Todo, unavailable : not cross_idx
+    co_post_idx = np.full(len_df, np.nan)
+
+    cu_post_idx[paired_cu_post_idx] = paired_cu_post_idx
+    co_post_idx[paired_co_post_idx] = paired_co_post_idx
+
+    cu_post_fill_idx = fill_arr(cu_post_idx)
+    co_post_fill_idx = fill_arr(co_post_idx)
+
+    # ------ get prime_terms ------ # # 기본은 아래 logic 으로 수행하고, update_hl 도 해당 term 구간의 hl 이 더 작거나 클경우 적용 가능할 것
+    # high_prime_terms = np.vstack((co_prime_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
+    # low_prime_terms = np.vstack((cu_prime_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
+
+    # high_prime_terms_cnt = high_prime_terms[:, 1] - high_prime_terms[:, 0]
+    # low_prime_terms_cnt = low_prime_terms[:, 1] - low_prime_terms[:, 0]
+
+    # paired_prime_cu_idx = high_prime_terms[:, 1]
+    # paired_prime_co_idx = low_prime_terms[:, 1]
+
+    # ====== get wave_hl & terms ====== #
+    wave_high_ = np.full(len_df, np.nan)
+    wave_low_ = np.full(len_df, np.nan)
+
+    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_post_terms])
+    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_post_terms])
+
+    wave_high_[paired_cu_post_idx] = wave_highs
+    wave_low_[paired_co_post_idx] = wave_lows
+
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    # ------ Todo, update_hl 에 대해서, post_terms_hl 적용 ------ #
+    wave_high_terms_low_ = np.full(len_df, np.nan)
+    wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_post_terms])  # for point rejection, Todo, min_max 설정 항상 주의
+    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_post_terms])
+
+    wave_high_terms_low_[paired_cu_post_idx] = wave_high_terms_lows
+    wave_low_terms_high_[paired_co_post_idx] = wave_low_terms_highs
+
+    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
+    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
+
+    # ------ term cnt ------ #
+    wave_high_terms_cnt_ = np.full(len_df, np.nan)
+    wave_low_terms_cnt_ = np.full(len_df, np.nan)
+
+    wave_high_terms_cnt_[paired_cu_post_idx] = high_post_terms_cnt
+    wave_low_terms_cnt_[paired_co_post_idx] = low_post_terms_cnt
+
+    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
+    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
+
+    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
+    # b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
+    # b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
+    # wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
+    # wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
+    #
+    # high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
+    # low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
+
+    # ============ enlist to df_cols ============ #
+    t_df['wave_high_fill_{}{}'.format(itv, wave_period)] = wave_high_fill_
+    t_df['wave_low_fill_{}{}'.format(itv, wave_period)] = wave_low_fill_
+    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_high_terms_cnt_fill_
+    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_low_terms_cnt_fill_
+
+    t_df['wave_update_low_cu_bool_{}{}'.format(itv, wave_period)] = update_low_cu_bool  # temporary, for plot_check
+    t_df['wave_update_high_co_bool_{}{}'.format(itv, wave_period)] = update_high_co_bool
+
+    t_df['wave_cu_{}{}'.format(itv, wave_period)] = cu_bool  # * ~update_low_cu_bool
+    t_df['wave_co_{}{}'.format(itv, wave_period)] = co_bool  # * ~update_high_co_bool
+
+    t_df['wave_co_idx_{}{}'.format(itv, wave_period)] = co_idx
+    t_df['wave_cu_idx_{}{}'.format(itv, wave_period)] = cu_idx
+
+    t_df['wave_co_post_idx_{}{}'.format(itv, wave_period)] = co_post_idx  # paired_
+    t_df['wave_cu_post_idx_{}{}'.format(itv, wave_period)] = cu_post_idx  # paired_
+    t_df['wave_co_post_idx_fill_{}{}'.format(itv, wave_period)] = co_post_fill_idx
+    t_df['wave_cu_post_idx_fill_{}{}'.format(itv, wave_period)] = cu_post_fill_idx
+
+    # Todo, idx 저장은 sync. 가 맞는 tf_df 에 대하여 적용하여야함
+    # ------ for roll prev_hl ------ #
+    # high_post_idx 를 위해 co_prime_idx 입력 = 뜻 : high_term's prime co_idx (high_prime_idx = wave_high 를 만들기 위한 가장 앞단의 co_idx)
+    t_df['wave_co_prime_idx_{}{}'.format(itv,
+                                         wave_period)] = co_prime_idx  # co_prime_idx wave_high_prime_idx  # high 갱신을 고려해, prev_hl 는 prime_idx 기준으로 진행
+    t_df['wave_cu_prime_idx_{}{}'.format(itv,
+                                         wave_period)] = cu_prime_idx  # cu_prime_idx wave_low_prime_idx  # cu_prime_idx's low 를 사용하겠다라는 의미, 즉 roll_prev 임
+    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, wave_period)] = co_prime_fill_idx  # co_prime_fill_idx high_prime_idx_fill_
+    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, wave_period)] = cu_prime_fill_idx  # cu_prime_fill_idx low_prime_idx_fill_
+
+    # ------ for plot_checking ------ #
+    t_df['wave_cu_marker_{}{}'.format(itv, wave_period)] = get_line(cu_idx, close)
+    t_df['wave_co_marker_{}{}'.format(itv, wave_period)] = get_line(co_idx, close)
+
+    return t_df
+
+def wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period):
+    itv = pd.infer_freq(t_df.index)
+
+    len_df = len(t_df)
+    len_df_range = np.arange(len_df).astype(int)
+
+    cu_idx = get_index_bybool(cu_bool, len_df_range)
+    co_idx = get_index_bybool(co_bool, len_df_range)
+
+    open, high, low, close = ohlc_list
+
+    cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v4(
+        cu_idx, co_idx, len_df, len_df_range)
+    # cu_fill_idx, co_fill_idx, cu_prime_idx, co_prime_idx, cu_prime_fill_idx, co_prime_fill_idx, \
+    #   cu_post_idx, co_post_idx, cu_post_fill_idx, co_post_fill_idx, valid_cu_bool, valid_co_bool = get_terms_info_v5(cu_idx, co_idx, len_df, len_df_range)
+
+    # ------ get post_terms ------ #
+    high_post_terms = np.vstack((co_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
+    low_post_terms = np.vstack((cu_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
+
+    high_post_terms_cnt = high_post_terms[:, 1] - high_post_terms[:, 0]
+    low_post_terms_cnt = low_post_terms[:, 1] - low_post_terms[:, 0]
+
+    # ------ get post_idx ------ #
+    paired_cu_post_idx = high_post_terms[:, 1]  # Todo, 여기는 cross_idx (위에서 vstack 으로 cross_idx 입력함)
+    paired_co_post_idx = low_post_terms[:, 1]
+
+    cu_post_idx = np.full(len_df, np.nan)  # --> Todo, unavailable : not cross_idx
+    co_post_idx = np.full(len_df, np.nan)
+
+    cu_post_idx[paired_cu_post_idx] = paired_cu_post_idx
+    co_post_idx[paired_co_post_idx] = paired_co_post_idx
+
+    cu_post_fill_idx = fill_arr(cu_post_idx)
+    co_post_fill_idx = fill_arr(co_post_idx)
+
+    # ------ get prime_terms ------ # # 기본은 아래 logic 으로 수행하고, update_hl 도 해당 term 구간의 hl 이 더 작거나 클경우 적용 가능할 것
+    # high_prime_terms = np.vstack((co_prime_fill_idx[valid_cu_bool], cu_idx[valid_cu_bool])).T.astype(int)
+    # low_prime_terms = np.vstack((cu_prime_fill_idx[valid_co_bool], co_idx[valid_co_bool])).T.astype(int)
+
+    # high_prime_terms_cnt = high_prime_terms[:, 1] - high_prime_terms[:, 0]
+    # low_prime_terms_cnt = low_prime_terms[:, 1] - low_prime_terms[:, 0]
+
+    # paired_prime_cu_idx = high_prime_terms[:, 1]
+    # paired_prime_co_idx = low_prime_terms[:, 1]
+
+    # ====== get wave_hl & terms ====== #
+    wave_high_ = np.full(len_df, np.nan)
+    wave_low_ = np.full(len_df, np.nan)
+
+    wave_highs = np.array([high[iin:iout + 1].max() for iin, iout in high_post_terms])
+    wave_lows = np.array([low[iin:iout + 1].min() for iin, iout in low_post_terms])
+
+    wave_high_[paired_cu_post_idx] = wave_highs
+    wave_low_[paired_co_post_idx] = wave_lows
+
+    wave_high_fill_ = fill_arr(wave_high_)
+    wave_low_fill_ = fill_arr(wave_low_)
+
+    # ------ Todo, update_hl 에 대해서, post_terms_hl 적용 ------ #
+    wave_high_terms_low_ = np.full(len_df, np.nan)
+    wave_low_terms_high_ = np.full(len_df, np.nan)
+
+    wave_high_terms_lows = np.array([low[iin:iout + 1].min() for iin, iout in high_post_terms])  # for point rejection, Todo, min_max 설정 항상 주의
+    wave_low_terms_highs = np.array([high[iin:iout + 1].max() for iin, iout in low_post_terms])
+
+    wave_high_terms_low_[paired_cu_post_idx] = wave_high_terms_lows
+    wave_low_terms_high_[paired_co_post_idx] = wave_low_terms_highs
+
+    update_low_cu_bool = wave_high_terms_low_ < wave_low_fill_
+    update_high_co_bool = wave_low_terms_high_ > wave_high_fill_
+
+    # ------ term cnt ------ #
+    wave_high_terms_cnt_ = np.full(len_df, np.nan)
+    wave_low_terms_cnt_ = np.full(len_df, np.nan)
+
+    wave_high_terms_cnt_[paired_cu_post_idx] = high_post_terms_cnt
+    wave_low_terms_cnt_[paired_co_post_idx] = low_post_terms_cnt
+
+    wave_high_terms_cnt_fill_ = fill_arr(wave_high_terms_cnt_)
+    wave_low_terms_cnt_fill_ = fill_arr(wave_low_terms_cnt_)
+
+    # ------ hl_fill 의 prime_idx 를 찾아야함 ------ #
+    # b1_wave_high_fill_ = pd.Series(wave_high_fill_).shift(1).to_numpy()
+    # b1_wave_low_fill_ = pd.Series(wave_low_fill_).shift(1).to_numpy()
+    # wave_high_prime_idx = np.where((wave_high_fill_ != b1_wave_high_fill_) & ~np.isnan(wave_high_fill_), len_df_range, np.nan)
+    # wave_low_prime_idx = np.where((wave_low_fill_ != b1_wave_low_fill_) & ~np.isnan(wave_low_fill_), len_df_range, np.nan)
+    #
+    # high_prime_idx_fill_ = fill_arr(wave_high_prime_idx)
+    # low_prime_idx_fill_ = fill_arr(wave_low_prime_idx)
+
+    # ============ enlist to df_cols ============ #
+    t_df['wave_high_fill_{}{}'.format(itv, wave_period)] = wave_high_fill_
+    t_df['wave_low_fill_{}{}'.format(itv, wave_period)] = wave_low_fill_
+    t_df['wave_high_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_high_terms_cnt_fill_
+    t_df['wave_low_terms_cnt_fill_{}{}'.format(itv, wave_period)] = wave_low_terms_cnt_fill_
+
+    t_df['wave_update_low_cu_bool_{}{}'.format(itv, wave_period)] = update_low_cu_bool  # temporary, for plot_check
+    t_df['wave_update_high_co_bool_{}{}'.format(itv, wave_period)] = update_high_co_bool
+
+    t_df['wave_cu_{}{}'.format(itv, wave_period)] = cu_bool  # * ~update_low_cu_bool
+    t_df['wave_co_{}{}'.format(itv, wave_period)] = co_bool  # * ~update_high_co_bool
+
+    t_df['wave_co_post_idx_{}{}'.format(itv, wave_period)] = co_post_idx  # paired_
+    t_df['wave_cu_post_idx_{}{}'.format(itv, wave_period)] = cu_post_idx  # paired_
+    t_df['wave_co_post_idx_fill_{}{}'.format(itv, wave_period)] = co_post_fill_idx
+    t_df['wave_cu_post_idx_fill_{}{}'.format(itv, wave_period)] = cu_post_fill_idx
+
+    # Todo, idx 저장은 sync. 가 맞는 tf_df 에 대하여 적용하여야함
+    # ------ for roll prev_hl ------ #
+    # high_post_idx 를 위해 co_prime_idx 입력 = 뜻 : high_term's prime co_idx (high_prime_idx = wave_high 를 만들기 위한 가장 앞단의 co_idx)
+    t_df['wave_co_prime_idx_{}{}'.format(itv,
+                                         wave_period)] = co_prime_idx  # co_prime_idx wave_high_prime_idx  # high 갱신을 고려해, prev_hl 는 prime_idx 기준으로 진행
+    t_df['wave_cu_prime_idx_{}{}'.format(itv,
+                                         wave_period)] = cu_prime_idx  # cu_prime_idx wave_low_prime_idx  # cu_prime_idx's low 를 사용하겠다라는 의미, 즉 roll_prev 임
+    t_df['wave_co_prime_idx_fill_{}{}'.format(itv, wave_period)] = co_prime_fill_idx  # co_prime_fill_idx high_prime_idx_fill_
+    t_df['wave_cu_prime_idx_fill_{}{}'.format(itv, wave_period)] = cu_prime_fill_idx  # cu_prime_fill_idx low_prime_idx_fill_
+
+    # ------ for plot_checking ------ #
+    t_df['wave_cu_marker_{}{}'.format(itv, wave_period)] = get_line(cu_idx, close)
+    t_df['wave_co_marker_{}{}'.format(itv, wave_period)] = get_line(co_idx, close)
+
+    return t_df
+
 
 def norm_data(res_df, target_data, target_col, minmax_col=None, norm_period=100):
     if minmax_col is None:
@@ -1023,7 +1254,6 @@ def norm_data(res_df, target_data, target_col, minmax_col=None, norm_period=100)
     res_df['norm_' + target_col] = target_data / (res_df['norm_max'].to_numpy() - res_df['norm_min'].to_numpy()) * 100
 
     return
-
 
 def norm_hohlc(res_df, h_c_itv, norm_period=120):
     try:
@@ -1038,9 +1268,9 @@ def norm_hohlc(res_df, h_c_itv, norm_period=120):
 
     return
 
-
 #    개별 candle_score 조회를 위해 _ratio 와 분리함        #
 def get_candle_score(o, h, l, c, updown=None, unsigned=True):
+
     #   check up / downward
     up = np.where(c >= o, 1, 0)
 
@@ -1069,7 +1299,6 @@ def get_candle_score(o, h, l, c, updown=None, unsigned=True):
 
     return wick_score, body_score
 
-
 def wick_ratio(res_df, itv):
     if itv == "T":
         ohlc_col = ["open", "high", "low", "close"]
@@ -1085,7 +1314,6 @@ def wick_ratio(res_df, itv):
     res_df['candle_updown_{}'.format(itv)] = np.where(close >= open, 1, 0)
 
     return res_df
-
 
 def candle_score_v3(res_df, itv, updown=None, unsigned=True):
     if itv == "T":
@@ -1127,7 +1355,6 @@ def candle_score_v3(res_df, itv, updown=None, unsigned=True):
 
     return
 
-
 def candle_score_v2(res_df, itv, ohlc_col=None, updown=None, unsigned=True):
     if ohlc_col is None:
         ohlc_col = ["open", "high", "low", "close"]
@@ -1166,8 +1393,8 @@ def candle_score_v2(res_df, itv, ohlc_col=None, updown=None, unsigned=True):
 
     return
 
-
 def candle_score(res_df, ohlc_col=None, updown=None, unsigned=True):
+
     if ohlc_col is None:
         ohlc_col = ["open", "high", "low", "close"]
 
@@ -1175,7 +1402,6 @@ def candle_score(res_df, ohlc_col=None, updown=None, unsigned=True):
     o, h, l, c = np.split(ohlcs.values, 4, axis=1)
 
     return get_candle_score(o, h, l, c, updown, unsigned)
-
 
 def rel_abs_ratio(res_df, itv, norm_period=120):
     if itv == 'T':
@@ -1191,30 +1417,23 @@ def rel_abs_ratio(res_df, itv, norm_period=120):
 
     return
 
+def h_ratio_cols(h_c_itv):   # 아래 함수와 통일성 유지
+  return ['hrel_ratio_{}'.format(h_c_itv), 'habs_ratio_{}'.format(h_c_itv)]
 
-def h_ratio_cols(h_c_itv):  # 아래 함수와 통일성 유지
-    return ['hrel_ratio_{}'.format(h_c_itv), 'habs_ratio_{}'.format(h_c_itv)]
+def ratio_cols(h_c_itv):   # 아래 함수와 통일성 유지
+  return ['rel_ratio_{}'.format(h_c_itv), 'abs_ratio_{}'.format(h_c_itv)]
 
+def h_oc_cols(h_c_itv):   # 아래 함수와 통일성 유지
+  return ['hopen_{}'.format(h_c_itv), 'hclose_{}'.format(h_c_itv)]
 
-def ratio_cols(h_c_itv):  # 아래 함수와 통일성 유지
-    return ['rel_ratio_{}'.format(h_c_itv), 'abs_ratio_{}'.format(h_c_itv)]
-
-
-def h_oc_cols(h_c_itv):  # 아래 함수와 통일성 유지
-    return ['hopen_{}'.format(h_c_itv), 'hclose_{}'.format(h_c_itv)]
-
-
-def oc_cols(h_c_itv):  # 아래 함수와 통일성 유지
-    return ['open_{}'.format(h_c_itv), 'close_{}'.format(h_c_itv)]
-
+def oc_cols(h_c_itv):   # 아래 함수와 통일성 유지
+  return ['open_{}'.format(h_c_itv), 'close_{}'.format(h_c_itv)]
 
 def h_candle_cols(h_c_itv):
     return ['hopen_{}'.format(h_c_itv), 'hhigh_{}'.format(h_c_itv), 'hlow_{}'.format(h_c_itv), 'hclose_{}'.format(h_c_itv)]
 
-
 def ohlc_cols(h_c_itv):
     return ['open_{}'.format(h_c_itv), 'high_{}'.format(h_c_itv), 'low_{}'.format(h_c_itv), 'close_{}'.format(h_c_itv)]
-
 
 def score_cols(h_c_itv):
     return ['front_wick_score_{}'.format(h_c_itv), 'body_score_{}'.format(h_c_itv), 'back_wick_score_{}'.format(h_c_itv)]
@@ -1227,7 +1446,6 @@ def sma(data, period):
 #       Todo - recursive       #
 def ema(data, period, adjust=False):
     return pd.Series(data.ewm(span=period, adjust=adjust).mean())
-
 
 # def ema(data, period):
 #
@@ -1289,15 +1507,14 @@ def ema(data, period, adjust=False):
 def cloud_bline(df, period):
     return (df['high'].rolling(period).max() + df['low'].rolling(period).min()) / 2
 
-
 def cloud_bline_v2(df, period):  # dc_base 와 다를게 없는데 ?
     itv = pd.infer_freq(df.index)
     df['cbline_{}{}'.format(itv, period)] = (df['high'].rolling(period).max().to_numpy() + df['low'].rolling(period).min().to_numpy()) / 2
 
     return
 
-
 def heikinashi(df):
+
     ha_df = df.copy()
     ha_df['close'] = (df['open'] + df['close'] + df['high'] + df['low']) / 4
     ha_df['open'] = np.nan
@@ -1311,25 +1528,23 @@ def heikinashi(df):
 
     return ha_df
 
-
 def heikinashi_v2(res_df_):
-    data_cols = ['open', 'high', 'low', 'close']
-    o, h, l, c = [res_df_[col_].to_numpy() for col_ in data_cols]
+  data_cols = ['open', 'high', 'low', 'close']
+  o, h, l, c = [res_df_[col_].to_numpy() for col_ in data_cols]
 
-    ha_c = (o + h + l + c) / 4
-    ha_o = np.full(len(o), np.nan)
-    ha_o[0] = (o[0] + c[0]) / 2
-    #       Todo - recursive -> numba 사용해서 for loop 돌리는게 합리적이라고 함       #
-    for i in range(1, len(ha_o)):
-        ha_o[i] = (ha_o[i - 1] + ha_c[i - 1]) / 2
-    ha_h = np.max(np.vstack((ha_o, h, ha_c)), axis=0)  # ohc
-    ha_l = np.min(np.vstack((ha_o, l, ha_c)), axis=0)
+  ha_c = (o + h + l + c) / 4
+  ha_o = np.full(len(o), np.nan)
+  ha_o[0] = (o[0] + c[0]) / 2
+  #       Todo - recursive -> numba 사용해서 for loop 돌리는게 합리적이라고 함       #
+  for i in range(1, len(ha_o)):
+      ha_o[i] = (ha_o[i - 1] + ha_c[i - 1]) / 2
+  ha_h = np.max(np.vstack((ha_o, h, ha_c)), axis=0)  # ohc
+  ha_l = np.min(np.vstack((ha_o, l, ha_c)), axis=0)
 
-    for cols, data in zip(data_cols, [ha_o, ha_h, ha_l, ha_c]):
-        res_df_['ha' + cols] = data
+  for cols, data in zip(data_cols, [ha_o, ha_h, ha_l, ha_c]):
+    res_df_['ha' + cols] = data
 
-    return
-
+  return
 
 def roc(data, period):
     roc_ = 100 * (data - data.shift(period)) / data.shift(period)
@@ -1357,6 +1572,7 @@ def trix_hist(df, period, multiplier, signal_period):
 
 
 def dtk_plot(res_df, dtk_itv2, hhtf_entry, use_dtk_line, np_timeidx=None):
+
     if np_timeidx is None:  # temporary adjusted for "utils_v3_1216.py"
         np_timeidx = np.array(list(map(lambda x: intmin(x), res_df.index)))
 
@@ -1404,11 +1620,10 @@ def get_hhll(res_df, itv):
 
     return res_df
 
-
-def h_candle_v4(ltf_df, htf_df, columns=None):  # v4 는 htf_df 를 입력해야함, colab 상에서 to_htf 를 중복하지 않기 위해 만든걸로 보임
+def h_candle_v4(ltf_df, htf_df, columns=None):   # v4 는 htf_df 를 입력해야함, colab 상에서 to_htf 를 중복하지 않기 위해 만든걸로 보임
 
     if columns is None:
-        columns = ['open', 'high', 'low', 'close']
+      columns = ['open', 'high', 'low', 'close']
 
     last_row_ltf_df = pd.DataFrame(index=[ltf_df.index[-1]], data=np.full((1, len(columns)), np.nan), columns=columns)
     htf_df2 = pd.concat([htf_df[columns], last_row_ltf_df[columns].iloc[-1:]])  # downsampling 과정에서 timeindex sync 를 맞추기 위해 ltf last_row's ts 를 덧붙임
@@ -1427,8 +1642,7 @@ def h_candle_v4(ltf_df, htf_df, columns=None):  # v4 는 htf_df 를 입력해야
 
     return ltf_df
 
-
-def h_candle_v3(res_df_, itv):  # v3 는 htf_df 를 입력하지 않아도 됨
+def h_candle_v3(res_df_, itv):   # v3 는 htf_df 를 입력하지 않아도 됨
     h_res_df = res_df_.resample(itv).agg({
         'open': 'first',
         'high': 'max',
@@ -1452,8 +1666,8 @@ def h_candle_v3(res_df_, itv):  # v3 는 htf_df 를 입력하지 않아도 됨
 
     return
 
-
 def h_candle_v2(res_df_, itv):
+
     h_res_df = res_df_.resample(itv).agg({
         'open': 'first',
         'high': 'max',
@@ -1479,6 +1693,7 @@ def h_candle_v2(res_df_, itv):
 
 
 def cct_bbo(df, period, smooth):
+
     avg_ = df['close'].rolling(period).mean()
     stdev_ = stdev(df, period)
     # print("len(stdev_) :", len(stdev_))
@@ -1489,68 +1704,64 @@ def cct_bbo(df, period, smooth):
 
     return cctbbo, ema_cctbbo
 
-
 def donchian_channel_v4(df, period):
-    itv = pd.infer_freq(df.index)
-    upper_name = 'dc_upper_{}{}'.format(itv, period)
-    lower_name = 'dc_lower_{}{}'.format(itv, period)
-    base_name = 'dc_base_{}{}'.format(itv, period)
+  itv = pd.infer_freq(df.index)
+  upper_name = 'dc_upper_{}{}'.format(itv, period)
+  lower_name = 'dc_lower_{}{}'.format(itv, period)
+  base_name = 'dc_base_{}{}'.format(itv, period)
 
-    try:
-        df.drop([upper_name, lower_name, base_name], inplace=True, axis=1)
-    except:
-        pass
+  try:
+    df.drop([upper_name, lower_name, base_name], inplace=True, axis=1)
+  except:
+    pass
 
-    if period != 1:
-        hh = talib.MAX(df.high, period).to_numpy()
-        ll = talib.MIN(df.low, period).to_numpy()
-    else:
-        hh = df.high.to_numpy()
-        ll = df.low.to_numpy()
+  if period != 1:
+      hh = talib.MAX(df.high, period).to_numpy()
+      ll = talib.MIN(df.low, period).to_numpy()
+  else:
+      hh = df.high.to_numpy()
+      ll = df.low.to_numpy()
 
-    df[upper_name] = hh
-    df[lower_name] = ll
-    df[base_name] = (hh + ll) / 2
+  df[upper_name] = hh
+  df[lower_name] = ll
+  df[base_name] = (hh + ll) / 2
 
-    return df
-
+  return df
 
 def donchian_channel_v3(df, period):
-    itv = pd.infer_freq(df.index)
-    upper_name = 'dc_upper_{}{}'.format(itv, period)
-    lower_name = 'dc_lower_{}{}'.format(itv, period)
-    base_name = 'dc_base_{}{}'.format(itv, period)
+  itv = pd.infer_freq(df.index)
+  upper_name = 'dc_upper_{}{}'.format(itv, period)
+  lower_name = 'dc_lower_{}{}'.format(itv, period)
+  base_name = 'dc_base_{}{}'.format(itv, period)
 
-    try:
-        df.drop([upper_name, lower_name, base_name], inplace=True, axis=1)
-    except:
-        pass
+  try:
+    df.drop([upper_name, lower_name, base_name], inplace=True, axis=1)
+  except:
+    pass
 
-    hh = df['high'].rolling(period).max().to_numpy()
-    ll = df['low'].rolling(period).min().to_numpy()
+  hh = df['high'].rolling(period).max().to_numpy()
+  ll = df['low'].rolling(period).min().to_numpy()
 
-    df[upper_name] = hh
-    df[lower_name] = ll
-    df[base_name] = (hh + ll) / 2
+  df[upper_name] = hh
+  df[lower_name] = ll
+  df[base_name] = (hh + ll) / 2
 
-    return df
-
+  return df
 
 def donchian_channel_v2(df, period):
-    itv = pd.infer_freq(df.index)
-    upper_name = 'dc_upper_{}{}'.format(itv, period)
-    lower_name = 'dc_lower_{}{}'.format(itv, period)
+  itv = pd.infer_freq(df.index)
+  upper_name = 'dc_upper_{}{}'.format(itv, period)
+  lower_name = 'dc_lower_{}{}'.format(itv, period)
 
-    try:
-        df.drop([upper_name, lower_name], inplace=True, axis=1)
-    except:
-        pass
+  try:
+    df.drop([upper_name, lower_name], inplace=True, axis=1)
+  except:
+    pass
 
-    df[upper_name] = df['high'].rolling(period).max()
-    df[lower_name] = df['low'].rolling(period).min()
+  df[upper_name] = df['high'].rolling(period).max()
+  df[lower_name] = df['low'].rolling(period).min()
 
-    return
-
+  return
 
 def donchian_channel(df, period):
     hh = df['high'].rolling(period).max().to_numpy()
@@ -1559,49 +1770,45 @@ def donchian_channel(df, period):
 
     return hh, ll, base
 
-
 def sd_dc(df, period1, period2, ltf_df=None):
     assert period1 <= period2, "assert period1 <= period2"
     donchian_channel_v2(df, period1)
     donchian_channel_v2(df, period2)
     itv = pd.infer_freq(df.index)
     if itv != 'T':
-        assert ltf_df is not None, "assert ltf_df is not None"
-        ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, [-4, -3, -2, -1]), how='inner')
+      assert ltf_df is not None, "assert ltf_df is not None"
+      ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, df, [-4, -3, -2, -1]), how='inner')
     else:
-        ltf_df = df
+      ltf_df = df
 
     ltf_df['short_base_{}'.format(itv)] = (ltf_df['dc_lower_{}{}'.format(itv, period1)].to_numpy() + ltf_df['dc_upper_{}{}'.format(itv, period2)].to_numpy()) / 2
     ltf_df['long_base_{}'.format(itv)] = (ltf_df['dc_upper_{}{}'.format(itv, period1)].to_numpy() + ltf_df['dc_lower_{}{}'.format(itv, period2)].to_numpy()) / 2
 
     return ltf_df
 
-
 def get_line(touch_idx, rtc_):
-    touch_idx_copy = touch_idx.copy()
-    # touch_line = np.full_like(rtc_, np.nan)
+  touch_idx_copy = touch_idx.copy()
+  # touch_line = np.full_like(rtc_, np.nan)
 
-    nan_idx = np.isnan(touch_idx_copy)
-    touch_idx_copy[nan_idx] = 0  # for indexing array
-    touch_line = rtc_[touch_idx_copy.astype(int)].copy()
-    touch_line[nan_idx] = np.nan  # for true comp.
+  nan_idx = np.isnan(touch_idx_copy)
+  touch_idx_copy[nan_idx] = 0   # for indexing array
+  touch_line = rtc_[touch_idx_copy.astype(int)].copy()
+  touch_line[nan_idx] = np.nan   # for true comp.
 
-    return touch_line
-
+  return touch_line
 
 def to_value_index(prev_wave_point_idx2, len_df_range):
-    valid_idx = ~np.isnan(prev_wave_point_idx2)
-    # np.sum(~np.isnan(prev_wave_point_idx2))
-    prevwp_valid_value = prev_wave_point_idx2[valid_idx].astype(int)  # inner box value
-    prev_wave_point_ = np.full(len(valid_idx), False)
-    prev_wave_point_[prevwp_valid_value] = True
+  valid_idx = ~np.isnan(prev_wave_point_idx2)
+  # np.sum(~np.isnan(prev_wave_point_idx2))
+  prevwp_valid_value = prev_wave_point_idx2[valid_idx].astype(int)   # inner box value
+  prev_wave_point_ = np.full(len(valid_idx), False)
+  prev_wave_point_[prevwp_valid_value] = True
 
-    return np.where(prev_wave_point_, len_df_range, np.nan)
+  return np.where(prev_wave_point_, len_df_range, np.nan)
 
 
 def get_index_bybool(bool_arr, len_df_range):
-    return np.where(bool_arr, len_df_range, np.nan)
-
+  return np.where(bool_arr, len_df_range, np.nan)
 
 def using_clump(a):
     return [a[s].astype(int) for s in np.ma.clump_unmasked(np.ma.masked_invalid(a))]
@@ -1615,6 +1822,7 @@ def fill_arr(arr_, mode='ffill'):
 
 
 def dc_line_v4(ltf_df, htf_df, dc_period=20):
+
     interval = pd.infer_freq(htf_df.index)
     if interval not in ['T', '1m']:
         htf_df = donchian_channel_v4(htf_df, dc_period)
@@ -1623,8 +1831,8 @@ def dc_line_v4(ltf_df, htf_df, dc_period=20):
         ltf_df = donchian_channel_v4(ltf_df, dc_period)
         return ltf_df
 
-
 def dc_line_v3(ltf_df, htf_df, dc_period=20):
+
     interval = pd.infer_freq(htf_df.index)
     if interval not in ['T', '1m']:
         htf_df = donchian_channel_v3(htf_df, dc_period)
@@ -1633,8 +1841,8 @@ def dc_line_v3(ltf_df, htf_df, dc_period=20):
         ltf_df = donchian_channel_v3(ltf_df, dc_period)
         return ltf_df
 
-
 def dc_line_v2(ltf_df, htf_df, interval, dc_period=20):
+
     if interval not in ['T', '1m']:
         htf_df = donchian_channel_v3(htf_df, dc_period)
         return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
@@ -1644,6 +1852,7 @@ def dc_line_v2(ltf_df, htf_df, interval, dc_period=20):
 
 
 def dc_line(ltf_df, htf_df, interval, dc_period=20):
+
     dc_upper = 'dc_upper_%s' % interval
     dc_lower = 'dc_lower_%s' % interval
     dc_base = 'dc_base_%s' % interval
@@ -1659,6 +1868,7 @@ def dc_line(ltf_df, htf_df, interval, dc_period=20):
 
 
 def dc_level(ltf_df, interval, dc_gap_multiple):
+
     dc_upper = 'dc_upper_%s' % interval
     dc_lower = 'dc_lower_%s' % interval
     dc_base = 'dc_base_%s' % interval
@@ -1686,7 +1896,6 @@ def dc_level(ltf_df, interval, dc_gap_multiple):
 
     return ltf_df
 
-
 def rs_channel(df, period=20, itv='T'):  # htf ohlc 는 itv 조사가 안되서 itv 변수 필요함
     if itv == 'T':
         rolled_data = df[['open', 'close']].rolling(period)
@@ -1696,7 +1905,6 @@ def rs_channel(df, period=20, itv='T'):  # htf ohlc 는 itv 조사가 안되서 
     df['sup_{}'.format(itv)] = rolled_data.min().min(1)
 
     return
-
 
 def rs_channel_v2(df, period=20, itv='T', type='TP'):
     if itv == 'T':
@@ -1735,7 +1943,6 @@ def bb_width_v3(df, period, multiple, itv=None):
 
     return df
 
-
 def bb_width_v2(df, period, multiple, return_bbw=False):
     basis = df['close'].rolling(period).mean().to_numpy()
     dev_ = multiple * stdev(df, period)
@@ -1759,8 +1966,8 @@ def bb_width_v2(df, period, multiple, return_bbw=False):
     if return_bbw:
         df['bbw_{}{}'.format(itv, period)] = 2 * dev_ / basis
 
-
 def bb_width(df, period, multiple):
+
     basis = df['close'].rolling(period).mean()
     # print(stdev(df, period))
     # quit()
@@ -1770,7 +1977,6 @@ def bb_width(df, period, multiple):
     bbw = 2 * dev_ / basis
 
     return upper, lower, basis, bbw
-
 
 def bb_line(ltf_df, htf_df, interval, period=20, multi=1):  # deprecated - join 을 따로 사용해도 될터인데.. (v2 만들면서 느낀점)
 
@@ -1787,7 +1993,6 @@ def bb_line(ltf_df, htf_df, interval, period=20, multi=1):  # deprecated - join 
 
     return joined_ltf_df
 
-
 def bb_line_v2(ltf_df, htf_df, interval, period=20, multi=1):
     # interval = pd.infer_freq(htf_df.index)
     if interval not in ['T', '1m']:
@@ -1797,8 +2002,8 @@ def bb_line_v2(ltf_df, htf_df, interval, period=20, multi=1):
         bb_width(ltf_df, period, multi)
         return ltf_df
 
-
 def bb_line_v3(ltf_df, htf_df, period=20, multiple=1):
+
     interval = pd.infer_freq(htf_df.index)
     if interval not in ['T', '1m']:
         bb_width_v3(htf_df, period, multiple)
@@ -1807,8 +2012,8 @@ def bb_line_v3(ltf_df, htf_df, period=20, multiple=1):
         bb_width_v3(ltf_df, period, multiple)
         return ltf_df
 
-
 def bb_level_v2(res_df, itv, period):
+
     bb_base = res_df['bb_base_{}{}'.format(itv, period)].to_numpy()
 
     bb_upper2 = 'bb_upper2_{}{}'.format(itv, period)
@@ -1826,8 +2031,8 @@ def bb_level_v2(res_df, itv, period):
 
     return res_df
 
-
 def bb_level(ltf_df, interval, bb_gap_multiple):
+
     bb_upper = 'bb_upper_%s' % interval
     bb_lower = 'bb_lower_%s' % interval
     bb_base = 'bb_base_%s' % interval
@@ -1857,7 +2062,6 @@ def bb_level(ltf_df, interval, bb_gap_multiple):
 
     return ltf_df
 
-
 #       Todo - recursive -> not fixed      #
 def fisher(df, period):
     hl2 = (df['high'] + df['low']) / 2
@@ -1886,8 +2090,8 @@ def fisher(df, period):
 
     return fish
 
-
 def bbwp(bb_gap, st_gap, ma_period=10):
+
     bbwp_ = bb_gap / st_gap
     bbwp_ma = bbwp_.rolling(ma_period).mean()
 
@@ -1979,7 +2183,7 @@ def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_upt
                 if sar.iloc[i] < df['high'].iloc[i]:
                     uptrend.iloc[i] = True
                     new_trend.iloc[i] = True
-                    sar.iloc[i] = min(df['low'].iloc[i], ep.iloc[i - 1])
+                    sar.iloc[i] = min(df['low'].iloc[i],  ep.iloc[i - 1])
                     ep.iloc[i] = max(df['high'].iloc[i], df['high'].iloc[i - 1])
                     reversal_state.iloc[i] = 1
                 else:
@@ -2006,7 +2210,6 @@ def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_upt
         return sar, uptrend
 
     return sar
-
 
 def lucid_sar_v2(df, af_initial=0.03, af_increment=0.02, af_maximum=0.2, return_uptrend=True):
     len_df = len(df)
@@ -2038,7 +2241,7 @@ def lucid_sar_v2(df, af_initial=0.03, af_increment=0.02, af_maximum=0.2, return_
                     af[i] = af[i - 1]
 
             # ------ sar set ------ #
-            sar[i] = sar[i - 1] + af[i] * (ep[i] - sar[i - 1])  # recursive
+            sar[i] = sar[i - 1] + af[i] * (ep[i] - sar[i - 1])   # recursive
             if uptrend[i - 1]:
                 sar[i] = min(sar[i], l[i - 1])
                 # if not pd.isna(l[i - 2]):
@@ -2062,7 +2265,7 @@ def lucid_sar_v2(df, af_initial=0.03, af_increment=0.02, af_maximum=0.2, return_
                 if sar[i] < h[i]:
                     uptrend[i] = 1
                     new_trend[i] = 1
-                    sar[i] = min(l[i], ep[i - 1])
+                    sar[i] = min(l[i],  ep[i - 1])
                     ep[i] = max(h[i], h[i - 1])
                     reversal_state[i] = 1
                 else:
@@ -2093,6 +2296,7 @@ def lucid_sar_v2(df, af_initial=0.03, af_increment=0.02, af_maximum=0.2, return_
 
 
 def cmo(df, period=9):
+
     df['closegap_cunsum'] = (df['close'] - df['close'].shift(1)).cumsum()
     df['closegap_abs_cumsum'] = abs(df['close'] - df['close'].shift(1)).cumsum()
     # print(df)
@@ -2108,17 +2312,18 @@ def cmo(df, period=9):
 
 #       Todo - recursive       #
 def rma(series, period):
+
     alpha = 1 / period
     rma_ = pd.Series(index=series.index, dtype=np.float64)
     avg_ = series.rolling(period).mean()
-
+    
     rma_.iloc[0] = 0
     for i in range(1, len(series)):
         if np.isnan(rma_.iloc[i - 1]):
             rma_.iloc[i] = avg_.iloc[i]
         else:
             rma_.iloc[i] = series.iloc[i] * alpha + (1 - alpha) * nz(rma_.iloc[i - 1])  # recursive
-
+            
     # rma_.iloc[0] = avg_.iloc[0]
     # rma_ = series * alpha + (1 - alpha) * rma_.shift(1).apply(nz)
 
@@ -2127,6 +2332,7 @@ def rma(series, period):
 
 #       Todo - recursive       #
 def rsi(ohlcv_df, period=14):
+
     #       rma 에 rolling, index 가 필요해서 series 로 남겨두고 del 하는 것임     #
     ohlcv_df['up'] = np.where(ohlcv_df['close'].diff(1) > 0, ohlcv_df['close'].diff(1), 0)
     ohlcv_df['down'] = np.where(ohlcv_df['close'].diff(1) < 0, ohlcv_df['close'].diff(1) * (-1), 0)
@@ -2141,6 +2347,7 @@ def rsi(ohlcv_df, period=14):
 
 
 def cci(df, period=20):
+
     hlc3 = (df['high'] + df['low'] + df['close']) / 3
     ma_ = hlc3.rolling(period).mean()
     cci_ = (hlc3 - ma_) / (0.015 * dev(hlc3, period))
@@ -2149,6 +2356,7 @@ def cci(df, period=20):
 
 
 def stoch(ohlcv_df, period_sto=13, k=3, d=3):
+
     hh = ohlcv_df['high'].rolling(period_sto).max()
     ll = ohlcv_df['low'].rolling(period_sto).min()
     stoch = (ohlcv_df['close'] - ll) / (hh - ll) * 100
@@ -2199,6 +2407,7 @@ def obv(df):
 
 #       Todo - recursive       #
 def macd(df, short=9, long=19, signal=9):
+
     macd = ema(df['close'], short) - ema(df['close'], long)
     macd_signal = ema(macd, signal)
     macd_hist = macd - macd_signal
@@ -2206,8 +2415,10 @@ def macd(df, short=9, long=19, signal=9):
     return macd_hist
 
 
+
 #       Todo - recursive       #
 def ema_ribbon(df, ema_1=5, ema_2=8, ema_3=13):
+
     # ema1 = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
     # ema2 = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
     # ema3 = df['close'].ewm(span=ema_3, min_periods=ema_3 - 1, adjust=False).mean()
@@ -2220,6 +2431,7 @@ def ema_ribbon(df, ema_1=5, ema_2=8, ema_3=13):
 
 #       Todo - recursive       #
 def ema_cross(df, ema_1=30, ema_2=60):
+
     # df['EMA_1'] = df['close'].ewm(span=ema_1, min_periods=ema_1 - 1, adjust=False).mean()
     # df['EMA_2'] = df['close'].ewm(span=ema_2, min_periods=ema_2 - 1, adjust=False).mean()
     df['EMA_1'] = ema(df['close'], ema_1)
@@ -2242,16 +2454,16 @@ def atr(df, period):
     #             abs(df['low'].iloc[i] - df['close'].iloc[i - 1]))
 
     tr = np.maximum(np.maximum(df['high'] - df['low'], abs(df['high'] - df['close'].shift(1))),
-                    abs(df['low'] - df['close'].shift(1)))
+        abs(df['low'] - df['close'].shift(1)))
     # print(tr.tail(10))
     # quit()
     atr = rma(tr, period)
 
     return atr
 
-
 # ------ vectorized supertrend ------ #
 def supertrend_v2(df, period, multiplier):
+
     hl2 = (df.high.to_numpy() + df.low.to_numpy()) / 2
 
     atr = talib.ATR(df.high, df.low, df.close, timeperiod=period)
@@ -2272,6 +2484,7 @@ def supertrend_v2(df, period, multiplier):
 
 #       Todo - recursive       #, rma 부터 시작해서 구성요소 모두가 recursive 함.
 def supertrend(df, period, multiplier, cal_st=False):
+
     hl2 = (df['high'] + df['low']) / 2
     # print(hl2)
     # print(atr(df, period))
@@ -2320,6 +2533,7 @@ def supertrend(df, period, multiplier, cal_st=False):
 
 
 def st_price_line(ltf_df, htf_df):
+
     ha_htf_df = heikinashi(htf_df)
 
     interval = pd.infer_freq(htf_df.index)
@@ -2341,8 +2555,6 @@ def st_price_line(ltf_df, htf_df):
     joined_ltf_df = ltf_df.join(to_lower_tf_v4(ltf_df, htf_df, columns), how='inner')
 
     return joined_ltf_df
-
-
 #
 # def st_price_line(ltf_df, htf_df, interval):
 #
@@ -2365,6 +2577,7 @@ def st_price_line(ltf_df, htf_df):
 #     return joined_ltf_df
 
 def st_level(ltf_df, interval, st_gap_multiple):
+
     st1_up, st2_up, st3_up = 'st1_up_%s' % interval, 'st2_up_%s' % interval, 'st3_up_%s' % interval
     st1_down, st2_down, st3_down = 'st1_down_%s' % interval, 'st2_down_%s' % interval, 'st3_down_%s' % interval
 
@@ -2396,7 +2609,7 @@ def st_level(ltf_df, interval, st_gap_multiple):
 
 # def mmh_st(df, mp1, mp2, pd1=10, pd2=10):   # makemoney_hybrid
 #       Todo - recursive       #
-def mmh_st(df, mp1, pd1=10):  # makemoney_hybrid
+def mmh_st(df, mp1, pd1=10):   # makemoney_hybrid
 
     hlc3 = (df['high'] + df['low'] + df['close']) / 3
 
@@ -2435,6 +2648,7 @@ def mmh_st(df, mp1, pd1=10):  # makemoney_hybrid
 
 
 def ichimoku(ohlc, tenkan_period=9, kijun_period=26, senkou_period=52, chikou_period=1):
+
     #       Conversion Line     #
     tenkan_sen = pd.Series(
         (
@@ -2484,6 +2698,7 @@ def ad(df):
     ad_ = ad_.cumsum()
 
     return ad_
+
 
 # def lt_trend(df, lambda_bear=0.06, lambda_bull=0.08):
 #     df['LT_Trend'] = np.NaN

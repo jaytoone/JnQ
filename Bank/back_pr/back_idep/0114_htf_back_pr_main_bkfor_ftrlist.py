@@ -43,7 +43,7 @@ if __name__ == "__main__":
     log_name = "ETHUSDT_1642388726.pkl"
 
     # ------------- link module ------------- #
-    bot_name = "{}.bots.{}_bot_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)
+    bot_name = "{}.main.{}_bot_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)
     bot_lib = importlib.import_module(bot_name)
 
     strat_name = "{}.back_pr.back_id.{}_back_id_{}_{}_{}".format(strat_pkg, frame_ver, *ID_list)

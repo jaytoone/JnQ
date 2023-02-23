@@ -39,7 +39,7 @@ if __name__ == "__main__":
     edited_start_timestamp = datetime.timestamp(edited_start_datetime)
 
     # ------------- link module ------------- #
-    bot_name = "{}.bots.{}_bot".format(strat_pkg, frame_ver, *ID_list)
+    bot_name = "{}.main.{}_bot".format(strat_pkg, frame_ver, *ID_list)
     bot_lib = importlib.import_module(bot_name)
 
     pkg_path = bot_lib.trader_lib.pkg_path

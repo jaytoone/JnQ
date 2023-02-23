@@ -1,6 +1,6 @@
 import os
 
-#        1. relative path should be static '/Bank' 를 가리켜야함, 기준은 script 실행 dir 기준 (bots, back_idep)
+#        1. relative path should be static '/Bank' 를 가리켜야함, 기준은 script 실행 dir 기준 (main, back_idep)
 #        2. 깊이가 다르면, './../' 이런식의 표현으로는 동일 pkg_path 에 접근할 수 없음
 # print(os.getcwd())
 # pkg_path = os.path.abspath('./../')

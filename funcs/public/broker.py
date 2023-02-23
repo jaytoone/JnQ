@@ -6,7 +6,7 @@ import warnings
 import logging
 import pickle
 
-sys_log4 = logging.getLogger()
+sys_log = logging.getLogger()
 
 #        keep fundamental warnings quiet         #
 warnings.simplefilter("ignore", category=RuntimeWarning)
@@ -296,6 +296,45 @@ def consecutive_df(res_df, itv_num):
     return new_res_idx_df
 
 
+def to_lower_tf_v4(ltf_df, htf_df, cols, backing_i=1, show_info=False, ltf_itv=None):
+    """
+    v3 -> v4 : downsampled_df & ltf_df timeindex 의 format sync. 진행.
+    """
+
+    if ltf_itv is None:
+        ltf_itv = pd.infer_freq(ltf_df.index)
+    assert ltf_itv == 'T', "currently only -> 'T' allowed.."
+    # assert type(column[0]) in [int, np.int64], "column value should be integer"
+
+    # cols = htf_df.columns[column]  # to_lower_tf_v1 의 int col 반영
+
+    if show_info:
+        print("backing_i :", backing_i)
+
+    # 1. 15T 기준 : 1:30 -> ~1:30 까지 downsample 됨 / T 는 1:43 까지 있는데.
+    # 2. 따라서 htf col 형식을 유지하기 위해서 rename 을 사용하고,
+    # 3. 43 까지 downsampling 을 위해서, ltf_df 마지막 행을 추가해줌
+    renamed_last_row = htf_df.rename(index={htf_df.index[-1]: ltf_df.index[-1]}, inplace=False).iloc[[-1]]
+    if htf_df.index[-1] != renamed_last_row.index[-1]:  # cannot reindex a non-unique index with a method or limit 방지
+        htf_df = htf_df.append(renamed_last_row)
+
+    downsampled_df = htf_df[cols].shift(backing_i).resample(ltf_itv).ffill()
+
+    downsampled_time_format = str(downsampled_df.index[-1]).split(":")[-1]
+    ltf_time_format = str(ltf_df.index[-1]).split(":")[-1]
+
+    if downsampled_time_format != ltf_time_format:
+        downsampled_df.index = pd.to_datetime(list(map(lambda x: "{}:{}:{}".format(*str(x).split(":")[:-1], ltf_time_format), downsampled_df.index)))
+
+        intersec_index = sorted(list(set(downsampled_df.index) & set(ltf_df.index)))
+        downsampled_df = downsampled_df.loc[intersec_index]
+
+        # ------ check last row's validity ------ #
+        assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0"
+
+    return downsampled_df
+
+
 def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False, ltf_itv=None):
     if ltf_itv is None:
         ltf_itv = pd.infer_freq(ltf_df.index)
@@ -320,6 +359,10 @@ def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False, ltf_itv=N
     intersec_index = sorted(list(set(downsampled_df.index) & set(ltf_df.index)))
     downsampled_df = downsampled_df.loc[intersec_index]
 
+    """
+    new version (upper) -> kiwoom data 사용과정에서 범용성 위해 개선함.
+    old version (lower)
+    """
     # if len(downsampled_df) > len(ltf_df):
     #     # downsampled_df = downsampled_df.iloc[-len(ltf_df):]
     #     downsampled_df = downsampled_df.loc[ltf_df.index]
@@ -332,6 +375,7 @@ def to_lower_tf_v3(ltf_df, htf_df, cols, backing_i=1, show_info=False, ltf_itv=N
         ~pd.isnull(downsampled_df.iloc[-1].values)) > 0, "assert np.sum(~pd.isnull(downsampled_df.iloc[-1].values)) > 0"
 
     return downsampled_df
+
 
 def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
     #       Todo        #
@@ -395,9 +439,10 @@ def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
 
     return resampled_df
 
-def to_htf(df, itv_, offset):
 
-    h_res_df = df.resample(itv_, offset=offset).agg({
+def to_htf(df, itv, offset):
+
+    h_res_df = df.resample(itv, offset=offset).agg({
         'open': 'first',
         'high': 'max',
         'low': 'min',
@@ -405,7 +450,6 @@ def to_htf(df, itv_, offset):
     })
 
     return h_res_df
-
 
 
 def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
@@ -417,6 +461,7 @@ def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
     days = int(max_rows / min_days) + 1
 
     return max_rows, days
+
 
 def calc_tp_out_fee_v2(config_):
     if config_.ep_set.entry_type == 'MARKET':

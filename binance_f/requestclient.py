@@ -31,8 +31,8 @@ class RequestClient(object):
             pass
         self.limits = {}
     
-    def refresh_limits(self,limits):
-        for k,v in limits.items():
+    def refresh_limits(self, limits):
+        for k, v in limits.items():
             self.limits[k] = v
 
     def get_servertime(self) -> any:

@@ -90,9 +90,9 @@ def get_open_side_v2(self, res_df, np_timeidx, open_num=1):
             if not cfg_.pos_set.short_ban:
                 # ------ 3. mr_res ------ #
                 if open_num == 1:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
+                    mr_res, zone_arr = self.public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
                 else:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
+                    mr_res, zone_arr = self.public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
                 sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
                 # ------ assign ------ #
                 if mr_res[cfg_.trader_set.complete_index]:
@@ -111,9 +111,9 @@ def get_open_side_v2(self, res_df, np_timeidx, open_num=1):
             if not cfg_.pos_set.long_ban:  # additional const. on trader
                 # ------ 3. mr_res ------ #
                 if open_num == 1:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
+                    mr_res, zone_arr = self.public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
                 else:
-                    mr_res, zone_arr = self.utils_public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
+                    mr_res, zone_arr = self.public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
                 sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
                 # ------ assign ------ #
                 if mr_res[cfg_.trader_set.complete_index]:
@@ -136,7 +136,7 @@ def get_open_side(self, res_df, np_timeidx):
             #       ban      #
             if not cfg_.pos_set.short_ban:
                 #       ep_loc      #
-                res_df, open_side, _ = self.utils_public.short_ep_loc(res_df, cfg_,
+                res_df, open_side, _ = self.public.short_ep_loc(res_df, cfg_,
                                                                 cfg_.trader_set.complete_index,
                                                                 np_timeidx)
                 sys_log.warning("open_side : {}".format(open_side))
@@ -156,7 +156,7 @@ def get_open_side(self, res_df, np_timeidx):
             #       ban      #
             if not cfg_.pos_set.long_ban:  # additional const. on trader
                 #       ep_loc      #
-                res_df, open_side, _ = self.utils_public.long_ep_loc(res_df, cfg_,
+                res_df, open_side, _ = self.public.long_ep_loc(res_df, cfg_,
                                                                 cfg_.trader_set.complete_index,
                                                                 np_timeidx)
                 sys_log.warning("open_side : {}".format(open_side))
@@ -372,6 +372,11 @@ def check_breakout_qty(self, first_exec_qty_check, check_time, post_order_res, o
 
 
 def check_ei_k_v2(self, res_df_open, res_df, open_side):
+
+    """
+    _onbarclose 와의 차이점은 realtime_price 와 expire_level 을 비교한다는 점.
+    """
+
     ep_out = 0
     selection_id = self.config.selection_id
 
@@ -387,10 +392,12 @@ def check_ei_k_v2(self, res_df_open, res_df, open_side):
         #       Todo        #
         #        2. 추후, dynamic_tp 사용시 res_df 갱신해야할 것
         #           a. 그에 따른 res_df 종속 변수 check
-        #        3. ei_k - ep_out 변수 달아주고, close bar waiting 추가할지 고민중
-        #        4. warning - 체결량 존재하는데, ep_out 가능함 - market 고민중
-        #        5. funcs_trader_modules 에서 order_side check 하는 function 모두 inversion 고려해야할 것
+
+        #        3. ei_k - ep_out 변수 달아주고, close bar waiting 추가할지 고민중 => 무슨말인지 모르겠음. expire_tick 이라면 달아줌.
+        #        4. warning - 체결량 존재하는데, expire 가능함 : 가능한가..?  ep <-> tp 거리가 좀 있는데.
+        #        5. funcs_trader_modules 에서 order_side check 하는 function 모두 inversion 고려해야할 것 => inversion_mode deprecated.
         #           a. "단, order_side change 후로만 해당됨
+
         if open_side == OrderSide.SELL:
             short_tp_ = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
             short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(selection_id)].to_numpy()
@@ -870,9 +877,12 @@ def get_income_info_v2(self, real_balance, leverage, ideal_profit, real_profit):
 #
 #     return ideal_profit, trade_log
 
-# deprecated
+# old
 def calc_ideal_profit_v4(self, res_df, open_side, ideal_ep, tp_exec_dict, open_executedPrice_list,
                          tp_executedPrice_list, out_executedPrice_list, p_qtys, fee):
+    """
+    trade_log_path 가 없음, deprecated
+    """
     # 1. ideal_ep & tp_exec_dict exist for ideal_pr
     # 2. open_executedPrice_list, close_executedPrice_list exist for real_pr
     #   1. ideal
@@ -906,6 +916,7 @@ def calc_ideal_profit_v4(self, res_df, open_side, ideal_ep, tp_exec_dict, open_e
     # sys_log.info("temp_qty : {}".format(temp_qty))
 
     return ideal_profit, real_profit
+
 
 def calc_ideal_profit_v3(self, res_df, open_side, ideal_ep, tp_exec_dict, open_executedPrice_list,
                          tp_executedPrice_list, out_executedPrice_list, fee, trade_log):
@@ -946,6 +957,7 @@ def calc_ideal_profit_v3(self, res_df, open_side, ideal_ep, tp_exec_dict, open_e
         trade_log[k_ts] = [tps, open_side, "exit"]     # Todo, trade_log 사용하는 phase, list 로 변한 tps 주의
 
     return ideal_profit, real_profit, trade_log
+
 
 def calc_ideal_profit_v2(self, open_side, ideal_ep, tp_exec_dict, open_executedPrice_list, close_executedPrice_list, res_df, fee, trade_log):
     #   Todo - 추후에 list_comprehension 진행

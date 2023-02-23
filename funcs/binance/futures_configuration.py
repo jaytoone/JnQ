@@ -1,5 +1,4 @@
 from binance_f import RequestClient
-import logging
 from binance_f import SubscriptionClient
 from binance_f.constant.test import *
 from binance_f.model import *
@@ -7,6 +6,7 @@ from binance_f.base.printobject import *
 from binance_f.exception.binanceapiexception import BinanceApiException
 import pprint
 import json
+import logging
 
 
 request_client = RequestClient(api_key=g_api_key, secret_key=g_secret_key)

@@ -316,10 +316,10 @@ if __name__ == '__main__':
     # symbol = 'ADAUSDT'
 
     # print(get_position_info(t_symbol))
-    PrintMix.print_data(get_position_info(t_symbol))
-    while 1:
-        print(get_position_info(t_symbol).positionAmt) #unrealizedProfit)
-        time.sleep(1)
+    # PrintMix.print_data(get_position_info(t_symbol))
+    # while 1:
+    #     print(get_position_info(t_symbol).positionAmt) #unrealizedProfit)
+    #     time.sleep(1)
     # PrintMix.print_data(request_client.get_adl_quantile())
     # print(json.dumps(request_client.get_adl_quantile()[0]))
     # PrintBasic.print_obj(request_client.get_adl_quantile())
@@ -354,10 +354,10 @@ if __name__ == '__main__':
     # # print(total_income(t_symbol, 1650933600000, 1650981660000))
     # # sub_client.unsubscribe_all()
     # start_0 = time.time()
-    # sub_client.subscribe_aggregate_trade_event(t_symbol.lower(), callback, error)
-    # while 1:
-    #     print(get_market_price_v2(sub_client))
-    #     time.sleep(0.1)
+    sub_client.subscribe_aggregate_trade_event(t_symbol.lower(), callback, error)
+    while 1:
+        print(get_market_price_v2(sub_client))
+        time.sleep(0.5)
 
     # # sub_client.subscribe_candlestick_event(t_symbol.lower(), '1m', callback, error)
     # # print(dir(sub_client.subscribe_aggregate_trade_event))
