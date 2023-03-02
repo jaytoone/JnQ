@@ -2,7 +2,7 @@
 trader_v1_2
 1. bank_modules class 화를 위한 도입
 """
-from funcs.binance.bank_modules_v2 import BankModule
+from funcs.binance.bank_module_v2 import BankModule
 from binance_f.model import *
 from funcs.public.broker import intmin_np
 

@@ -1,4 +1,4 @@
-from funcs.binance.bank_modules_v2 import BankModule
+from funcs.binance.bank_module_v2 import BankModule
 from binance_f.model import *
 from funcs.public.broker import intmin_np
 
@@ -642,7 +642,7 @@ class Trader:
                 #    real_trade 의 경우, datetime.now()'s td 로 입력해야하는 것 아닌가
                 #    + backtrade's en_ts log 의 경우, lastest_index 가 complete_index 로 (위에서 c_i 를 사용함)
                 if not self.config.trader_set.backtrade:
-                    str_ts = str(datetime_now)
+                    str_ts = str(datetime.now())
                     trade_log_dict[str_ts.replace(str_ts.split(':')[-1], "59.999000")] = [ep, open_side, "entry"]
                 else:
                     trade_log_dict[str(res_df.index[self.config.trader_set.complete_index])] = [ep, open_side, "entry"]
@@ -753,9 +753,7 @@ class Trader:
                             new_check_time = time.time()
                             # [ back & real-trade validation phase ]
                             if new_check_time - check_time >= self.config.trader_set.tp_exec_check_term:  # 0.25 second 로 설정시 연결 끊김. --> api limits 에 대한 document 참조할 것.
-                                all_executed, tp_exec_price_list = bank_module.check_limit_tp_exec_v2(post_order_res_list,
-                                                                                                      quantity_precision,
-                                                                                                      return_price=True)
+                                all_executed, tp_exec_price_list = bank_module.check_limit_tp_exec_v2(post_order_res_list, quantity_precision)
                                 # dynamic_tp 안만듬 - 미예정임 (solved)
                                 check_time = new_check_time
                             exec_tp_len = len(tp_exec_price_list)

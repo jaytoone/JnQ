@@ -115,8 +115,11 @@ def whole_plot_check(data, win_idxs, selected_op_idxs, selected_ex_idxs, plot_ch
 
 
 def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exit_idx, p1_idx, p2_idx, lvrg, fee, tp_level, out_level, tp_1, tp_0,
-                     out_1, out_0, ep2_0,
-                     back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict):
+                     out_1, out_0, ep2_0, back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict):
+    """
+    기존 y_lim 에서 tr_set 기준 min & max 를 추가함 (indicator 에 의한 y_lim 을 유지하기 위해 추가하는 방법 사용함.)
+    """
+
     # ------ get vertical ticks ------ #
     entry_tick = int(entry_idx - iin)
     exit_tick = entry_tick + int(exit_idx - entry_idx)
@@ -226,13 +229,20 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
     # ax2.axhline(0, color="#ffffff")
 
     # ------ ylim ------ # - ax1 only
-    if back_plot:
-        y_lim_data = a_data[:x_max + 1, col_idx_dict['ylim_col_idxs']]  # +1 for including p1_tick
-    else:
-        y_lim_data = a_data[:, col_idx_dict['ylim_col_idxs']]
+    # 1. ylim by tr_set
+    y_min = min(tp_level, out_level, tp_1, tp_0, out_1, out_1)
+    y_max = max(tp_level, out_level, tp_1, tp_0, out_1, out_1)
 
-    y_min = y_lim_data.min()
-    y_max = y_lim_data.max()
+    # 2. ylim by indicator
+    if len(col_idx_dict['ylim_col_idxs']) != 0:
+        if back_plot:
+            y_lim_data = a_data[:x_max + 1, col_idx_dict['ylim_col_idxs']]  # +1 for including p1_tick
+        else:
+            y_lim_data = a_data[:, col_idx_dict['ylim_col_idxs']]
+
+        y_min = min(y_lim_data.min(), y_min)
+        y_max = max(y_lim_data.max(), y_max)
+
     y_margin = (y_max - y_min) * y_margin_mult
     ax1.set_ylim(y_min - y_margin, y_max + y_margin)
 

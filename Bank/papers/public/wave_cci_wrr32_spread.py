@@ -9,7 +9,6 @@ sys_log = logging.getLogger()
 
 
 def lvrg_liqd_set(res_df, config, open_side, ep_, out_, fee, limit_leverage=50):
-
     selection_id = config.selection_id
     leverage = config.lvrg_set.leverage
 
@@ -394,45 +393,58 @@ def expiry_p1p2(res_df, config, op_idx1, op_idx2, tp1, tp0, tp_gap, np_datas, op
 
 
 def ep_loc_p1_v3(res_df, config, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL):
+
     """
     vectorized calc.
         1. multi-stem 에 따라 dynamic vars.가 입력되기 때문에 class 내부 vars. 로 종속시키지 않음
+        2. min & max variables 사용
     """
 
     # ------- param init ------- #
     selection_id = config.selection_id
+    wave_itv1 = config.tr_set.wave_itv1
+    wave_period1 = config.tr_set.wave_period1
     c_i = config.trader_set.complete_index
+
     len_df = len(res_df)
     mr_res = np.ones(len_df)
     zone_arr = np.full(len_df, 'n')
 
     # ------------ wrr ------------ #
-    if config.loc_set.point1.wrr_32 != "None":
-
-        wave_itv1 = config.tr_set.wave_itv1
-        wave_period1 = config.tr_set.wave_period1
-
-        co_wrr_32_ = res_df['co_wrr_32_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-        cu_wrr_32_ = res_df['cu_wrr_32_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-
+    if config.loc_set.point1.min_wrr_32 != "None":
         if ep_loc_side == OrderSide.SELL:
-            mr_res *= cu_wrr_32_ <= config.loc_set.point1.wrr_32  # + 0.1  # 0.1 0.05
-            # mr_res *= (cu_wrr_32_ >= config.loc_set.point1.wrr_32) # & (cu_wrr_32_ <= 1)
-            # mr_res *= cu_wrr_32_ >= config.loc_set.point1.wrr_32 - 0.1
+            cu_wrr_32_ = res_df['cu_wrr_32_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+            mr_res *= cu_wrr_32_ >= config.loc_set.point1.min_wrr_32
             if show_detail:
                 sys_log.warning(
-                    "cu_wrr_32_ <= config.loc_set.point1.wrr_32 : {:.5f} {:.5f} ({})".format(cu_wrr_32_[c_i],
-                                                                                             config.loc_set.point1.wrr_32,
-                                                                                             mr_res[c_i]))
+                    "cu_wrr_32_ >= config.loc_set.point1.min_wrr_32 : {:.5f} {:.5f} ({})".format(cu_wrr_32_[c_i],
+                                                                                                 config.loc_set.point1.min_wrr_32,
+                                                                                                 mr_res[c_i]))
         else:
-            mr_res *= co_wrr_32_ <= config.loc_set.point1.wrr_32  # + 0.1  # 0.1 0.05
-            # mr_res *= (co_wrr_32_ >= config.loc_set.point1.wrr_32) # & (co_wrr_32_ <= 1)
-            # mr_res *= co_wrr_32_ >= config.loc_set.point1.wrr_32 - 0.1
+            co_wrr_32_ = res_df['co_wrr_32_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+            mr_res *= co_wrr_32_ >= config.loc_set.point1.min_wrr_32
             if show_detail:
                 sys_log.warning(
-                    "co_wrr_32_ <= config.loc_set.point1.wrr_32 : {:.5f} {:.5f} ({})".format(co_wrr_32_[c_i],
-                                                                                             config.loc_set.point1.wrr_32,
-                                                                                             mr_res[c_i]))
+                    "co_wrr_32_ >= config.loc_set.point1.min_wrr_32 : {:.5f} {:.5f} ({})".format(co_wrr_32_[c_i],
+                                                                                                 config.loc_set.point1.min_wrr_32,
+                                                                                                 mr_res[c_i]))
+    if config.loc_set.point1.max_wrr_32 != "None":
+        if ep_loc_side == OrderSide.SELL:
+            cu_wrr_32_ = res_df['cu_wrr_32_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+            mr_res *= cu_wrr_32_ <= config.loc_set.point1.max_wrr_32
+            if show_detail:
+                sys_log.warning(
+                    "cu_wrr_32_ <= config.loc_set.point1.max_wrr_32 : {:.5f} {:.5f} ({})".format(cu_wrr_32_[c_i],
+                                                                                                 config.loc_set.point1.max_wrr_32,
+                                                                                                 mr_res[c_i]))
+        else:
+            co_wrr_32_ = res_df['co_wrr_32_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
+            mr_res *= co_wrr_32_ <= config.loc_set.point1.max_wrr_32
+            if show_detail:
+                sys_log.warning(
+                    "co_wrr_32_ <= config.loc_set.point1.max_wrr_32 : {:.5f} {:.5f} ({})".format(co_wrr_32_[c_i],
+                                                                                                 config.loc_set.point1.max_wrr_32,
+                                                                                                 mr_res[c_i]))
 
     # ------------ spread ------------ #
     if config.loc_set.point1.short_min_spread != "None":  # and not config.tr_set.check_hlm:
@@ -589,52 +601,52 @@ def ep_loc_p1_v3(res_df, config, np_timeidx, show_detail=True, ep_loc_side=Order
 
 
 def ep_loc_p2_v3(res_df, config, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL):
+
     # ------- param init ------- #
     selection_id = config.selection_id
+    wave_itv2 = config.tr_set.wave_itv2
+    wave_period2 = config.tr_set.wave_period2
     c_i = config.trader_set.complete_index
+
     len_df = len(res_df)
     mr_res = np.ones(len_df)
     zone_arr = np.full(len_df, 'n')
 
     # ------------ wave_range_ratio ------------ #
-
-    # if config.loc_set.point2.cu_wrr_21 != "None":   # for excessive range rejection
-    #   wave_itv1 = config.tr_set.wave_itv1
-    #   wave_period1 = config.tr_set.wave_period1
-    #   co_wrr_21_ = res_df['co_wrr_21_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-    #   cu_wrr_21_ = res_df['cu_wrr_21_{}{}'.format(wave_itv1, wave_period1)].to_numpy()
-    #   if ep_loc_side == OrderSide.SELL:
-    #     mr_res *= cu_wrr_21_ <= config.loc_set.point2.cu_wrr_21
-    #     mr_res *= cu_wrr_21_ >= config.loc_set.point2.cu_wrr_21 - 0.2
-    #     if show_detail:
-    #         sys_log.warning("cu_wrr_21_ <= config.loc_set.point2.cu_wrr_21 : {:.5f} {:.5f} ({})".format(cu_wrr_21_[c_i], config.loc_set.point2.cu_wrr_21, mr_res[c_i]))
-    #   else:
-    #     mr_res *= co_wrr_21_ <= config.loc_set.point2.co_wrr_21
-    #     mr_res *= co_wrr_21_ >= config.loc_set.point2.co_wrr_21 - 0.2
-    #     if show_detail:
-    #         sys_log.warning("co_wrr_21_ <= config.loc_set.point2.co_wrr_21 : {:.5f} {:.5f} ({})".format(co_wrr_21_[c_i], config.loc_set.point2.co_wrr_21, mr_res[c_i]))
-
-    if config.loc_set.point2.wrr_32 != "None":
-        wave_itv2 = config.tr_set.wave_itv2
-        wave_period2 = config.tr_set.wave_period2
-        co_wrr_32_ = res_df['co_wrr_32_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
-        cu_wrr_32_ = res_df['cu_wrr_32_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+    if config.loc_set.point2.min_wrr_32 != "None":
         if ep_loc_side == OrderSide.SELL:
-            mr_res *= cu_wrr_32_ <= config.loc_set.point2.wrr_32  # + 0.1  # 0.1 0.05
-            # mr_res *= cu_wrr_32_ >= config.loc_set.point2.wrr_32
+            cu_wrr_32_ = res_df['cu_wrr_32_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+            mr_res *= cu_wrr_32_ >= config.loc_set.point2.min_wrr_32
             if show_detail:
                 sys_log.warning(
-                    "cu_wrr_32_ <= config.loc_set.point2.wrr_32 : {:.5f} {:.5f} ({})".format(cu_wrr_32_[c_i],
-                                                                                             config.loc_set.point2.wrr_32,
-                                                                                             mr_res[c_i]))
+                    "cu_wrr_32_ >= config.loc_set.point2.min_wrr_32 : {:.5f} {:.5f} ({})".format(cu_wrr_32_[c_i],
+                                                                                                 config.loc_set.point2.min_wrr_32,
+                                                                                                 mr_res[c_i]))
         else:
-            mr_res *= co_wrr_32_ <= config.loc_set.point2.wrr_32  # + 0.1  # 0.1 0.05
-            # mr_res *= co_wrr_32_ >= config.loc_set.point2.wrr_32
+            co_wrr_32_ = res_df['co_wrr_32_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+            mr_res *= co_wrr_32_ >= config.loc_set.point2.min_wrr_32
             if show_detail:
                 sys_log.warning(
-                    "co_wrr_32_ <= config.loc_set.point2.wrr_32 : {:.5f} {:.5f} ({})".format(co_wrr_32_[c_i],
-                                                                                             config.loc_set.point2.wrr_32,
-                                                                                             mr_res[c_i]))
+                    "co_wrr_32_ >= config.loc_set.point2.min_wrr_32 : {:.5f} {:.5f} ({})".format(co_wrr_32_[c_i],
+                                                                                                 config.loc_set.point2.min_wrr_32,
+                                                                                                 mr_res[c_i]))
+    if config.loc_set.point2.max_wrr_32 != "None":
+        if ep_loc_side == OrderSide.SELL:
+            cu_wrr_32_ = res_df['cu_wrr_32_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+            mr_res *= cu_wrr_32_ <= config.loc_set.point2.max_wrr_32
+            if show_detail:
+                sys_log.warning(
+                    "cu_wrr_32_ <= config.loc_set.point2.max_wrr_32 : {:.5f} {:.5f} ({})".format(cu_wrr_32_[c_i],
+                                                                                                 config.loc_set.point2.max_wrr_32,
+                                                                                                 mr_res[c_i]))
+        else:
+            co_wrr_32_ = res_df['co_wrr_32_{}{}'.format(wave_itv2, wave_period2)].to_numpy()
+            mr_res *= co_wrr_32_ <= config.loc_set.point2.max_wrr_32
+            if show_detail:
+                sys_log.warning(
+                    "co_wrr_32_ <= config.loc_set.point2.max_wrr_32 : {:.5f} {:.5f} ({})".format(co_wrr_32_[c_i],
+                                                                                                 config.loc_set.point2.max_wrr_32,
+                                                                                                 mr_res[c_i]))
 
     if config.loc_set.zone2.use_zone:
         # ------------ outer_price ------------ #

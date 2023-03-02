@@ -51,7 +51,8 @@
       "wick_itv": "5T",
       "wrr_10": "None",
       "wrr_21": "None",
-      "wrr_32": 0.7,
+      "min_wrr_32": "None",
+      "max_wrr_32": 0.7,
       "co_es": "None",
       "cu_es": "None",
       "crr": "None",
@@ -65,7 +66,8 @@
       "abs_ratio": "None"
     },
     "point2": {
-      "wrr_32": "None",
+      "min_wrr_32": "None",
+      "max_wrr_32": "None",
       "csdbox_range": 0.3,
       "short_tr_thresh": "None",
       "long_tr_thresh": "None",

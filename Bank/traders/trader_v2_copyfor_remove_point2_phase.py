@@ -1,5 +1,5 @@
-from funcs.binance.bank_module_v2 import BankModule
-from binance_f.model import *
+from funcs.kiwoom.bank_module import BankModule
+from funcs.kiwoom.constant import *
 from funcs.public.broker import intmin_np
 
 import numpy as np  # for np.nan, np.array() ...
@@ -17,16 +17,19 @@ import json
 
 
 class Trader:
+
     """
-    v1_2 -> v1_3
-    1. Use check_open_exec_qty_v2
-    2. Add config_type
-    3. Replace order_term to api_term
-    4. Remove to_htf
-    5. Change configuration's term name (second -> term), 단일화.
+    v1_4 -> v2
+        1. Stock platform 확장.
+        2. Loop concept 재사용 -> 자원 낭비 줄일 것.
     """
 
     def __init__(self, paper_name, id_list, config_type, mode="Trader"):
+
+        # ------ queue for loop ------ #
+        self.watch_loop_queue = []  # watch 성사시 open_order -> 유효성 검증 후 pop -> open_loop_queue 에 붙여넣기
+        self.open_loop_queue = []  # ei_k 성사시 pop, exec 성사시 -> limit_tp order -> 유효성 검증 후 pop -> close_loop_queue 에 붙여넣기
+        self.close_loop_queue = []  # out, exec 성사시 pop
 
         if mode == "Trader":    # IDEP 환경에서는 유효하지 않음.
             self.pkg_path = os.path.dirname(os.getcwd())  # pkg_path 가 가리켜야할 곳은 "Bank" 임.
@@ -66,8 +69,8 @@ class Trader:
         # ------ pnl ------ #
         self.income = 0.0
         self.accumulated_income = 0.0
-        self.accumulated_profit = 1.0
-        self.ideal_accumulated_profit = 1.0
+        self.accumulated_profit = 1.0   # if profit_mode == "SUM", will be changed to zero
+        self.ideal_accumulated_profit = 1.0   # if profit_mode == "SUM", will be changed to zero
 
         # ------ obj ------ #
         self.streamer = None
@@ -140,7 +143,7 @@ class Trader:
             else:
                 return
 
-    def get_balance_info(self, bank_module, first_iter):
+    def get_balance_info(self, bank_module, first_iter, mode="PROD"):
 
         min_balance_bool = 0
 
@@ -149,8 +152,13 @@ class Trader:
             #       self.config 의 setting 을 기준으로함       #
             if self.accumulated_income == 0.0:
                 self.available_balance = self.config.trader_set.initial_asset  # USDT
+                if mode == "SUM":
+                    self.accumulated_profit = 0.0
+                    self.ideal_accumulated_profit = 0.0
             else:
-                self.available_balance += self.income
+                if mode == "PROD":
+                    self.available_balance += self.income
+                # elif mode == "SUM", 항상 일정한 available_balance 사용
 
             # ---------- asset_change - 첫 거래여부와 무관하게 진행 ---------- #
             if self.config.trader_set.asset_changed:
@@ -166,29 +174,38 @@ class Trader:
         if not self.config.trader_set.backtrade:
             max_available_balance = bank_module.get_available_balance()
 
-            # ------ over_balance 가 저장되어 있다면, 지속적으로 max_balance 와의 비교 진행 ------ #
+            # 1. over_balance 가 저장되어 있다면, 현재 사용하는 balance 가 원하는 것보다 작은 상태임.
+            #   a. 최대 허용 가능 balance 인 max_balance 와의 지속적인 비교 진행
             if self.over_balance is not None:
-                if self.over_balance <= max_available_balance * 0.9:  # 정상화.
-                    self.available_balance = self.over_balance
+                if self.over_balance <= max_available_balance * 0.9:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
+                    self.available_balance = self.over_balance  # mode="SUM" 의 경우에도 self.over_balance 에는 initial_asset 만큼만 담길 수 있기 때문에 구분하지 않음.
                     self.over_balance = None
-                else:
+                else:   # 상태가 어찌되었든 일단은 지속해서 Bank 를 돌리려는 상황. (후조치 한다는 의미, 중단하는게 아니라)
                     self.available_balance = max_available_balance * 0.9  # max_available_balance 를 넘지 않는 선
                 self.sys_log.info('available_balance (temp) : {}'.format(self.available_balance))
 
-            # ------ 예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치 ------ #
+            # 2. 예기치 못한 오류로 인해 over_balance 상태가 되었을때의 조치
             else:
-                if self.available_balance > max_available_balance:
-                    self.over_balance = self.available_balance
+                if self.available_balance >= max_available_balance:
+                    self.over_balance = self.available_balance  # 복원 가능하도록 현재 상태를 over_balance 에 저장
                     self.available_balance = max_available_balance * 0.9
                 self.sys_log.info('available_balance : {}'.format(self.available_balance))
 
+            # 3. min_balance check
             if self.available_balance < self.min_balance:
                 self.sys_log.info('available_balance {:.3f} < min_balance\n'.format(self.available_balance))
                 min_balance_bool = 1
 
         return min_balance_bool
 
-    def get_income_info_v2(self, real_balance, leverage, ideal_profit, real_profit):  # 복수 pos 를 허용하기 위한 api 미사용
+    def get_income_info(self, real_balance, leverage, ideal_profit, real_profit, mode="PROD"):  # 복수 pos 를 허용하기 위한 api 미사용
+
+        """
+        v2 -> _
+            1. 단리 / 복리 mode 에 따라 출력값 변경하도록 구성함.
+            2. Trader 내부 메소드는 version 을 따로 명명하지 않도록함. -> Trader version 에 귀속되도록하기 위해서.
+        """
+
         real_profit_pct = real_profit - 1
         self.income = real_balance * real_profit_pct
         self.accumulated_income += self.income
@@ -199,12 +216,18 @@ class Trader:
         real_tmp_profit = real_profit_pct * leverage
         ideal_tmp_profit = (ideal_profit - 1) * leverage
 
-        self.accumulated_profit *= 1 + real_tmp_profit
-        self.ideal_accumulated_profit *= 1 + ideal_tmp_profit
-
         self.sys_log.info('income : {} USDT'.format(self.income))
         self.sys_log.info('temporary profit : {:.2%} ({:.2%})'.format(real_tmp_profit, ideal_tmp_profit))
-        self.sys_log.info('accumulated profit : {:.2%} ({:.2%})'.format((self.accumulated_profit - 1), (self.ideal_accumulated_profit - 1)))
+
+        if mode == "PROD":
+            self.accumulated_profit *= 1 + real_tmp_profit
+            self.ideal_accumulated_profit *= 1 + ideal_tmp_profit
+            self.sys_log.info('accumulated profit : {:.2%} ({:.2%})'.format((self.accumulated_profit - 1), (self.ideal_accumulated_profit - 1)))
+        else:
+            self.accumulated_profit += real_tmp_profit
+            self.ideal_accumulated_profit += ideal_tmp_profit
+            self.sys_log.info('accumulated profit : {:.2%} ({:.2%})'.format(self.accumulated_profit, self.ideal_accumulated_profit))
+
         self.sys_log.info('accumulated income : {} USDT\n'.format(self.accumulated_income))
 
     def run(self):
@@ -281,23 +304,35 @@ class Trader:
             ep_loc_point2 = 0  # use_point2 사용시 loop 내에서 enlist once 를 위한 var.
             expired = 0
 
+            """
+            ONE LOOP
+            """
             while 1:
-                if load_new_df:
-                    # ------ log last trading time ------ #
-                    #        미체결을 고려해, load_new_df 마다 log 수행       #
+
+                # if load_new_df:
+                """
+                이제는 쉬지 않고 watch_loop_queue, open_loop_queue, close_loop_queue 를 순회할 것.
+                """
+
+                """ WATCH LOOP """
+                for code in self.watch_loop_queue:
+
+                    # watch 0 : log last trading time
+                    #       Todo, 매번 수행하지 않을 것.
+                    #       a. 미체결을 고려해, load_new_df 마다 log 수행       #
                     trade_log_dict["last_trading_time"] = str(datetime.now())
                     with open(trade_log_fullpath, "wb") as dict_f:
                         pickle.dump(trade_log_dict, dict_f)
 
-                    # ------------ get_new_df ------------ #
+                    # watch 1 : get_new_df
                     start_ts = time.time()
                     if self.config.trader_set.backtrade:
-                        res_df, load_new_df = bank_module.get_new_df_onstream(self.streamer)
+                        res_df, load_new_df = bank_module.get_new_df_onstream(self.streamer)  # Todo, streamer 는 back_data_path 로 선언하기 때문에 단일 종목에 기준하고 있음.
                     else:
-                        res_df, load_new_df = bank_module.get_new_df()
+                        res_df, load_new_df = bank_module.get_new_df(code)
                     self.sys_log.info("~ load_new_df time : %.2f" % (time.time() - start_ts))
 
-                    # ------------ paper works ------------ #
+                    # watch 2 : paper works
                     try:
                         res_df = self.public.sync_check(res_df, self.config)  # function usage format maintenance
                         self.sys_log.info('~ sync_check time : %.5f' % (time.time() - start_ts))
@@ -325,6 +360,7 @@ class Trader:
                         load_new_df = 1
                         continue
 
+                    # watch 3 : signal check
                     if open_side is None:  # open_signal not exists, check ep_loc
                         try:
                             # ------ df logging ------ #
@@ -347,52 +383,52 @@ class Trader:
                         """
                         if open_side is not None:
                             res_df_open = res_df.copy()
-                            bank_module = BankModule(self.config)
+                            bank_module = BankModule(self.config, login=False)  # relogin 은 하지 않음.
 
-                # ------------ after load_new_df - check open_signal again ------------ #
-                # <-- 이줄에다가 else 로 아래 phase 옮길 수 없나 ? --> 안됨, ep_loc survey 진행후에도 아래 phase 는 실행되어야함
-                if open_side is not None:
-                    # ------ 1. market_check_term for market_entry ------ # --> 바로 진행할 경우, data loading delay 로 인한 오류 방지
-                    if self.config.ep_set.entry_type == "MARKET" and not self.config.trader_set.backtrade:
-                        market_check_term = datetime.now().second
-                        if market_check_term > self.config.trader_set.market_check_term:
-                            open_side = None
-                            self.sys_log.warning("market_check_term : {}".format(market_check_term))
-                            continue  # ep_loc_check = False 라서 open_side None phase 로 감 -> 무슨 의미 ? 어쨌든 wait_zone 으로 회귀
+                    # watch 4 : market term, initial_fee, point2
+                    # <-- 이줄에다가 else 로 아래 phase 옮길 수 없나 ? --> 안됨, ep_loc survey 진행후에도 아래 phase 는 실행되어야함
+                    if open_side is not None:
+                        # ------ 1. market_check_term for market_entry ------ # --> 바로 진행할 경우, data loading delay 로 인한 오류 방지
+                        if self.config.ep_set.entry_type == "MARKET" and not self.config.trader_set.backtrade:
+                            market_check_term = datetime.now().second
+                            if market_check_term > self.config.trader_set.market_check_term:
+                                open_side = None
+                                self.sys_log.warning("market_check_term : {}".format(market_check_term))
+                                continue  # ep_loc_check = False 라서 open_side None phase 로 감 -> 무슨 의미 ? 어쨌든 wait_zone 으로 회귀
 
-                    # ------ 2. init fee ------ #
-                    if self.config.ep_set.entry_type == "MARKET":
-                        fee = self.config.trader_set.market_fee
-                    else:
-                        fee = self.config.trader_set.limit_fee
+                        # ------ 2. init fee ------ #
+                        if self.config.ep_set.entry_type == "MARKET":
+                            fee = self.config.trader_set.market_fee
+                        else:
+                            fee = self.config.trader_set.limit_fee
 
-                    #        a. ep_loc.point2 - point1 과 동시성이 성립하지 않음, 가 위치할 곳      #
-                    #           i. out 이 point 에 따라 변경되기 때문에 이곳이 적합한 것으로 판단     #
-                    #        b. load_df phase loop 돌릴 것
-                    #        c. continue 바로하면 안되고, 분마다 진행해야할 것 --> waiting_zone while loop 적용
-                    #           i. 첫 point2 검사는 바로진행해도 될것
-                    #           ii. ei_k check 이 realtime 으로 진행되어야한다는 점
-                    #               i. => ei_k check by ID
+                        #        a. ep_loc.point2 - point1 과 동시성이 성립하지 않음, 가 위치할 곳      #
+                        #           i. out 이 point 에 따라 변경되기 때문에 이곳이 적합한 것으로 판단     #
+                        #        b. load_df phase loop 돌릴 것
+                        #        c. continue 바로하면 안되고, 분마다 진행해야할 것 --> waiting_zone while loop 적용
+                        #           i. 첫 point2 검사는 바로진행해도 될것
+                        #           ii. ei_k check 이 realtime 으로 진행되어야한다는 점
+                        #               i. => ei_k check by ID
 
-                    # ------ 3. set selection_id ------ #  not used anymore
-                    # selection_id = self.config.selection_id
+                        # ------ 3. set selection_id ------ #  not used anymore
+                        # selection_id = self.config.selection_id
 
-                    # ------ 4. point2 (+ ei_k) phase ------ #  we don't use now.
-                    # if self.config.loc_set.point2.use_point2:
-                    #     ep_loc_point2 = 1
-                    #     self.sys_log.warning("selection_id use_point2 : {}{}".format(selection_id, self.config.loc_set.point2.use_point2))
-                    #
-                    #     #        a. tp_j, res_df_open 으로 고정
-                    #     c_i = self.config.trader_set.complete_index
-                    #     expired = check_ei_k_onbarclose_v2(self, res_df_open, res_df, c_i, c_i, open_side)   # e_j, tp_j
-                    #     #        b. e_j 에 관한 고찰 필요함, backtest 에는 i + 1 부터 시작하니 +1 하는게 맞을 것으로 봄
-                    #     #          -> 좀더 명확하게, dc_lower_1m.iloc[i - 1] 에 last_index 가 할당되는게 맞아서
-                    #     allow_ep_in, _ = self.public.ep_loc_point2_v2(res_df, self.config, c_i + 1, out_j=None, side=open_side)   # e_j
-                    #     if allow_ep_in:
-                    #         break
-                    # else:   # point2 미사용시 바로 order phase 로 break
-                    #     break
-                    break
+                        # ------ 4. point2 (+ ei_k) phase ------ #  we don't use now.
+                        # if self.config.loc_set.point2.use_point2:
+                        #     ep_loc_point2 = 1
+                        #     self.sys_log.warning("selection_id use_point2 : {}{}".format(selection_id, self.config.loc_set.point2.use_point2))
+                        #
+                        #     #        a. tp_j, res_df_open 으로 고정
+                        #     c_i = self.config.trader_set.complete_index
+                        #     expired = check_ei_k_onbarclose_v2(self, res_df_open, res_df, c_i, c_i, open_side)   # e_j, tp_j
+                        #     #        b. e_j 에 관한 고찰 필요함, backtest 에는 i + 1 부터 시작하니 +1 하는게 맞을 것으로 봄
+                        #     #          -> 좀더 명확하게, dc_lower_1m.iloc[i - 1] 에 last_index 가 할당되는게 맞아서
+                        #     allow_ep_in, _ = self.public.ep_loc_point2_v2(res_df, self.config, c_i + 1, out_j=None, side=open_side)   # e_j
+                        #     if allow_ep_in:
+                        #         break
+                        # else:   # point2 미사용시 바로 order phase 로 break
+                        #     break
+                        # break
 
                 # -------------- open_side is None - no_signal holding phase -------------- #
                 #        1. 추후 position change platform 으로 변경 가능
@@ -447,18 +483,19 @@ class Trader:
             if expired:  # expired init 을 위한 continue
                 continue
 
+            """
+            OPEN LOOP
+            """
             first_iter = True  # 포지션 변경하는 경우, 필요함
             while 1:  # <-- loop for 'check order type change condition'
 
-                min_balance_bool = self.get_balance_info(bank_module, first_iter)
+                min_balance_bool = self.get_balance_info(bank_module, first_iter, mode=self.config.trader_set.profit_mode)
                 if min_balance_bool:
                     break
                 self.sys_log.info('~ get balance time : %.5f' % (time.time() - start_ts))
 
-                # ------ get tr_set x adj precision ------ #
+                # ------ get tr_set ------ #
                 tp, ep, out, open_side = bank_module.get_tpepout(open_side, res_df_open, res_df)  # Todo, 일단은, ep1 default 로 설정
-                price_precision, quantity_precision = bank_module.get_precision()
-                tp, ep, out = [bank_module.calc_with_precision(price_, price_precision) for price_ in [tp, ep, out]]  # includes half-dynamic tp
 
                 # ------ set pos_side & fake_order & open_price comparison ------ #
                 open_price = res_df['open'].to_numpy()[-1]  # open 은 latest_index 의 open 사용
@@ -473,11 +510,16 @@ class Trader:
                         fake_order = 1
                     ep = max(open_price, ep)
 
-                leverage = self.public.lvrg_set(res_df, self.config, open_side, ep, out, fee, self.limit_leverage)
+                leverage, liqd_p = self.public.lvrg_liqd_set(res_df, self.config, open_side, ep, out, fee, self.limit_leverage)
+
+                # ------ get precision ------ #
+                price_precision, quantity_precision = bank_module.get_precision()
+                tp, ep, out, liqd_p = [bank_module.calc_with_precision(price_, price_precision) for price_ in [tp, ep, out, liqd_p]]  # includes half-dynamic tp
 
                 self.sys_log.info('tp : {}'.format(tp))
                 self.sys_log.info('ep : {}'.format(ep))
                 self.sys_log.info('out : {}'.format(out))
+                self.sys_log.info('liqd_p : {}'.format(liqd_p))
                 self.sys_log.info('leverage : {}'.format(leverage))
                 self.sys_log.info('~ tp ep out leverage set time : %.5f' % (time.time() - start_ts))
 
@@ -657,6 +699,9 @@ class Trader:
                 all_executed = 0
                 check_time = time.time()  # for tp_execution check_term
 
+                """
+                CLOSE LOOP
+                """
                 while 1:
                     if use_new_df2:
                         if load_new_df2:  # dynamic_out & tp phase
@@ -763,13 +808,12 @@ class Trader:
                         try:
                             # [ back & real-trade validation phase ]
                             if not self.config.trader_set.backtrade:
-                                market_close_on, log_out = bank_module.check_hl_out(res_df, market_close_on, log_out, out, open_side)
+                                market_close_on, log_out = bank_module.check_hl_out_v2(res_df, market_close_on, log_out, out, liqd_p, open_side)
                             else:
-                                market_close_on, log_out = bank_module.check_hl_out_onbarclose(res_df, market_close_on, log_out, out, open_side)
+                                market_close_on, log_out = bank_module.check_hl_out_onbarclose_v2(res_df, market_close_on, log_out, out, liqd_p, open_side)
 
                             if not market_close_on:  # log_out 갱신 방지
-                                market_close_on, log_out, cross_on = bank_module.check_signal_out(res_df, market_close_on, log_out, cross_on,
-                                                                                                  open_side)
+                                market_close_on, log_out, cross_on = bank_module.check_signal_out_v2(res_df, market_close_on, log_out, cross_on, open_side)
 
                             if market_close_on:
                                 self.sys_log.info("market_close_on is True")
@@ -832,4 +876,4 @@ class Trader:
 
                 # ------------ get total income from this trade ------------ #
                 if not fake_order:
-                    self.get_income_info_v2(real_balance, leverage, ideal_profit, real_profit)
+                    self.get_income_info(real_balance, leverage, ideal_profit, real_profit, mode=self.config.trader_set.profit_mode)

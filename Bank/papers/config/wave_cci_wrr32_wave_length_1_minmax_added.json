@@ -3,7 +3,7 @@
   "trader_set": {
     "backtrade": 0,
     "back_data_path": "D:\\Projects\\System_Trading\\JnQ\\database\\binance\\cum\\2023-01-12\\2023-01-12 ETHUSDT_1m.ftr",
-    "start_datetime": "2022-10-05 00:00:59.999",
+    "start_datetime": "2022-12-16 12:34:59.999000",
     "run": 1,
     "df_log": 0,
     "show_detail": 0,
@@ -11,8 +11,8 @@
     "complete_index": -2,
     "limit_fee": 0.0002,
     "market_fee": 0.0004,
-    "initial_asset": 10,
-    "profit_mode": "SUM",
+    "initial_asset": 2240,
+    "profit_mode": "PROD",
     "asset_changed": 0,
     "symbol": "ETHUSDT",
     "symbol_changed": 0,
@@ -31,7 +31,7 @@
     "short_inversion": 0,
     "long_inversion": 0,
     "short_ban": 0,
-    "long_ban": 0,
+    "long_ban": 1,
     "short_fake": 0,
     "long_fake": 0
   },
@@ -52,7 +52,7 @@
       "wrr_10": "None",
       "wrr_21": "None",
       "min_wrr_32": "None",
-      "max_wrr_32": 0.9,
+      "max_wrr_32": 0.3,
       "co_es": "None",
       "cu_es": "None",
       "crr": "None",
@@ -92,7 +92,7 @@
     "check_hlm": 0,
     "wave_itv1": "T",
     "wave_period1": 20,
-    "wave_length1": "None",
+    "wave_length1": 110,
     "wave_spread1": "None",
     "wave_time_ratio1": "None",
     "wave_itv2": "T",
@@ -123,7 +123,7 @@
     "entry_type": "LIMIT",
     "static_ep": 1,
     "point2": {
-      "entry_type": "LIMIT"
+      "entry_type": "MARKET"
     }
   },
   "tp_set": {
@@ -144,7 +144,7 @@
   "lvrg_set": {
     "static_lvrg": 1,
     "limit_leverage": "None",
-    "leverage": 10,
+    "leverage": 5,
     "target_pct": 0.03,
     "allow_float": 0,
     "lvrg_rejection": 0

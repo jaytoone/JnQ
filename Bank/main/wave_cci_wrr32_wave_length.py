@@ -8,6 +8,8 @@ from Bank.traders.trader_v1_4 import *
 
 # ------- input params ------- #
 paper_name = "wave_cci_wrr32_wave_length"
+assert paper_name in os.path.basename(__file__)
+
 id_list = [1]
 
 

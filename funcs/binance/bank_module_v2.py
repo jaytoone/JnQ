@@ -1,4 +1,4 @@
-from funcs.binance.futures_modules_v2 import FuturesModule
+from funcs.binance.futures_module_v2 import FuturesModule
 from binance_f.model import *
 
 from funcs.binance.futures_concat_candlestick_ftr import concat_candlestick
@@ -368,12 +368,13 @@ class BankModule(FuturesModule):
 
         return partial_tps, partial_qtys
 
-    def check_limit_tp_exec_v2(self, post_order_res_list, quantity_precision, return_price=False):
+    def check_limit_tp_exec_v2(self, post_order_res_list, quantity_precision):
 
         """
         v1 -> v2
             1. tp_type 에 의한 condition phase 를 제거함.
                 a. 외부에서 참조하도록 구성함.
+            2. return_price parameter 제거하고 all_executed, exec_price_list 반환
         """
 
         all_executed = 0
@@ -386,9 +387,8 @@ class BankModule(FuturesModule):
             self.sys_log.info('all limit tp order executed')
             all_executed = 1
 
-        if return_price:  # order_list 로 변환하는김에 같이 넣은 거임
-            execPrice_list = [self.get_exec_price(order_info) for order_info, executed in zip(order_info_list, order_exec_check_list) if executed]
-            return all_executed, execPrice_list
+        exec_price_list = [self.get_exec_price(order_info) for order_info, executed in zip(order_info_list, order_exec_check_list) if executed]
+        return all_executed, exec_price_list
 
     def check_hl_out_onbarclose_v2(self, res_df, market_close_on, log_out, out, liqd_p, open_side):
 
@@ -711,7 +711,7 @@ class BankModule(FuturesModule):
     def calc_ideal_profit_v3(self, res_df, open_side, ideal_ep, tp_exec_dict, open_executedPrice_list, tp_executedPrice_list, out_executedPrice_list,
                              fee, trade_log_dict):
         """
-        literval_eval 사용으로 BankModule 에 종속시킴.
+        literal_eval 사용으로 BankModule 에 종속시킴.
 
         1. ideal_ep & tp_exec_dict exist for ideal_pr
         2. open_executedPrice_list, close_executedPrice_list exist for real_pr
@@ -754,7 +754,7 @@ class BankModule(FuturesModule):
 
     def limit_order(self, order_type, limit_side, pos_side, limit_price, limit_quantity, order_info=None):
         open_retry_cnt = 0
-        res_code = 0
+        error_code = 0
 
         if order_info is None:
             over_balance = None
@@ -781,22 +781,22 @@ class BankModule(FuturesModule):
                                                      ordertype=OrderType.LIMIT,
                                                      quantity=str(limit_quantity), price=str(limit_price))
             except Exception as e:
-                self.sys_log.error('error in limit open order : {}'.format(e))
+                self.sys_log.error('error in limit_order : {}'.format(e))
 
                 # ------ 1. limit_order() 에서 해결할 수 없는 error 일 경우, return ------ #
                 # ------ -4003 : quantity less than zero ------ #
                 if "-4003" in str(e):
-                    res_code = -4003
-                    return None, over_balance, res_code
+                    error_code = -4003
+                    return None, over_balance, error_code
 
                 # ------ -1111 : Precision is over the maximum defined for this asset ------ #
                 #         = quantity precision error        #
                 if '-1111' in str(e):
-                    res_code = -1111
+                    error_code = -1111
                     self.sys_log.info("limit_price : {}".format(limit_price))
                     self.sys_log.info("limit_quantity : {}\n".format(limit_quantity))
                     # break
-                    return None, over_balance, res_code
+                    return None, over_balance, error_code
 
                 # ------ 2. limit_order() 에서 해결할 error 일 경우, continue ------ #
                 # ------ -4014 : price precision validation ------ #
@@ -832,18 +832,18 @@ class BankModule(FuturesModule):
 
                         if open_retry_cnt > 5:
                             self.sys_log.error("open_retry_cnt over. : {}".format(open_retry_cnt))
-                            res_code = -2019
-                            return None, over_balance, res_code
+                            error_code = -2019
+                            return None, over_balance, error_code
                         else:
                             continue
                 else:
                     self.sys_log.error("unknown error : {}".format(e))
-                    res_code = "unknown"
-                    return None, over_balance, res_code
+                    error_code = "unknown"
+                    return None, over_balance, error_code
 
             else:
-                self.sys_log.info('open order enlisted : {}'.format(datetime.now()))
-                return post_order_res, over_balance, res_code
+                self.sys_log.info('limit_order enlisted. : {}'.format(datetime.now()))
+                return post_order_res, over_balance, error_code
 
     def partial_limit_order_v4(self, partial_tps, partial_qtys, close_side, pos_side, open_exec_qty, quantity_precision):
         partial_tp_idx = 0
@@ -865,17 +865,17 @@ class BankModule(FuturesModule):
             1. 들고 있는 position != order_side 일 경우,  -2022,"msg":"ReduceOnly Order is rejected." 발생함
                 a. reduceOnly=False 줘도 무관한가 => 를 줘야 무방해짐 (solved)
             """
-            post_order_res, _, res_code = self.limit_order(OrderType.LIMIT, close_side, pos_side, partial_tp, partial_qty)
+            post_order_res, _, error_code = self.limit_order(OrderType.LIMIT, close_side, pos_side, partial_tp, partial_qty)
             post_order_res_list.append(post_order_res)
 
             # ------ 2. check succession ------ #
-            if not res_code:  # if succeeded, res_code = 0
+            if not error_code:  # if succeeded, error_code = 0
                 partial_tp_idx += 1
 
             # ------ 3. errors ------ #
             # ------ -1111 : quantity precision error ------ #
             #   a. all_cancel 하고 처음부터 다시 (temp-solved)
-            elif res_code == -1111:
+            elif error_code == -1111:
                 partial_tp_idx = 0
                 self.cancel_order_list(post_order_res_list)
 
@@ -889,7 +889,7 @@ class BankModule(FuturesModule):
             # Todo
             #   1. 가설 1 : open_exec_qty 가 잘못되면 발생하지 않을까
             #       a. 현재 open_exec_qty 를 수정하기 위해서는 open_orderID 에서 exec_qty 를 다시 가져와야함. --> 다소 번거로움.
-            elif res_code == -4003:
+            elif error_code == -4003:
                 self.sys_log.info('partial_qtys : {}'.format(partial_qtys))
                 self.sys_log.info('quantity_precision : {}'.format(quantity_precision))
                 continue
@@ -951,7 +951,7 @@ class BankModule(FuturesModule):
             #           1. order side should be opposite side to the open          #
             #           2. reduceOnly = 'true'       #
             #       Todo        #
-            #        -1111 code 에 대해서 다른 대안을 제시한다면, res_code var. 로 통합가능함
+            #        -1111 code 에 대해서 다른 대안을 제시한다면, error_code var. 로 통합가능함
             code_1111 = 0
             error_code = None
             while 1:  # <-- loop for complete close order
@@ -1027,5 +1027,5 @@ class BankModule(FuturesModule):
                     return market_exec_price_list
                 else:
                     # ------ complete close by market ------ #
-                    self.sys_log.info('re-close')
+                    self.sys_log.info('market_close reorder')
                     continue

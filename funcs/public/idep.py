@@ -1236,6 +1236,7 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
     """
     v16_4 -> v16_5
         1. sum_pr 을 periodic_pr plot 을 위해 plot_info 외부에 위치시킴.
+        2. frq_dev_plot 을 plot_info 와 같은 phase 에 위치함 (long / short_ban 에 영향받지 않고 plot 하기 위함임.)
     """
 
     get_wave_bias, get_pr, get_res_info, plot_info, frq_dev_plot = funcs
@@ -1249,6 +1250,7 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
                                # height_ratios=[10, 10, 1]
                                )
     gs_idx = 0
+    gs_idx_below = 3
     # plt.suptitle(key)
 
     partial_ranges, partial_qty_ratio = literal_eval(config.tp_set.partial_ranges), literal_eval(config.tp_set.partial_qty_ratio)
@@ -1290,15 +1292,12 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
 
     short_obj, long_obj, both_obj = [np.split(obj_, 5, axis=1) for obj_ in [short_obj, long_obj, both_obj]]
 
-    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in
-                                         [short_p1_openi_idx, long_p1_openi_idx]]
-    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in
-                                     [short_p1_openi_idx, long_p1_openi_idx]]
-    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in
-                                   [short_p1_openi_idx, long_p1_openi_idx]]
+    short_p2_idx_arr, long_p2_idx_arr = [p2_idx_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_lvrg_arr, long_lvrg_arr = [lvrg_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    short_fee_arr, long_fee_arr = [fee_arr[openi_idx_].reshape(-1, 1) for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
     short_tpout_arr, long_tpout_arr = [tpout_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
-    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
     short_tr_arr, long_tr_arr = [tr_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
+    # short_bias_arr, long_bias_arr = [bias_arr[openi_idx_] for openi_idx_ in [short_p1_openi_idx, long_p1_openi_idx]]
     # print("long_bias_arr.shape :", long_bias_arr.shape)
     # print("short / long arr setting elapsed time :", time.time() - start_0)
 
@@ -1318,9 +1317,8 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
     # ------ plot_data ------ #
     try:
         # start_0 = time.time()
-        if len_short == 0:
+        if len_short == 0:  # 0 이 아닌 경우에만 계산이 가능함
             short_pr = []
-            gs_idx += 1
         else:
             short_tr = short_tr_arr.mean()
             short_pr, short_liqd = get_pr(OrderSide.SELL, high, low, short_obj, short_tpout_arr, short_lvrg_arr,
@@ -1336,20 +1334,22 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
                                                                                         short_total_pr,
                                                                                         short_acc_pr, short_liqd)
             else:
-                gs_idx = plot_info(gs, gs_idx, len_df, sample_len, short_tr, short_tpbox_hhm, short_tpbox_p2exec_hhm,
-                                   short_outbox_hhm, short_hlm, short_trade_ticks, short_net_p1_frq, short_pr, short_total_pr,
-                                   short_acc_pr, short_sum_pr, short_liqd, short_lvrg_arr.mean(), title_position, fontsize)
-        # print("short plot_data elapsed time :", time.time() - start_0)
+                plot_info(gs, gs_idx, len_df, sample_len, short_tr, short_tpbox_hhm, short_tpbox_p2exec_hhm,
+                          short_outbox_hhm, short_hlm, short_trade_ticks, short_net_p1_frq, short_pr, short_total_pr,
+                          short_acc_pr, short_sum_pr, short_liqd, short_lvrg_arr.mean(), title_position, fontsize)
+
+                frq_dev_plot(gs, gs_idx_below, len_df, sample_len, short_obj[-2], short_p2_true_bias_bool, short_acc_pr[-1], short_sum_pr[-1], fontsize)
 
     except Exception as e:
-        gs_idx += 1
         print("error in short plot_data :", e)
+
+    gs_idx += 1
+    gs_idx_below += 1
 
     try:
         # start_0 = time.time()
         if len_long == 0:
             long_pr = []
-            gs_idx += 1
         else:
             long_tr = long_tr_arr.mean()
             long_pr, long_liqd = get_pr(OrderSide.BUY, high, low, long_obj, long_tpout_arr, long_lvrg_arr,
@@ -1365,19 +1365,22 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
                                                                                      long_total_pr, long_acc_pr,
                                                                                      long_liqd)
             else:
-                gs_idx = plot_info(gs, gs_idx, len_df, sample_len, long_tr, long_tpbox_hhm, long_tpbox_p2exec_hhm,
-                                   long_outbox_hhm, long_hlm, long_trade_ticks, long_net_p1_frq, long_pr, long_total_pr,
-                                   long_acc_pr, long_sum_pr, long_liqd, long_lvrg_arr.mean(), title_position, fontsize)
-        # print("long plot_data elapsed time :", time.time() - start_0)
+                plot_info(gs, gs_idx, len_df, sample_len, long_tr, long_tpbox_hhm, long_tpbox_p2exec_hhm,
+                          long_outbox_hhm, long_hlm, long_trade_ticks, long_net_p1_frq, long_pr, long_total_pr,
+                          long_acc_pr, long_sum_pr, long_liqd, long_lvrg_arr.mean(), title_position, fontsize)
+
+                frq_dev_plot(gs, gs_idx_below, len_df, sample_len, long_obj[-2], long_p2_true_bias_bool, long_acc_pr[-1], long_sum_pr[-1], fontsize)
+
     except Exception as e:
-        gs_idx += 1
         print("error in long plot_data :", e)
+
+    gs_idx += 1
+    gs_idx_below += 1
 
     try:
         # start_0 = time.time()
         if len_short * len_long == 0:
             both_pr = []
-            gs_idx += 1
         else:
             both_tr = (short_tr + long_tr) / 2
             both_pr = np.vstack((short_pr, long_pr))  # for 2d arr, obj 를 1d 로 만들지 않는 이상, pr 은 2d 유지될 것
@@ -1386,11 +1389,9 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
             both_sum_pr = get_sum_pr_nb(both_total_pr)
             both_liqd = min(short_liqd, long_liqd)
 
-            both_p2_true_bias_bool = np.hstack(
-                (short_p2_true_bias_bool, long_p2_true_bias_bool))  # hstack for 1d arr, vstack for 2d arr
+            both_p2_true_bias_bool = np.hstack((short_p2_true_bias_bool, long_p2_true_bias_bool))  # hstack for 1d arr, vstack for 2d arr
             both_tpbox_hhm = (short_tpbox_hhm + long_tpbox_hhm) / 2
-            both_tpbox_p2exec_hhm, both_hlm = (short_tpbox_p2exec_hhm + long_tpbox_p2exec_hhm) / 2, (
-                    short_hlm + long_hlm) / 2
+            both_tpbox_p2exec_hhm, both_hlm = (short_tpbox_p2exec_hhm + long_tpbox_p2exec_hhm) / 2, (short_hlm + long_hlm) / 2
             both_outbox_hhm = (short_outbox_hhm + long_outbox_hhm) / 2
             both_trade_ticks = np.mean(both_obj[-2] - both_obj[-1])
             both_net_p1_frq = short_net_p1_frq + long_net_p1_frq
@@ -1399,33 +1400,24 @@ def idep_plot_v16_5(res_df, len_df, config, high, low, open_info_df1, paired_res
                                                                                      both_total_pr, both_acc_pr,
                                                                                      both_liqd)
             else:
-                gs_idx = plot_info(gs, gs_idx, len_df, sample_len, both_tr, both_tpbox_hhm, both_tpbox_p2exec_hhm,
-                                   both_outbox_hhm, both_hlm, both_trade_ticks, both_net_p1_frq, both_pr, both_total_pr,
-                                   both_acc_pr, both_sum_pr, both_liqd, lvrg_arr.mean(), title_position, fontsize)
-        # print("both plot_data elapsed time :", time.time() - start_0)
+                plot_info(gs, gs_idx, len_df, sample_len, both_tr, both_tpbox_hhm, both_tpbox_p2exec_hhm,
+                          both_outbox_hhm, both_hlm, both_trade_ticks, both_net_p1_frq, both_pr, both_total_pr,
+                          both_acc_pr, both_sum_pr, both_liqd, lvrg_arr.mean(), title_position, fontsize)
+
+                frq_dev_plot(gs, gs_idx_below, len_df, sample_len, both_obj[-2], both_p2_true_bias_bool, both_acc_pr[-1], both_sum_pr[-1], fontsize)
+
     except Exception as e:
-        gs_idx += 1
         print("error in both plot_data :", e)
 
+    gs_idx += 1
+    gs_idx_below += 1
+
     if not signi:
-        if len_short * len_long > 0:
-            for obj, bias_arr, acc_pr, sum_pr in zip([short_obj, long_obj, both_obj],
-                                                     [short_p2_true_bias_bool, long_p2_true_bias_bool, both_p2_true_bias_bool],
-                                                     [short_acc_pr, long_acc_pr, both_acc_pr],
-                                                     [short_sum_pr, long_sum_pr, both_sum_pr]):
-                try:
-                    # start_0 = time.time()
-                    gs_idx = frq_dev_plot(gs, gs_idx, len_df, sample_len, obj[-2], bias_arr, acc_pr[-1], sum_pr[-1], fontsize)
-                    # print("frq_dev_plot elapsed time :", time.time() - start_0)
-                except Exception as e:
-                    gs_idx += 1
-                    print("error in frq_dev_plot :", e)
-            plt.show()
-            plt.close()
+        plt.show()
+        plt.close()
 
         return short_pr, short_obj, short_lvrg_arr, short_fee_arr, short_tpout_arr, short_tr_arr, short_p2_true_bias_bool, short_net_p1_bias_tick, short_p2exec_p1_bias_tick, short_net_p1_idx_arr, short_p2_idx_arr, short_tp_1, short_tp_0, short_out_1, short_out_0, short_ep2_0, \
                long_pr, long_obj, long_lvrg_arr, long_fee_arr, long_tpout_arr, long_tr_arr, long_p2_true_bias_bool, long_net_p1_bias_tick, long_p2exec_p1_bias_tick, long_net_p1_idx_arr, long_p2_idx_arr, long_tp_1, long_tp_0, long_out_1, long_out_0, long_ep2_0  # long_net_p1_idx_arr long_p2_idx_arr
-
     else:
         return [short_idep_res_obj[:-1], long_idep_res_obj[:-1], both_idep_res_obj[:-1]]
 
@@ -2264,9 +2256,11 @@ def liquidation(open_side, data_, obj_, lvrg, fee):  # much faster
 
 
 def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, sum_pr, fontsize):
+
     """
     v4 -> v5
         1. add periodic sum_pr
+        2. remove return value
     """
 
     plt.subplot(gs[gs_idx])
@@ -2280,7 +2274,7 @@ def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, 
 
     plt.title(title_msg.format(*array_zip, fontsize=fontsize))
 
-    return gs_idx + 1
+    return
 
 
 def frq_dev_plot_v4(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, fontsize):
@@ -2380,10 +2374,12 @@ def plot_info_v9(gs, gs_idx, len_df, sample_len, tr, hhm, p2_hhm, out_hhm, mean_
 
 def plot_info_v8_2(gs, gs_idx, len_df, sample_len, tr, hhm, p2_hhm, out_hhm, hlm, bars_in, net_p1_frq, pr, total_pr,
                    acc_pr, sum_pr, liqd, leverage, title_position, fontsize):
+
     """
     v8 -> v8_2
         1. peridic sum_pr plot 을 위해 get_res_info_nb_v3, title_msg 수정함.
         2. sum_mdd -> prod & sum mdd 둘다 plot 함.
+        3. remove return value
     """
 
     try:
@@ -2401,7 +2397,7 @@ def plot_info_v8_2(gs, gs_idx, len_df, sample_len, tr, hhm, p2_hhm, out_hhm, hlm
     except Exception as e:
         print("error in plot_info :", e)
 
-    return gs_idx + 1
+    return
 
 
 def plot_info_v8_1(gs, gs_idx, len_df, sample_len, tr, hhll, hhm, p2_hhm, out_hhm, hlm, bars_in, net_p1_frq, pr,
@@ -2568,7 +2564,7 @@ def get_res_info_nb_v3(len_df, np_pr, acc_pr, sum_pr, liqd):
     sum_mdd_prod = mdd_v2(sum_pr)
     sum_mdd_sum = mdd_v2(sum_pr, mode="SUM")
 
-    return len_pr, dpf, wr, sr, acc_pr[-1], sum_pr[-1], min_pr, liqd, acc_mdd, sum_mdd_prod, sum_mdd_sum
+    return len_pr, dpf, wr, sr, acc_pr[-1], sum_pr[-1] - 1, min_pr, liqd, acc_mdd, sum_mdd_prod, sum_mdd_sum
 
 
 # @jit  # almost equal
@@ -2657,6 +2653,7 @@ def get_pr_v5(open_side, h, l, obj, tpout, lvrg, fee, partial_ranges, partial_qt
     """
     v4 -> v5
         1. liquidation 적용을 위해, np.nanmin 을 return 값에 붙여줌.
+        2. profit * (1 - fees) 적용 => 수수료 및 세금 적용하는 올바른 방법.
     """
 
     en_p = obj[0]
@@ -2696,28 +2693,26 @@ def get_pr_v5(open_side, h, l, obj, tpout, lvrg, fee, partial_ranges, partial_qt
 
     if open_side == "SELL":
         if not inversion:
-            pr = ((en_ps / ex_ps - fees - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+            pr = ((en_ps / ex_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
             # ------ liquidation ------ #
-            #   0. 시작 기준 = entry_idx (iin)
-            #   1. exit_idx 를 포함하기 위해 iout + 1 을 할 경우 오차 매우 커지는 경우 존재함.
             max_high = np.full_like(en_p, np.nan)
-            max_high[~equal_idx] = np.array([np.max(h[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
+            max_high[~equal_idx] = np.array([np.max(h[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)  # start from iin (liquidation 을 entry_idx 봄)
             liqd = (en_p / max_high - fee - 1) * lvrg + 1
         else:
-            pr = ((ex_ps / en_ps - fees - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+            pr = ((ex_ps / en_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
             # ------ liquidation ------ #
             min_low = np.full_like(en_p, np.nan)
             min_low[~equal_idx] = np.array([np.min(l[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
             liqd = (min_low / en_p - fee - 1) * lvrg + 1
     else:
         if not inversion:
-            pr = ((ex_ps / en_ps - fees - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+            pr = ((ex_ps / en_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
             # ------ liquidation ------ #
             min_low = np.full_like(en_p, np.nan)
             min_low[~equal_idx] = np.array([np.min(l[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
             liqd = (min_low / en_p - fee - 1) * lvrg + 1
         else:
-            pr = ((en_ps / ex_ps - fees - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+            pr = ((en_ps / ex_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
             # ------ liquidation ------ #
             max_high = np.full_like(en_p, np.nan)
             max_high[~equal_idx] = np.array([np.max(h[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
@@ -2917,7 +2912,7 @@ def get_sum_pr_nb(np_pr):
     for_sum_pr[0] = 1  # 1 로 시작하지 않을 경우, sum_mdd = nan 출력됨.
 
     sum_pr = np.cumsum(for_sum_pr)
-    sum_pr = np.where(sum_pr < 0, 0, sum_pr)
+    sum_pr = np.where(sum_pr < 0, 0, sum_pr)  # sum_mdd 의 정확한 측정을 위해 주석처리함.
 
     return sum_pr
 

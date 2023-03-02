@@ -21,9 +21,11 @@ candle_limit = 1500
 def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None, show_process=False, timesleep=None):
     assert limit <= candle_limit, "assert limit < candle_limit"
 
-    """ real_trading 에서 자정 지나면 data 부족해지는 문제로 assert, days >= 2 적용
-    - imit under 1500 으로 cover 가능 (startTime = None 이면, 자정 이전 data load 함)
-    - startTime 을 자정으로 설정해서 자정 이전의 data 를 가져오기 못한 것"""
+    """ 
+    1. real_trade 에서 자정 지나면 data 부족해지는 문제로 assert, days >= 2 적용
+        => imit under 1500 으로 cover 가능 (startTime = None 이면, 자정 이전 data load 함)
+            = (startTime 을 자정으로 설정해서 자정 이전의 data 를 가져오기 못한 것)
+    """
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
@@ -87,7 +89,7 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
 if __name__ == '__main__':
 
-    days = 700  # 330 3
+    days = 1  # 330 3
     end_date = None  # "2023-01-06" "2021-04-12" "2021-03-23"
     intervals = ['1m']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
 
@@ -120,8 +122,8 @@ if __name__ == '__main__':
             try:
                 concated_df, end_date = concat_candlestick(symbol, interval, days, limit=1500,
                                                            end_date=end_date, show_process=True, timesleep=0.4)
-                # print(concated_df.tail())
-                # quit()
+                print(concated_df.tail())
+                quit()
                 concated_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')
             except Exception as e:
                 print('Error in save to_excel :', e)

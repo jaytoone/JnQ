@@ -9,6 +9,7 @@ class OrderSide:  # 추후 위치 옮길 것 - colab 에 binance_file 종속할 
 
 
 def get_res_v2(res_df, open_info_df_list, ohlc_list, config_list, np_timeidx, en_ex_pairing, funcs1, idep_plot, funcs2, inversion=False, test_ratio=0.3, plot_is=True, signi=False, show_detail=False):
+
     """
     v1 -> v2
     1. en_ex_pairing, idep_plot 에 필요한 funcs 를 분리함, funcs1, funcs2
@@ -21,6 +22,7 @@ def get_res_v2(res_df, open_info_df_list, ohlc_list, config_list, np_timeidx, en
     sample_len = int(len_df * (1 - test_ratio))
     sample_idx1 = (open_idx1 < sample_len) == plot_is  # in / out sample plot 여부
     sample_open_idx1 = open_idx1[sample_idx1]
+
     sample_idx2 = (open_idx2 < sample_len) == plot_is  # in / out sample plot 여부
 
     # ------------ open_info_list 기준 = p1 ------------ #
@@ -1051,6 +1053,7 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
         1. 내부 version 관리 함수들을 모두 외부 참조로 구성함
             a. version 에 가변적으로 대응하기 위함임.
         2. liqd_p 기능 도입함.
+        3. p2_tr_set_idx 직접 지정하도록 구성함.
     """
 
     open_info1, open_info2 = open_info_list
@@ -1163,10 +1166,10 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
                     break
 
                 # ------ check side sync. ------ #
-                # if open_side != side_arr2[open_i2]:
-                #     if show_detail:
-                #         print("side check rejection, open_i2 {}, open_side {}".format(open_i2, side_arr2[open_i2]))
-                #     continue
+                if open_side != side_arr2[open_i2]:
+                    if show_detail:
+                        print("side check rejection, open_i2 {}, open_side {}".format(open_i2, side_arr2[open_i2]))
+                    continue
 
                 # ------ assert, op_idx2 >= exec_j ------ #
                 op_idx2 = open_idx2[open_i2]  # open_i2 는 i 와 별개로 운영
@@ -3807,7 +3810,12 @@ def check_entry_v6_2(res_df, config, entry_type, op_idx, tr_set_idx, len_df, ope
                         ep = open[e_j]
                     break
 
-        exec_idx = e_j
+        try:
+            exec_idx = e_j
+
+        except Exception as e:
+            exec_idx = None  # 어차피, 외부에서 entry_done = 0 로 빠지면 continue 되기 때문에 의미 없음.
+            print("error in check_entry e_j loop : {}".format(e))
 
     else:  # market entry
         exec_idx = op_idx + 1
