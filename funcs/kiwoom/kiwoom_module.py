@@ -1,25 +1,19 @@
 from pykiwoom import Kiwoom
 import pandas as pd
-import logging.config
 import math
 import time
 
 
 class KiwoomModule(Kiwoom):
-    def __init__(self, config, secret_key, login=True):
-        super().__init__()
+    def __init__(self, secret_key):
 
-        # login
-        if login:
-            self.comm_connect()
+        super().__init__()
+        self.comm_connect()
 
         if self.get_connect_state():
             print("connected.")
         else:
             print("disconnected.")
-
-        self.config = config
-        self.sys_log = logging.getLogger()
 
         self.screen_number = "2000"  # Todo, 추후 module_phase 에 따라 다변화할 것.
         self.account_number = self.get_login_info("ACCNO").split(";")[0]
@@ -158,7 +152,7 @@ class KiwoomModule(Kiwoom):
         if len(self.data_opt10075) > 1:  # data validation
             int_cols = ["주문수량", "미체결수량", "체결가", "체결량", "현재가"]
             for col in int_cols:
-                self.data_opt10075[col] = self.data_opt10075[col].astype(int)
+                self.data_opt10075[col] = self.data_opt10075[col].astype(int).abs()
 
         return self.data_opt10075
 

@@ -76,8 +76,10 @@ class Trader:
         self.ideal_accumulated_profit = 1.0  # if profit_mode == "SUM", will be changed to zero
 
         # 7. obj
+        self.streamer = None
         self.sys_log = logging.getLogger()
 
+        self.initial_set = 1
         self.limit_leverage = "None"
 
         # 8. path definition
@@ -112,7 +114,6 @@ class Trader:
             self.sys_log.error("error in read_write_config_list :", e)
 
     def set_copy_base_log(self, log_name, base_cfg_path, base_cfg_copy_path):
-
         """
          set logger info. to {ticker}.json - offer realtime modification
          1. base_cfg_copy_path 기준으로 변경 내용 .log 로 적용
@@ -121,20 +122,22 @@ class Trader:
             try:
                 shutil.copy(base_cfg_path, base_cfg_copy_path)
 
-                with open(base_cfg_copy_path, 'r') as sys_cfg:
+                with open(base_cfg_copy_path, 'r') as sys_cfg:  # initial_set 과 무관하게 거래 종료 시에도 반영하기 위함 - 윗 initial_set phase 와 분리한 이유
                     sys_log_cfg = EasyDict(json.load(sys_cfg))
 
-                # 1. edit 내용
-                sys_log_cfg.handlers.file_rot.filename = \
-                    os.path.join(self.sys_log_path, log_name + ".log")  # log_file name - log_name 에 종속
-                logging.getLogger("apscheduler.executors.default").propagate = False
+                if self.initial_set:  # dump edited_cfg - sys_log_cfg 정의가 필요해서 윗 phase 와 분리됨
 
-                with open(base_cfg_copy_path, 'w') as edited_cfg:
-                    json.dump(sys_log_cfg, edited_cfg, indent=3)
+                    # 1. edit 내용
+                    sys_log_cfg.handlers.file_rot.filename = \
+                        os.path.join(self.sys_log_path, log_name + ".log")  # log_file name - log_name 에 종속
+                    logging.getLogger("apscheduler.executors.default").propagate = False
 
-                logging.config.dictConfig(sys_log_cfg)  # 선언 순서 상관 없음.
-                self.sys_log.info('# ----------- {} ----------- #'.format(self.log_dir_name))
-                self.sys_log.info("pkg_path : {}".format(self.pkg_path))
+                    with open(base_cfg_copy_path, 'w') as edited_cfg:
+                        json.dump(sys_log_cfg, edited_cfg, indent=3)
+
+                    logging.config.dictConfig(sys_log_cfg)  # 선언 순서 상관 없음.
+                    self.sys_log.info('# ----------- {} ----------- #'.format(self.log_dir_name))
+                    self.sys_log.info("pkg_path : {}".format(self.pkg_path))
 
             except Exception as e:
                 print("error in load sys_log_cfg :", e)
@@ -294,15 +297,12 @@ class Trader:
                     top_df["ep_loc_point2"] = 0
                     self.watch_data_queue = top_df[["종목코드", "ep_loc_point2"]].values.tolist()
 
-                    #   b. bank_module 내부에 streamer 선언은 loop 이탈하면 초기화되서, Trader 의 streamer 로 유지함.
+                    #   b. bank_module 내부에 streamer 선언은 loop 이탈하면 초기화되서, Trader 의 self.streamer 로 유지함.
                     #       i. append streamer code by code
                     #           Todo, 여기서도 초기화될런지 ... -> 확인 필요함.
-                    for w_zero_i, watch_data in enumerate(self.watch_data_queue):
-                        if self.config.trader_set.backtrade:
+                    if self.config.trader_set.backtrade:
+                        for w_zero_i, watch_data in enumerate(self.watch_data_queue):
                             self.watch_data_queue[w_zero_i] = watch_data.append(bank_module.get_streamer())
-                        else:
-                            self.watch_data_queue[w_zero_i] = watch_data.append("")
-
                     prev_w_i = 0
 
             """
@@ -319,7 +319,7 @@ class Trader:
 
                 start_time = time.time()
 
-                code, ep_loc_point2, streamer = watch_data  # 이외의 data 가 필요한지 recheck (Todo)
+                code, ep_loc_point2 = watch_data  # 이외의 data 가 필요한지 recheck (Todo)
 
                 # 0. param init.
                 open_side = None
@@ -329,7 +329,7 @@ class Trader:
                 if self.config.trader_set.backtrade:
                     # Todo, streamer 는 back_data_path 로 선언하기 때문에 단일 종목에 기준하고 있음.
                     #       1. code 에 종속되어 변경될 수 있어야함.
-                    res_df, _ = bank_module.get_new_df_onstream(streamer)
+                    res_df, _ = bank_module.get_new_df_onstream(self.streamer)
                 else:
                     res_df, _ = bank_module.get_new_df(code)
                 self.sys_log.info("WATCH : ~ get_new_df : %.2f" % (time.time() - start_time))
@@ -440,12 +440,6 @@ class Trader:
                     #       i. w_i 는 len(self.watch_data_queue) - 1 보다 클 수 없음.
                     if w_i == len(self.watch_data_queue) - 1:
                         prev_w_i = 0
-
-                        #   ii. configuration 실시간 반영 기준 : watch loop 1회 종료.
-                        #       1. backtrade 시에는 지연시간을 없애기 위해 진행하지 않는다.
-                        #       2. sys_log 는 이제부터 실시간 반영하지 않는다.
-                        if not self.config.trader_set.backtrade:
-                            self.read_write_config_list(mode='w', edited_config_list=self.config_list)
                     else:
                         prev_w_i = w_i
                     break
@@ -572,7 +566,7 @@ class Trader:
                 open_exec = 0
                 if self.config.ep_set.entry_type == OrderType.MARKET:
                     if self.config.trader_set.backtrade:
-                        res_df, _ = bank_module.get_new_df_onstream(streamer)  # + index, code 에 종속될 수 있게 수정 (Todo)
+                        res_df, _ = bank_module.get_new_df_onstream(self.streamer)  # + index, code 에 종속될 수 있게 수정 (Todo)
                     open_exec = 1
 
                 # 2. limit
@@ -596,7 +590,7 @@ class Trader:
                         else:
                             open_exec = open_exec_series.loc[order_no]
                     else:
-                        res_df, _ = bank_module.get_new_df_onstream(streamer)  # + index
+                        res_df, _ = bank_module.get_new_df_onstream(self.streamer)  # + index
                         c_i = self.config.trader_set.complete_index  # 단지, 길이 줄이기 위해 c_i 로 재선언하는 것뿐, phase 가 많지 않아 수정하지 않음.
 
                         #   a. ei_k
@@ -665,7 +659,7 @@ class Trader:
                 # 1. get_new_df => 없앨 예정 (Todo)
                 #       a. 기존에 왜 있었던 거지 ..? => dynamic_tp / out 같음.
                 # if self.config.trader_set.backtrade:
-                #     res_df, load_new_df2 = bank_module.get_new_df_onstream(streamer)
+                #     res_df, load_new_df2 = bank_module.get_new_df_onstream(self.streamer)
                 # else:
                 #     res_df, load_new_df2 = bank_module.get_new_df(code, mode="CLOSE")
                 #
@@ -739,7 +733,7 @@ class Trader:
                     tp_exec_price_list = close_order_info_valid[close_exec_series == 1]["체결가"].tolist()
                 else:
                     if not self.config.tp_set.non_tp:
-                        res_df, _ = bank_module.get_new_df_onstream(streamer)
+                        res_df, _ = bank_module.get_new_df_onstream(self.streamer)
                         if open_side == OrderSide.BUY:
                             exec_tp_len = np.sum(res_df['high'].to_numpy()[self.config.trader_set.complete_index] >= np.array(partial_tps))
                         else:

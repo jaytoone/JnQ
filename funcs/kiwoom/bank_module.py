@@ -8,13 +8,20 @@ from datetime import datetime
 import time
 from ast import literal_eval
 import pickle
+import logging.config
 
 
 class BankModule(KiwoomModule):
 
     def __init__(self, config, login=True):
-        secret_key = self.load_key(r"D:\Projects\System_Trading\JnQ\Bank\api_keys\kiwoom_5189140110.pkl")
-        super().__init__(config, secret_key, login)
+
+        if login:
+            secret_key = self.load_key(r"D:\Projects\System_Trading\JnQ\Bank\api_keys\kiwoom_5189140110.pkl")
+            super().__init__(secret_key)
+
+        # 0. config, sys_log 는 BankModule 에서만 사용됨.
+        self.config = config
+        self.sys_log = logging.getLogger()
 
     @staticmethod
     def load_key(key_abspath):
@@ -205,7 +212,7 @@ class BankModule(KiwoomModule):
                     or order_info_valid['주문상태'] == "체결"
         return open_exec
 
-    def check_ei_k_v2(self, res_df_open, res_df, open_side, realtime_price):
+    def check_ei_k_v2(self, res_df_open, res_df, realtime_price, open_side):
 
         """
         = expire_tp
@@ -409,17 +416,16 @@ class BankModule(KiwoomModule):
 
         return market_close_on, log_out
 
-    def check_hl_out_v2(self, res_df, market_close_on, out, liqd_p, open_side):
+    def check_hl_out_v3(self, res_df, market_close_on, out, liqd_p, realtime_price, open_side):
 
         """
-        v1 -> v2
-            1. add liquidation platform
+        v2 -> v3
+            1. get realtime_price from outer_scope
             2. inversion 고려 아직임. (inversion 사용하게 되면 고려할 것.) (Todo)
             3. add log_out
         """
 
         log_out = None
-        realtime_price = self.get_market_price_v2()
 
         # ------ 1. liquidation default check ------ #
         if open_side == OrderSide.SELL:
@@ -469,18 +475,14 @@ class BankModule(KiwoomModule):
 
         return market_close_on, log_out
 
-    def calc_ideal_profit_v3(self, res_df, open_side, ideal_ep, tp_exec_dict, open_exec_price_list, tp_exec_price_list, out_exec_price_list, fee, trade_log_dict):
-        """
-        literal_eval 사용으로 BankModule 에 종속시킴.
+    def calc_ideal_profit_v4(self, res_df, open_side, ideal_ep, tp_exec_dict, open_exec_price_list, tp_exec_price_list, out_exec_price_list, fee, trade_log_dict):
 
-        1. ideal_ep & tp_exec_dict exist for ideal_pr
-        2. open_exec_price_list, close_executedPrice_list exist for real_pr
-            a. ideal
-                i. (tp_exec_dict / ideal_ep - fee - 1) * partial_qtys (long)
-                    1. dict item -> np.array
-            b. real
-            c. open_comparison 생략
         """
+        v3 -> v4
+            1. 수정된 수수료 계산법 도입
+                a. ((ideal_enp_np / ideal_exp_np * (1 - fee) - 1) * partial_qty_ratio_np).sum() + 1
+        """
+        
         ideal_exp_np = np.hstack(np.array(list(tp_exec_dict.values())))  # list 로 저장된 value, 1d_array 로 conversion
         ideal_enp_np = np.array([ideal_ep] * len(ideal_exp_np))
         # market_close 에서 -2002, -4003 발생한 경우 = error 인데 close 된 경우
@@ -492,11 +494,11 @@ class BankModule(KiwoomModule):
 
         partial_qty_ratio_np = np.array(literal_eval(self.config.tp_set.partial_qty_ratio))
         if open_side == OrderSide.SELL:
-            ideal_profit = ((ideal_enp_np / ideal_exp_np - fee - 1) * partial_qty_ratio_np).sum() + 1  # exp_np = 1d
-            real_profit = ((enp_np / exp_np - fee - 1) * partial_qty_ratio_np).sum() + 1
+            ideal_profit = ((ideal_enp_np / ideal_exp_np * (1 - fee) - 1) * partial_qty_ratio_np).sum() + 1
+            real_profit = ((enp_np / exp_np * (1 - fee) - 1) * partial_qty_ratio_np).sum() + 1
         else:
-            ideal_profit = ((ideal_exp_np / ideal_enp_np - fee - 1) * partial_qty_ratio_np).sum() + 1
-            real_profit = ((exp_np / enp_np - fee - 1) * partial_qty_ratio_np).sum() + 1
+            ideal_profit = ((ideal_exp_np / ideal_enp_np * (1 - fee) - 1) * partial_qty_ratio_np).sum() + 1
+            real_profit = ((exp_np / enp_np * (1 - fee) - 1) * partial_qty_ratio_np).sum() + 1
 
         self.sys_log.info("--------- bills ---------")
         self.sys_log.info("ideal_enp_np : {}".format(ideal_enp_np))
@@ -508,7 +510,7 @@ class BankModule(KiwoomModule):
 
         # ------ trade_log_dict ------ #
         for k_ts, tps in tp_exec_dict.items():  # tp_exec_dict 의 사용 의미는 ideal / real_pr 계산인건가
-            trade_log_dict[k_ts] = [tps, open_side, "exit"]  # Todo, trade_log_dict 사용하는 phase, list 로 변한 tps 주의
+            trade_log_dict[k_ts] = [tps, open_side, "exit"]  # trade_log_dict 사용하는 phase, list 로 변한 tps 주의
 
         return ideal_profit, real_profit, trade_log_dict
 
