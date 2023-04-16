@@ -9,7 +9,6 @@ class OrderSide:  # 추후 위치 옮길 것 - colab 에 binance_file 종속할 
 
 
 def get_res_v2(res_df, open_info_df_list, ohlc_list, config_list, np_timeidx, en_ex_pairing, funcs1, idep_plot, funcs2, inversion=False, test_ratio=0.3, plot_is=True, signi=False, show_detail=False):
-
     """
     v1 -> v2
     1. en_ex_pairing, idep_plot 에 필요한 funcs 를 분리함, funcs1, funcs2
@@ -39,7 +38,8 @@ def get_res_v2(res_df, open_info_df_list, ohlc_list, config_list, np_timeidx, en
     # ------------ get paired_res ------------ #
     start_0 = time.time()
     paired_res = en_ex_pairing(res_df, [sample_open_idx1, sample_open_idx2], [open_info1, open_info2], ohlc_list, config_list, np_timeidx, funcs1, show_detail)
-    # valid_openi_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr = paired_res
+    # net_p1_idx_arr, p1_idx_arr, p2_idx_arr, pair_idx_arr, pair_price_arr, lvrg_arr, fee_arr, tpout_arr, tr_arr = paired_res
+    # print(pair_price_arr)
     print("en_ex_pairing elapsed time :", time.time() - start_0)  # 0.37 --> 0.3660471439361572 --> 0.21(lesser if)
 
     # ------------ idep_plot ------------ #
@@ -208,18 +208,21 @@ def get_res_v9(res_df, open_info_df_list, ohlc_list, config_list, np_timeidx, fu
 
 
 def get_open_info_df_v2(ep_loc_v2, res_df, np_timeidx, id_list, config_list, id_idx_list, open_num=1):
+    """
+    v1 -> v2
+        1. <U32 dtype 으로 인한 memory allocate error 에 대응하기 위해 zone, side value 를 integer 기준으로 수정함.
+    """
     start_0 = time.time()
     # ------ get mr_res, zone_arr ------ #
     short_mr_res_obj = np.array([ep_loc_v2(res_df, config_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL) for config_ in config_list])
     long_mr_res_obj = np.array([ep_loc_v2(res_df, config_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY) for config_ in config_list])
-    short_open_idx_list = [np.where(res_df['short_open{}_{}'.format(open_num, id)].to_numpy() * mr_res)[0] for id, mr_res in
-                           zip(id_list, short_mr_res_obj[:, 0].astype(np.float64))]  # "point * mr_Res"
-    long_open_idx_list = [np.where(res_df['long_open{}_{}'.format(open_num, id)].to_numpy() * mr_res)[0] for id, mr_res in
-                          zip(id_list, long_mr_res_obj[:, 0].astype(np.float64))]  # zip 으로 zone (str) 과 묶어서 dtype 변경됨
+    short_open_idx_list = [np.where(res_df['short_open{}_{}'.format(open_num, id)].to_numpy() * mr_res)[0] for id, mr_res in zip(id_list, short_mr_res_obj[:, 0])]  # "point * mr_Res"
+    long_open_idx_list = [np.where(res_df['long_open{}_{}'.format(open_num, id)].to_numpy() * mr_res)[0] for id, mr_res in zip(id_list, long_mr_res_obj[:, 0])]  # zip 으로 zone (str) 과 묶어서 dtype 변경됨
+    print("~ ep_loc_v2 elapsed time :", time.time() - start_0)
 
     # ------ open_info_arr ------ #
-    short_side_list = [np.full(len(list_), OrderSide.SELL) for list_ in short_open_idx_list]
-    long_side_list = [np.full(len(list_), OrderSide.BUY) for list_ in long_open_idx_list]
+    short_side_list = [np.full(len(list_), -1) for list_ in short_open_idx_list]
+    long_side_list = [np.full(len(list_), 1) for list_ in long_open_idx_list]
 
     short_zone_list = [zone_res[short_open_idx] for zone_res, short_open_idx in zip(short_mr_res_obj[:, 1], short_open_idx_list)]
     long_zone_list = [zone_res[long_open_idx] for zone_res, long_open_idx in zip(long_mr_res_obj[:, 1], long_open_idx_list)]
@@ -244,7 +247,7 @@ def get_open_info_df_v2(ep_loc_v2, res_df, np_timeidx, id_list, config_list, id_
     # print(len(open_info_df))
     # print(len(open_info_df))
     # open_info_df.head()
-    print("get_open_info_df elapsed time :", time.time() - start_0)
+    print("~ get_open_info_df elapsed time :", time.time() - start_0)
     return open_info_df[~open_info_df.index.duplicated(keep='first')]  # 먼저 순서를 우선으로 지정
 
 
@@ -1054,6 +1057,7 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
             a. version 에 가변적으로 대응하기 위함임.
         2. liqd_p 기능 도입함.
         3. p2_tr_set_idx 직접 지정하도록 구성함.
+        4. integer type 으로 수정된 side_arr 를 수용하기 위해 코드 변경 진행함.
     """
 
     open_info1, open_info2 = open_info_list
@@ -1088,7 +1092,7 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
             break
 
         if show_detail:
-            print("open_i1 :", open_i1, side_arr1[open_i1])
+            print("open_i1 : {}, side_arr1 : {}".format(open_i1, side_arr1[open_i1]))
 
         op_idx1 = open_idx1[open_i1]  # open_i1 는 i 와 별개로 운영
         if op_idx1 < i:  # i = 이전 거래 끝난후의 res_df index - "거래 종료후 거래 시작", '<' : 거래 종료시점 진입 가능하다는 의미
@@ -1101,13 +1105,14 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
 
         # ------ 3. get open info ------ #
         #            a. ID 별로 수행하기 위해 selection_id, config 호출함.
-        open_side = side_arr1[open_i1]
-        id_idx = id_idx_arr1.astype(int)[open_i1]
+        open_side_num = side_arr1[open_i1]
+        id_idx = id_idx_arr1.astype(int)[open_i1]  # indexing 을 위해 integer 로 변환.
         config = config_list[id_idx]
         selection_id = config.selection_id
         check_hlm = config.tr_set.check_hlm
 
-        side_pos = 'short' if open_side == OrderSide.SELL else 'long'
+        open_side = OrderSide.SELL if open_side_num == -1 else OrderSide.BUY
+        side_pos = 'short' if open_side == OrderSide.SELL else 'long'  # utils paper 접근을 위한 long / short string.
         if show_detail:
             print("------------ op_idx1 : {} {} ------------".format(op_idx1, open_side))
 
@@ -1166,9 +1171,9 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
                     break
 
                 # ------ check side sync. ------ #
-                if open_side != side_arr2[open_i2]:
+                if side_arr1[open_i1] != side_arr2[open_i2]:
                     if show_detail:
-                        print("side check rejection, open_i2 {}, open_side {}".format(open_i2, side_arr2[open_i2]))
+                        print("side check rejection, open_i2 {}, side_arr2 {}".format(open_i2, side_arr2[open_i2]))
                     continue
 
                 # ------ assert, op_idx2 >= exec_j ------ #
@@ -1190,7 +1195,7 @@ def en_ex_pairing_v9_44(res_df, open_idx_list, open_info_list, ohlc_list, config
                         break
 
                 if show_detail:
-                    print("op_idx1, op_idx2 :", op_idx1, op_idx2, side_arr2[open_i2])
+                    print("op_idx1 : {} op_idx2 : {}".format(op_idx1, op_idx2))
 
             else:
                 op_idx2 = op_idx1
@@ -4121,6 +4126,41 @@ def check_limit_tp_exec(res_df, config, open_i, i, tp_j, len_df, fee, open_side,
         fee += config.trader_set.limit_fee
 
     return exit_done, tp, fee
+
+
+def check_signal_out_v4(res_df, config, open_i, i, len_df, fee, open_side, cross_on, exit_done, np_datas):
+
+    """
+    v3 -> v4
+        1. remove unnecessary conditions.
+    """
+    _, _, _, close, np_timeidx = np_datas
+    ex_p = None
+    selection_id = config.selection_id
+
+    # 1. timestamp
+    if config.out_set.tf_exit != "None":
+        if np_timeidx[i] % config.out_set.tf_exit == config.out_set.tf_exit - 1 and i != open_i:
+            exit_done = -1
+
+    # 2. cci
+    if config.out_set.cci_exit:
+        cci_ = res_df['cci_T20'].to_numpy()
+
+        if open_side == OrderSide.SELL:
+            if (cci_[i - 1] >= -100) & (cci_[i] < -100):
+            # if (cci_[i - 1] <= -100) & (cci_[i] > -100):
+                exit_done = -1
+        else:
+            if (cci_[i - 1] <= 100) & (cci_[i] > 100):
+            # if (cci_[i - 1] >= 100) & (cci_[i] < 100):
+                exit_done = -1
+
+    if exit_done:
+        ex_p = close[i]
+        fee += config.trader_set.market_fee
+
+    return exit_done, cross_on, ex_p, fee
 
 
 def check_signal_out_v3(res_df, config, open_i, i, len_df, fee, open_side, cross_on, exit_done, np_datas):

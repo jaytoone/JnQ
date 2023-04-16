@@ -8,11 +8,15 @@
       <excludeFolder url="file://$MODULE_DIR$/test_set" />
       <excludeFolder url="file://$MODULE_DIR$/trader_base" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
+      <excludeFolder url="file://$MODULE_DIR$/binance-futures-connector-python-main" />
+      <excludeFolder url="file://$MODULE_DIR$/olds" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.8 (python38_1)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="pybithumb" />
     <orderEntry type="module" module-name="JnQ_upbit" />
     <orderEntry type="module" module-name="kiwoom" />
+    <orderEntry type="module" module-name="Bank" />
+    <orderEntry type="module" module-name="JnQ_32bit" />
   </component>
 </module>

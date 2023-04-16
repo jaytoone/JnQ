@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import pickle
 from datetime import datetime
-from funcs.public.broker import consecutive_df, to_itvnum, itv_bn2ub, limit_by_itv
+from funcs.public.broker import consecutive_df, itv_to_number, itv_binance_to_upbit, limit_by_itv
 
 import pyupbit
 import time
@@ -48,7 +48,7 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
             endTime = int(endTime)
 
             df = pyupbit.get_ohlcv("{}".format(symbol),
-                                   interval=itv_bn2ub(interval),
+                                   interval=itv_binance_to_upbit(interval),
                                    count=limit,
                                    period=timesleep,
                                    to=datetime.fromtimestamp(endTime / 1000))
@@ -94,18 +94,18 @@ def concat_candlestick(symbol, interval, days, limit=1500, end_date=None, show_p
 
 if __name__ == '__main__':
 
-    days = 300
+    days = 1
     # days = 30
 
     end_date = '2021-07-01'
-    end_date = '2021-11-25'
-    # end_date = None
+    # end_date = '2020-11-25'
+    end_date = None
 
     # intervals = ['5m', '15m', '30m']
-    intervals = ['1m', '3m', '5m', '15m', '30m', '1h', '4h']
     # intervals = ['5m', '15m', '30m', '1h', '4h']
+    intervals = ['1m']
 
-    concat_path = '../database/database_ub'
+    concat_path = '../database/upbit'
 
     if end_date is None:
         end_date = str(datetime.now()).split(' ')[0]
@@ -115,10 +115,11 @@ if __name__ == '__main__':
 
     exist_files = os.listdir(save_dir)
 
-    with open('../ticker_list/upbit_20211207.pkl', 'rb') as f:
+    with open(r'D:\Projects\System_Trading\JnQ\olds\ticker_list\upbit_20230324.pkl', 'rb') as f:
         coin_list = pickle.load(f)
+    # coin_list.remove("KRW-ETH")
 
-    coin_list.remove("KRW-ETH")
+    coin_list = ["KRW-ETH"]
     print(coin_list)
     # quit()
 
@@ -137,9 +138,9 @@ if __name__ == '__main__':
             # print(save_name)
             # quit()
 
-            if save_name in exist_files:
-                print(save_name, 'exist !')
-                continue
+            # if save_name in exist_files:
+            #     print(save_name, 'exist !')
+            #     continue
 
             limit = limit_by_itv(interval)
 
@@ -148,13 +149,14 @@ if __name__ == '__main__':
                                                               end_date=end_date, limit=limit,
                                                               show_process=True, timesleep=0.05)
                 # print("str(concated_df.index[-1]) :", str(concated_df.index[-1]))
-                # quit()
+                print(concated_df)
+                quit()
 
             # try:
 
-                verified_df = consecutive_df(concated_df, to_itvnum(interval))
-
-                verified_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')
+                # verified_df = consecutive_df(concated_df, itv_to_number(interval))
+                #
+                # verified_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')
 
             except Exception as e:
                 print('Error in save to_feather :', e)

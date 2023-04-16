@@ -38,8 +38,8 @@ class BankModule(FuturesModule):
 
             # ------ 1. margin type => "cross or isolated" ------ #
             try:
-                self.change_margin_type(symbol=self.config.trader_set.symbol, marginType=FuturesMarginType.CROSSED)
-                # self.change_margin_type(symbol=self.config.trader_set.symbol, marginType=FuturesMarginType.ISOLATED)
+                # self.change_margin_type(symbol=self.config.trader_set.symbol, marginType=FuturesMarginType.CROSSED)
+                self.change_margin_type(symbol=self.config.trader_set.symbol, marginType=FuturesMarginType.ISOLATED)
             except Exception as e:
                 self.sys_log.error('error in change_margin_type : {}'.format(e))
             else:
@@ -500,9 +500,11 @@ class BankModule(FuturesModule):
         v1 -> v2
             1. add liquidation platform
             2. Todo, inversion 고려 아직임. (inversion 사용하게 되면 고려할 것.)
+            3. add term for sub_client
         """
 
         realtime_price = self.get_market_price_v2()
+        time.sleep(self.config.trader_set.realtime_term)
 
         # ------ 1. liquidation default check ------ #
         if open_side == OrderSide.SELL:

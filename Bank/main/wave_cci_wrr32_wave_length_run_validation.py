@@ -4,7 +4,7 @@
 1. list 형식의 utils & configuration 을 다루기 위해 importlib 형식을 도입함. (in Trader)
     a. public 이라는 공통된 paper 에 utils, configuration 기입하는 구조
 """
-from Bank.traders.trader_v1_4 import *
+from Shield.traders.trader_v1_4 import *
 
 # ------- input params ------- #
 paper_name = "wave_cci_wrr32_wave_length"

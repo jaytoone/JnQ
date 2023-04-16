@@ -1,6 +1,6 @@
 from funcs.binance.bank_module_v2 import BankModule
-from binance_f.model import *
 from funcs.public.broker import intmin_np
+from binance_f.model import *
 
 import numpy as np  # for np.nan, np.array() ...
 from datetime import datetime
@@ -23,6 +23,7 @@ class Trader:
         1. 단리 모드 도입
         2. liquidation platform 도입 (margin_type : CROSS 허용)
             a. check_hl_out_v2 (onbarclose) 도입
+        3. lvrg_liqd_set_v2 도입. (short / long static_lvrg 분리)
     """
 
     def __init__(self, paper_name, id_list, config_type, mode="Trader"):
@@ -490,7 +491,7 @@ class Trader:
                         fake_order = 1
                     ep = max(open_price, ep)
 
-                leverage, liqd_p = self.public.lvrg_liqd_set(res_df, self.config, open_side, ep, out, fee, self.limit_leverage)
+                leverage, liqd_p = self.public.lvrg_liqd_set_v2(res_df, self.config, open_side, ep, out, fee, self.limit_leverage)
 
                 # ------ get precision ------ #
                 price_precision, quantity_precision = bank_module.get_precision()
@@ -808,17 +809,22 @@ class Trader:
                         # ------ 3. bar_end phase - loop selection ------ #
                         if not self.config.trader_set.backtrade:
                             if datetime.now().timestamp() > datetime.timestamp(res_df.index[-1]):   # database timestamp 형태에 따라 다소 변경될 여지가 있음.
+                                #   a. return to outer loop - get df2's data
                                 if use_new_df2:
-                                    load_new_df2 = 1  # return to outer loop - get df2's data
+                                    load_new_df2 = 1
                                     break
+                                #   b. return to current loop
                                 else:
-                                    load_new_df3 = 1  # return to current loop
-                            # else:  # realtime_price 를 위해 realtime 으로 진행
-                            #     time.sleep(self.config.trader_set.realtime_term)
+                                    load_new_df3 = 1
+                            #       c. realtime_price 를 위해 realtime 으로 진행
+                            else:
+                                time.sleep(self.config.trader_set.realtime_term)
                         else:
+                            #   a. return to outer loop - get df2's data
                             if use_new_df2:
-                                load_new_df2 = 1  # return to outer loop - get df2's data
-                                break  # get next(gen.)
+                                load_new_df2 = 1
+                                #       i. get next(gen.)
+                                break
                             else:
                                 load_new_df3 = 1
 

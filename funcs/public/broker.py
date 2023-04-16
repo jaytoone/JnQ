@@ -248,6 +248,7 @@ def itv_to_number(interval):
 
     return int_minute
 
+
 def limit_by_itv(interval):
     if interval == "1m":
         limit = 1500
@@ -452,13 +453,13 @@ def to_htf(df, itv, offset):
     return h_res_df
 
 
-def calc_rows_and_days(itv_list, row_list, rec_row_list, min_days=1440):
+def calc_rows_and_days(itv_list, row_list, rec_row_list, rows_per_request=1440):
 
     itv_arr = np.array([itv_to_number(itv_) for itv_ in itv_list])
     row_arr = np.maximum(np.array(row_list), np.array(rec_row_list))
 
     max_rows = np.max(itv_arr * row_arr)
-    days = int(max_rows / min_days) + 1
+    days = int(max_rows / rows_per_request) + 1
 
     return max_rows, days
 
@@ -514,6 +515,44 @@ def calc_train_days(interval, use_rows):    # --> for ai
     days = int(use_rows / data_amt) + 1
 
     return days
+
+
+def get_hoga_unit(price):
+
+    if price < 2000:
+        return 1
+    elif price < 5000:
+        return 5
+    elif price < 20000:
+        return 10
+    elif price < 50000:
+        return 50
+    elif price < 200000:
+        return 100
+    elif price < 500000:
+        return 500
+    else:
+        return 1000
+
+
+def calc_with_hoga_unit(price, mode="top"):  # Stock 에서는 price_precision 이 무효함.
+
+    """
+    1. 체결을 고려해 올림을 기본으로 함 (+ 1 을 한 이유.)
+        a. 예로, 22580 -> 22600 이 매수가로 적당할 건데, 22500 은 매수되지 않을 가능성 있음.
+            i. 일단은, tp / ep / out 모두 + 1 hoga_unit 상태.
+    2. integer
+    """
+    if pd.isnull(price):
+        return np.nan
+    else:
+        hoga_unit = get_hoga_unit(price)
+        if mode == "top":
+            return int(((price // hoga_unit) + 1) * hoga_unit)
+        elif mode == "middle":
+            return int((price // hoga_unit) * hoga_unit)
+        else:
+            return int(((price // hoga_unit) - 1) * hoga_unit)
 
 
 def get_precision_by_price(price):

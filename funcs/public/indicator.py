@@ -232,10 +232,8 @@ def cci_v2(df, period=20, smooth=None, itv=None):
 def get_wave_length(res_df, valid_co_prime_idx, valid_cu_prime_idx, roll_co_idx_arr, roll_cu_idx_arr, wave_itv, wave_period, roll_hl_cnt=3):
     res_df['short_wave_length_{}{}'.format(wave_itv, wave_period)] = np.nan
     res_df['long_wave_length_{}{}'.format(wave_itv, wave_period)] = np.nan
-    res_df['short_wave_length_{}{}'.format(wave_itv, wave_period)].iloc[valid_cu_prime_idx[roll_hl_cnt - 1:]] = roll_cu_idx_arr[:,
-                                                                                                                -1] - roll_cu_idx_arr[:, -2]
-    res_df['long_wave_length_{}{}'.format(wave_itv, wave_period)].iloc[valid_co_prime_idx[roll_hl_cnt - 1:]] = roll_co_idx_arr[:,
-                                                                                                               -1] - roll_co_idx_arr[:, -2]
+    res_df['short_wave_length_{}{}'.format(wave_itv, wave_period)].iloc[valid_cu_prime_idx[roll_hl_cnt - 1:]] = roll_cu_idx_arr[:, -1] - roll_cu_idx_arr[:, -2]
+    res_df['long_wave_length_{}{}'.format(wave_itv, wave_period)].iloc[valid_co_prime_idx[roll_hl_cnt - 1:]] = roll_co_idx_arr[:, -1] - roll_co_idx_arr[:, -2]
     res_df['short_wave_length_fill_{}{}'.format(wave_itv, wave_period)] = res_df['short_wave_length_{}{}'.format(wave_itv, wave_period)].ffill()
     res_df['long_wave_length_fill_{}{}'.format(wave_itv, wave_period)] = res_df['long_wave_length_{}{}'.format(wave_itv, wave_period)].ffill()
 

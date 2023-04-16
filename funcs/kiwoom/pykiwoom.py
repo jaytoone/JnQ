@@ -4,7 +4,6 @@ import logging.config
 from PyQt5.QAxContainer import QAxWidget
 from PyQt5.QtCore import QEventLoop
 from PyQt5.QtWidgets import QApplication
-from funcs.kiwoom import parser  # 미 선언시 IDEP restart 됨.
 from pandas import DataFrame
 import time
 import numpy as np
@@ -13,14 +12,25 @@ from datetime import datetime
 
 
 class Kiwoom(QAxWidget):
+
+    """
+    customized phase
+        1. 내부에서 QApplication 선언.
+        2. self.msg -> receive_msg 에서 지속적으로 비워줌
+            a. 누적될 경우 램 사용량 커져서.
+        3. login 실패시, quit()
+    """
+
+    app = QApplication(sys.argv)
+
     def __init__(self):
         super().__init__()
 
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
 
-        # Loop 변수
-        #   1. 비동기 방식으로 동작되는 이벤트를 동기화(순서대로 동작) 시킬 때
-        #   2. loop 는 종료까지 관련 데이터를 수신하기 위해 선언함.
+        #   1. Loop 변수
+        #       a. 비동기 방식으로 동작되는 이벤트를 동기화(순서대로 동작) 시키기 위해 사용함.
+        #           i. loop 는 종료까지 관련 데이터를 수신함.
         self.login_loop = None
         self.request_loop = None
         self.order_loop = None
@@ -94,6 +104,9 @@ class Kiwoom(QAxWidget):
         """
         try:
             if return_code == ReturnCode.OP_ERR_NONE:
+                # 계좌비밀번호 설정창
+                # self.KOA_Functions("ShowAccountWindow", "")
+
                 if self.get_login_info("GetServerGubun", True):
                     self.msg += "실서버 연결 성공" + "\r\n\r\n"
                 else:
@@ -125,9 +138,11 @@ class Kiwoom(QAxWidget):
         if request_name == "서버구분":
 
             if msg.find('모의투자') < 0:
+                # 1. 실서버
                 self.server_gubun = 1
 
             else:
+                # 2. 모의서버
                 self.server_gubun = 0
 
             try:
@@ -137,7 +152,8 @@ class Kiwoom(QAxWidget):
             finally:
                 return
 
-        self.msg += request_name + ": " + msg + "\r\n\r\n"
+        # self.msg += request_name + ": " + msg + "\r\n\r\n"
+        self.msg = ""
 
     def on_receive_tr_data(self, screen_no, request_name, tr_code, record_name, inquiry, unused0, unused1, unused2,
                            unused3):
@@ -393,7 +409,9 @@ class Kiwoom(QAxWidget):
         print("return_code :", return_code)
 
         if return_code != ReturnCode.OP_ERR_NONE:
-            raise KiwoomProcessingError("comm_rq_data(): " + ReturnCode.CAUSE[return_code])
+            self.save_data()
+            quit()
+            # raise KiwoomProcessingError("comm_rq_data(): " + ReturnCode.CAUSE[return_code])
 
         # 루프 생성: receive_tr_data() 메서드에서 루프를 종료시킨다.
         self.request_loop = QEventLoop()

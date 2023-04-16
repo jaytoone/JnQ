@@ -1,23 +1,27 @@
-from pykiwoom import Kiwoom
+from funcs.kiwoom.pykiwoom import Kiwoom
+from funcs.kiwoom.pykiwoom import ReturnCode
 import pandas as pd
 import math
 import time
+import pickle
+import os
 
 
 class KiwoomModule(Kiwoom):
     def __init__(self, secret_key):
 
         super().__init__()
+
         self.comm_connect()
 
         if self.get_connect_state():
-            print("connected.")
+            self.sys_log.warning("connected.")
         else:
-            print("disconnected.")
+            self.sys_log.warning("disconnected.")
 
-        self.screen_number = "2000"  # Todo, 추후 module_phase 에 따라 다변화할 것.
+        self.screen_number = "2000"  # 추후 module_phase 에 따라 다변화할 것.
         self.account_number = self.get_login_info("ACCNO").split(";")[0]
-        self.password = secret_key  # Todo, temporarily direct declaration
+        self.password = secret_key  # 사용하게되면 역전파하기 고민되는 부분.
 
         self.data_opt10004 = None  # 주식호가요청
         self.data_opt10027 = None  # 전일대비등락상위요청
@@ -28,7 +32,7 @@ class KiwoomModule(Kiwoom):
 
         # self.OnReceiveRealData.connect(self.receive_real_data)
 
-    def concat_candlestick(self, days, **kwargs):
+    def concat_candlestick(self, cnts, api_term=0.3, **kwargs):
 
         """
         현재, 모든 거래소로부터 얻는 ohlcv dataframe 의 interval 기준은 T (1m) 으로 설정함.
@@ -46,8 +50,8 @@ class KiwoomModule(Kiwoom):
         ohlcv = self.data_opt10080
 
         # concat
-        for _ in range(days - 1):
-            time.sleep(0.3)
+        for _ in range(cnts - 1):
+            time.sleep(api_term)
             for key, value in kwargs.items():
                 self.set_input_value(key, value)
             self.comm_rq_data("주식분봉차트조회요청", "opt10080", 2, self.screen_number)
@@ -56,8 +60,8 @@ class KiwoomModule(Kiwoom):
         # 1. col_name 변경
         ohlcv.columns = ['index', 'open', 'high', 'low', 'close', 'volume']
 
-        # 2. index 수정 및 data type integer 사용
-        ohlcv = ohlcv.set_index('index').astype(int).abs()
+        # 2. index 수정 및 data type float 사용 : ta-lib 연산을 위해서. (주문시에는 calc_with_hoga_unit 적용하기 때문에 무관함.)
+        ohlcv = ohlcv.set_index('index').astype(float).abs()
 
         # 3. 시계열 순서로 데이터 정렬 및 index datetime type 으로 변환.
         if ohlcv.index.dtype != str:
@@ -156,6 +160,7 @@ class KiwoomModule(Kiwoom):
 
         return self.data_opt10075
 
+    # deprecated by get_order_info
     def get_market_price(self, **kwargs):
 
         for key, value in kwargs.items():
@@ -178,11 +183,14 @@ class KiwoomModule(Kiwoom):
 
         """
         1. 체결을 고려해 올림을 기본으로 함 (+ 1 을 한 이유.)
+            a. 예로, 22580 -> 22600 이 매수가로 적당할 건데, 22500 은 매수되지 않을 가능성 있음.
+                i. 일단은, tp / ep / out 모두 + 1 hoga_unit 상태.
+        2. integer
         """
 
         hoga_unit = self.get_hoga_unit(price)
 
-        return ((price // hoga_unit) + 1) * hoga_unit
+        return int(((price // hoga_unit) + 1) * hoga_unit)
 
     def tr_data_to_dataframe(self, tr_code, request_name, rows, outputs):
 
@@ -195,6 +203,36 @@ class KiwoomModule(Kiwoom):
             data_list.append(row_data)
 
         return pd.DataFrame(data=data_list, columns=outputs)
+
+    def event_connect(self, return_code):
+
+        try:
+            if return_code == ReturnCode.OP_ERR_NONE:
+                # 계좌비밀번호 설정창
+                # self.KOA_Functions("ShowAccountWindow", "")
+
+                if self.get_login_info("GetServerGubun", True):
+                    self.log.warning("실서버 연결 성공")
+                else:
+                    self.log.warning("모의투자서버 연결 성공")
+            else:
+                # a. 통신 종료에 대해서, 프로그램 종료 처리함
+                #       i. 프로그램 재시작 환경이 준비되면, 장중 시간에 대해서는 재시작할 것.
+                #       ii. 프로그램 종료시 data 저장.
+                #               1. bank_module 의 instance 가 kiwoom_module 로 역전파되서 self.log_dir_name 호출이 가능해짐.
+                self.save_data()
+                quit()          # it works.
+                # sys.exit(1)   # it doesn't work.
+
+        except Exception as error:
+            self.log.error('eventConnect {}'.format(error))
+        finally:
+            # commConnect() 메서드에 의해 생성된 루프를 종료시킨다.
+            # 로그인 후, 통신이 끊길 경우를 대비해서 예외처리함.
+            try:
+                self.login_loop.exit()
+            except AttributeError:
+                pass
 
     def on_receive_tr_data(self, screen_no, request_name, tr_code, record_name, inquiry, unused0, unused1, unused2,
                            unused3):
@@ -210,11 +248,12 @@ class KiwoomModule(Kiwoom):
         :param inquiry: string - 조회('0': 남은 데이터 없음, '2': 남은 데이터 있음)
         """
 
-        print("on_receive_tr_data 실행: screen_no: %s, request_name: %s, tr_code: %s, record_name: %s, inquiry: %s" % (
+        self.sys_log.warning("on_receive_tr_data 실행: screen_no: %s, request_name: %s, tr_code: %s, record_name: %s, inquiry: %s" % (
             screen_no, request_name, tr_code, record_name, inquiry))
 
         # 주문번호와 주문루프
         self.order_no = self.comm_get_data(tr_code, "", request_name, 0, "주문번호")
+        self.sys_log.warning("self.order_no : {}".format(self.order_no))
 
         try:
             self.order_loop.exit()
@@ -269,7 +308,7 @@ class KiwoomModule(Kiwoom):
             # 1. 미체결요청 tr_code 로 체결에 관한 데이터도 충분히 조회가 가능함
             #     a. 특정 주문번호에 대한 데이터 조회시, 종목 조회 후 주문번호 키매칭.
             # 2. 현재가는 hl_out 을 위해서 사용할 것
-            outputs = ["종목코드", "종목명", "주문번호", "주문상태", "주문수량", "미체결수량", "체결가", "체결량", "현재가"]
+            outputs = ["종목코드", "종목명", "주문번호", "주문구분", "주문상태", "주문수량", "미체결수량", "체결가", "체결량", "현재가"]
             self.data_opt10075 = self.tr_data_to_dataframe(tr_code, request_name, rows, outputs)
 
         try:

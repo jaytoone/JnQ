@@ -236,15 +236,15 @@ if __name__ == '__main__':
 
     # print(futures_module.get_order_info(8389765574377187710))
     # float(order_info.origQty) - float(order_info.executedQty))
-    # order_info_ = futures_module.get_order_info(8389765579886005149)
-    # print(order_info_.origQty, order_info_.executedQty)
+    order_info_ = futures_module.get_order_info(8389765584857223813) # 8389765584857223813 8389765584857223351
+    print(order_info_.origQty, order_info_.executedQty)
     # print(futures_module.get_exec_price(order_info_))
     # PrintMix.print_data(order_info_)
-    import numpy as np
-    # print(np.random.randint(1, 10))
-    while 1:
-        futures_module.change_initial_leverage(symbol=t_symbol, leverage=np.random.randint(1, 10))
-        time.sleep(0.1)
+    # import numpy as np
+    # # print(np.random.randint(1, 10))
+    # while 1:
+    #     futures_module.change_initial_leverage(symbol=t_symbol, leverage=np.random.randint(1, 10))
+    #     time.sleep(0.1)
     # for data in futures_module.get_exchange_information().symbols:
     #     print(dir(data)) #.symbol)
 

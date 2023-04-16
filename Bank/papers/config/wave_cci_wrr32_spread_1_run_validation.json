@@ -4,7 +4,7 @@
     "backtrade": 0,
     "back_data_path": "D:\\Projects\\System_Trading\\JnQ\\database\\binance\\cum\\2023-01-12\\2023-01-12 ETHUSDT_1m.ftr",
     "start_datetime": "2022-10-05 00:00:59.999",
-    "run": 1,
+    "run": 0,
     "df_log": 0,
     "show_detail": 0,
     "latest_index": -1,

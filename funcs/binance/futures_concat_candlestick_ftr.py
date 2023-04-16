@@ -51,15 +51,22 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
             endTime -= a_day
 
         try:
-            # ------ limit < max_limit, startTime != None 일 경우, last_index 이상하게 (-> 어떻게..?) 나옴 ------ #
+            # a. limit < max_limit, startTime != None 일 경우, last_index 이상하게 (-> 어떻게..?) 나옴
             if limit != candle_limit:
-                startTime = None  # 변수명 get_candlestick_data 함수 param 이랑 일치시키기 위해 startTime.
+                startTime = None  # 변수명 get_candlestick_data 함수 param 이랑 일치시키기 위해 startTime 사용.
             else:
                 startTime = int(startTime_)
             df = request_client.get_candlestick_data(symbol=symbol,
                                                      interval=interval,
-                                                     startTime=startTime, endTime=int(endTime), limit=limit)
-            # ------ validation ------ #
+                                                     startTime=startTime,
+                                                     endTime=int(endTime),
+                                                     limit=limit)
+
+            # b. validation
+            if len(df) == 0:
+                # quit()
+                break
+
             if show_process:
                 print(df.index[0], end=" --> ")
                 print(df.index[-1])
@@ -75,13 +82,6 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
         except Exception as e:
             print('error in get_candlestick_data :', e)
-
-            if len(df) == 0:
-                # quit()
-                break
-
-    # end_date = str(datetime.fromtimestamp(endTime / 1000)).split(' ')[0]
-    # print(len(sum_df[~sum_df.index.duplicated(keep='first')]))
 
     # keep = 'last' 로 해야 중복기준 최신 df 를 넣는건데, 왜 first 로 해놓은거지
     return sum_df[~sum_df.index.duplicated(keep='last')], end_date

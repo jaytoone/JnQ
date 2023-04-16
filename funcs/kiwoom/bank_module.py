@@ -1,6 +1,6 @@
-from kiwoom_module import KiwoomModule
+from funcs.kiwoom.kiwoom_module import KiwoomModule
 from funcs.public.broker import calc_rows_and_days
-from funcs.kiwoom.constant import *
+from funcs.public.constant import *
 
 import numpy as np
 import pandas as pd
@@ -13,11 +13,10 @@ import logging.config
 
 class BankModule(KiwoomModule):
 
-    def __init__(self, config, login=True):
+    def __init__(self, config):
 
-        if login:
-            secret_key = self.load_key(r"D:\Projects\System_Trading\JnQ\Bank\api_keys\kiwoom_5189140110.pkl")
-            super().__init__(secret_key)
+        secret_key = self.load_key(r"D:\Projects\System_Trading\JnQ_32bit\Bank\api_keys\kiwoom_5189140110.pkl")
+        super().__init__(secret_key)
 
         # 0. config, sys_log 는 BankModule 에서만 사용됨.
         self.config = config
@@ -28,10 +27,14 @@ class BankModule(KiwoomModule):
         with open(key_abspath, 'rb') as f:
             return pickle.load(f)
 
-    def get_new_df(self, code, calc_rows=True, mode="OPEN"):
+    def get_new_df_v2(self, code, api_term=0.3, calc_rows=True, mode="OPEN"):
 
         """
+        v1 -> v2
+        Bank() 환경에 맞추어 return value 1개로 설정.
         1. remove use_rows : 사용하지 않아서.
+        2. last row validation
+            a. 검수를 위해 지금은 continue 풀어놓음.
         """
 
         while 1:
@@ -43,13 +46,14 @@ class BankModule(KiwoomModule):
                     _, days = calc_rows_and_days(itv_list, row_list, rec_row_list)
                 else:
                     _, days = row_list[0], 1  # load_new_df3 사용 의도 = close, time logging
-                new_df_, _ = self.concat_candlestick(days, 종목코드=code, 틱범위="1", 수정주가구분="0")
+                new_df_ = self.concat_candlestick(days, api_term, 종목코드=code, 틱범위="1", 수정주가구분="0")
 
                 # new_df_ validity check (Stock 의 경우 59.999 초를 더해주어야함, timeindex 의 second = 0)
                 #    1. datetime timestamp() 의 기준은 second 임.
                 if datetime.timestamp(new_df_.index[-1]) + 59.999 < datetime.now().timestamp():
-                    time.sleep(self.config.trader_set.realtime_term)
-                    continue
+                    self.sys_log.warning("dataframe last row validation warning, last index : {}".format(str(new_df_.index[-1])))
+                    # time.sleep(self.config.trader_set.api_term)
+                    # continue
                 if mode == "OPEN":
                     self.sys_log.info("complete new_df_'s time : {}".format(datetime.now()))
 
@@ -59,16 +63,21 @@ class BankModule(KiwoomModule):
                 time.sleep(self.config.trader_set.api_term)
                 continue
             else:
-                return new_df_, 0  # 0 for load_new_df var.
+                return new_df_  # 0 for load_new_df var.
 
-    def get_streamer(self):
+    def get_streamer(self, code):
+
+        """
+        back_data_path 에 code 로 입력할 것
+        """
 
         row_list = literal_eval(self.config.trader_set.row_list)
         itv_list = literal_eval(self.config.trader_set.itv_list)
         rec_row_list = literal_eval(self.config.trader_set.rec_row_list)
         use_rows, days = calc_rows_and_days(itv_list, row_list, rec_row_list)
 
-        back_df = pd.read_pickle(self.config.trader_set.back_data_path)
+        # back_df = pd.read_pickle(self.config.trader_set.back_data_path.replace("code", code))
+        back_df = pd.read_pickle(self.config.trader_set.back_data_path.replace("code", code)).astype(float)  # int 로 저장해서, 임시적으로 변경함.
 
         if self.config.trader_set.start_datetime != "None":
             target_datetime = pd.to_datetime(self.config.trader_set.start_datetime)
@@ -85,7 +94,12 @@ class BankModule(KiwoomModule):
         for i in range(start_idx + 1, len(back_df)):  # +1 for i inclusion
             yield back_df.iloc[i - use_rows:i]
 
-    def get_new_df_onstream(self, streamer):
+    def get_new_df_onstream_v2(self, streamer):
+        """
+        v1 -> v2
+            1. return value 1개로 설정.
+        """
+
         try:
             res_df = next(streamer)  # Todo, 무결성 검증 미진행
         except Exception as e:
@@ -93,7 +107,7 @@ class BankModule(KiwoomModule):
             quit()  # error 처리할 필요없이, backtrader 프로그램 종료
             # return None, None   # output len 유지
         else:
-            return res_df, 0
+            return res_df
 
     def get_open_side_v2(self, res_df, papers, np_timeidx, open_num=1):
 
@@ -105,8 +119,8 @@ class BankModule(KiwoomModule):
 
             # ------ 1. point ------ #
             #  여기 왜 latest_index 사용했는지 모르겠음 -> bar_close point 를 고려해 mr_res 와의 index 분리
-            #   vecto. 하는 이상, point x ep_loc 의 index 는 sync. 되어야함 => complete_index 사용 (solved)
-            #  Todo, 각 phase 분리한 이유 = sys_logging (solved)
+            #  vecto. 하는 이상, point x ep_loc 의 index 는 sync. 되어야함 => complete_index 사용 (solved)
+            #  각 phase 분리한 이유 = sys_logging (solved)
             if res_df['short_open{}_{}'.format(open_num, cfg_.selection_id)].to_numpy()[cfg_.trader_set.complete_index]:
                 self.sys_log.warning("[ short ] true_point selection_id : {}".format(cfg_.selection_id))
 
@@ -118,7 +132,7 @@ class BankModule(KiwoomModule):
                         mr_res, zone_arr = public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
                     else:
                         mr_res, zone_arr = public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.SELL)
-                    self.sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
+                    self.sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}".format(mr_res[cfg_.trader_set.complete_index]))
 
                     # ------ assign ------ #
                     if mr_res[cfg_.trader_set.complete_index]:
@@ -142,7 +156,7 @@ class BankModule(KiwoomModule):
                         mr_res, zone_arr = public.ep_loc_p1_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
                     else:
                         mr_res, zone_arr = public.ep_loc_p2_v3(res_df, cfg_, np_timeidx, show_detail=True, ep_loc_side=OrderSide.BUY)
-                    self.sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}\n".format(mr_res[cfg_.trader_set.complete_index]))
+                    self.sys_log.warning("mr_res[cfg_.trader_set.complete_index] : {}".format(mr_res[cfg_.trader_set.complete_index]))
 
                     # ------ assign ------ #
                     if mr_res[cfg_.trader_set.complete_index]:
@@ -155,24 +169,16 @@ class BankModule(KiwoomModule):
 
         return open_side, utils, config
 
-    def get_tpepout(self, open_side, res_df_open, res_df):
+    def get_tpepout(self, open_side, res_df_open, res_df, mode="ep1"):
         self.sys_log.info('open_side : {}'.format(open_side))
         selection_id = self.config.selection_id
 
         tp_j = self.config.trader_set.complete_index
         ep_j = self.config.trader_set.complete_index
-        # Todo, complete_index + 1 이 아니라, 해당 index 롤 res_df_open 이 아닌 -> res_df 에 입력하면 되는거아닌가
+        #  complete_index + 1 이 아니라, 해당 index 롤 res_df_open 이 아닌 -> res_df 에 입력하면 되는거아닌가
         #  -> use_point2 여부에 따라 다르게 작성할 필요가 없어짐 (solved)
         out_j = self.config.trader_set.complete_index
 
-        # if selection_id in ['v5_2']:
-        # if self.config.ep_set.point2.use_point2:
-        #     # out_j = self.config.trader_set.complete_index + 1  # Todo, why + 1 ?
-        #     out_j = self.config.trader_set.complete_index
-        # else:
-        #     out_j = self.config.trader_set.complete_index
-
-        #       Todo        #
         #        b. --> res_df 사용시, dynamic (pre, whole) 을 허용하겠다는 의미
         #           i. ep_loc_point2 미사용시, res_df = res_df_open
         if open_side == OrderSide.BUY:
@@ -180,20 +186,20 @@ class BankModule(KiwoomModule):
 
             if self.config.pos_set.long_inversion:
                 open_side = OrderSide.SELL  # side change (inversion)
-                out = res_df['long_tp_{}'.format(selection_id)].to_numpy()[out_j]
+                out = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()[out_j]
                 tp = res_df_open['long_out_{}'.format(selection_id)].to_numpy()[tp_j]
             else:
-                out = res_df['long_out_{}'.format(selection_id)].to_numpy()[out_j]
+                out = res_df_open['long_out_{}'.format(selection_id)].to_numpy()[out_j]
                 tp = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()[tp_j]
         else:
             ep = res_df_open['short_ep1_{}'.format(selection_id)].to_numpy()[ep_j]
 
             if self.config.pos_set.short_inversion:
                 open_side = OrderSide.BUY
-                out = res_df['short_tp_{}'.format(selection_id)].to_numpy()[out_j]
+                out = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()[out_j]
                 tp = res_df_open['short_out_{}'.format(selection_id)].to_numpy()[tp_j]
             else:
-                out = res_df['short_out_{}'.format(selection_id)].to_numpy()[out_j]
+                out = res_df_open['short_out_{}'.format(selection_id)].to_numpy()[out_j]
                 tp = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()[tp_j]
 
         return tp, ep, out, open_side
@@ -218,6 +224,7 @@ class BankModule(KiwoomModule):
         = expire_tp
             1. check_ei_k_onbarclose_v2 에서는 expire_tick 기준으로 res_df_open, res_df 둘다 사용함.
                 a. 형태 유지를 위해 이곳에서도 res_df input 으로 유지함.
+            2. remove realtime term -> 외부에서 API limit 을 위한 term 관리를 진행함.
         """
 
         ep_out = 0
@@ -248,7 +255,6 @@ class BankModule(KiwoomModule):
                 long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(selection_id)].to_numpy()
                 if realtime_price >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
                     ep_out = 1
-            time.sleep(self.config.trader_set.realtime_term)  # <-- for realtime price function
 
         if ep_out:
             self.sys_log.warning("cancel open_order by ei_k\n")
@@ -509,8 +515,8 @@ class BankModule(KiwoomModule):
         # sys_log.info("temp_qty : {}".format(temp_qty))
 
         # ------ trade_log_dict ------ #
-        for k_ts, tps in tp_exec_dict.items():  # tp_exec_dict 의 사용 의미는 ideal / real_pr 계산인건가
-            trade_log_dict[k_ts] = [tps, open_side, "exit"]  # trade_log_dict 사용하는 phase, list 로 변한 tps 주의
+        for k_ts, tps in tp_exec_dict.items():
+            trade_log_dict["exit"] = [k_ts, open_side, tps]
 
         return ideal_profit, real_profit, trade_log_dict
 
@@ -562,15 +568,65 @@ class BankModule(KiwoomModule):
 
         return market_close_on, log_out
 
-    def limit_order(self, order_info=None, **kwargs):
+    def limit_order_v2(self, order_info, order_data=None, **kwargs):
 
-        open_retry_cnt = 0
-        error_code = 0
-
-        if order_info is None:
+        if order_data is None:
             over_balance = None
         else:
-            over_balance, leverage = order_info
+            over_balance, leverage = order_data
+
+        order_side = kwargs['order_side']
+        if order_side == "BUY":
+            order_side_number = 1
+            order_state = "+매수"
+        else:
+            order_side_number = 2
+            order_state = "-매도"
+
+        while 1:
+            try:
+                self.send_order(kwargs['request_name'], self.screen_number, self.account_number,
+                                order_side_number, kwargs['code'], kwargs['qty'], kwargs['price'], "00", "")
+
+            except Exception as e:
+                self.sys_log.error('error in limit_order : {}'.format(e))
+
+                # 1. error 처리 (Todo)
+                #       a. unknown error : return (retry 가 의미 없을테니까)
+                # return "", None, "unknown"  # 출력 형태 유지.
+                #       b. known error : retry
+                #               i. quantity less than zero
+                #               ii. Precision is over the maximum defined for this asset
+                #               iii. price precision
+                #               iv. Margin is insufficient
+                time.sleep(self.config.trader_set.order_term)
+                continue
+
+            else:
+                if self.order_no == "":
+                    self.sys_log.error("limit_order : self.order_no == "", maybe quantity for this order already set.")
+                    order_no_list = order_info.index[(order_info.종목코드 == kwargs['code']) & (order_info.주문상태 == "접수") & (order_info.주문상태 == order_state)].tolist()
+                    #   a. 주문상태 == "접수" => 미체결 상태의 주문만 cancel 진행함.
+                    if len(order_no_list) != 0:
+                        try:
+                            self.cancel_order_list(kwargs['code'], kwargs['order_side'], order_no_list, order_info)
+                        except Exception as e:
+                            self.sys_log.error('error in cancel_order_list (limit_order phase) : {}'.format(e))
+                        time.sleep(self.config.trader_set.order_term)
+                        continue
+                    #   b. 주문 단가가 상한선을 초과하는 경우.주문 가능해질때까지 keep.
+                    else:
+                        return self.order_no, over_balance, 1  # , limit 은 order_no = "" 허용하지 않음.
+                else:
+                    self.sys_log.info('limit_order enlisted. : {}'.format(datetime.now()))
+                    return self.order_no, over_balance, 0  # , error_code
+
+    def limit_order(self, order_data=None, **kwargs):
+
+        if order_data is None:
+            over_balance = None
+        else:
+            over_balance, leverage = order_data
 
         order_side = kwargs['order_side']
         if order_side == "BUY":
@@ -580,62 +636,97 @@ class BankModule(KiwoomModule):
 
         while 1:
             try:
-                self.send_order("LIMIT", self.screen_number, self.account_number,
+                self.send_order(kwargs['request_name'], self.screen_number, self.account_number,
                                 order_side_number, kwargs['code'], kwargs['qty'], kwargs['price'], "00", "")
 
             except Exception as e:
                 self.sys_log.error('error in limit_order : {}'.format(e))
 
-                # Todo, error 처리
-                return None, None, "unknown"  # 출력 형태 유지.
+                # 1. error 처리 (Todo)
+                #       a. unknown error : return (retry 가 의미 없을테니까)
+                # return "", None, "unknown"  # 출력 형태 유지.
+                #       b. known error : retry
+                #               i. quantity less than zero
+                #               ii. Precision is over the maximum defined for this asset
+                #               iii. price precision
+                #               iv. Margin is insufficient
+                time.sleep(self.config.trader_set.order_term)
+                continue
 
             else:
-                self.sys_log.info('limit_order enlisted. : {}'.format(datetime.now()))
-                return self.order_no, over_balance, 0  # , error_code
+                if self.order_no == "":
+                    self.sys_log.error("limit_order : self.order_no == "", maybe quantity for this order already set.")
+                    # time.sleep(self.config.trader_set.order_term)
+                    # continue
+                    return self.order_no, over_balance, 1  # , limit 은 order_no = "" 허용하지 않음.
+                else:
+                    self.sys_log.info('limit_order enlisted. : {}'.format(datetime.now()))
+                    return self.order_no, over_balance, 0  # , error_code
 
-    def partial_limit_order_v4(self, code, partial_tps, partial_qtys, close_side, open_exec_qty, quantity_precision):
+    def partial_limit_order_v4(self, code, order_no_list, order_info, partial_tps, partial_qtys, close_side, open_exec_qty, quantity_precision):
 
         """
-        add. error_code
+        v3 -> v4
+            1. add. error_code
+            2. use limit_order_v2
+            3. order_no append -> indexing for keeping invalid order.
         """
-
         partial_tp_idx = 0
         partial_length = len(partial_tps)
-        order_no_list = []
         error_code = 0
         while 1:
             if partial_tp_idx >= partial_length:
                 break
 
+            #       x. valid partial_order rejection.
+            if order_no_list[partial_tp_idx] != "":
+                partial_tp_idx += 1
+                continue
+
             partial_tp = partial_tps[partial_tp_idx]
+            #       y. 맨 마지막 잔여 partial_qty => [:-1] indexing 을 사용해 계산함.
             if partial_tp_idx == partial_length - 1:
                 partial_qty = self.calc_with_precision(open_exec_qty - np.sum(partial_qtys[:-1]), quantity_precision)
             else:
                 partial_qty = partial_qtys[partial_tp_idx]
 
-            if partial_qty == 0:  # qty should not be zero
+            #       0. quantity validation
+            #           a. qty should not be zero
+            if partial_qty == 0:
                 partial_tp_idx += 1
             else:
-                # ------ 1. tp_order ------ #
-                order_no, _, error_code = self.limit_order(code=code, order_side=close_side, qty=partial_qty, price=partial_tp)
-                order_no_list.append(order_no)
+                #   1. tp_order
+                order_no, _, error_code = self.limit_order_v2(order_info, request_name="PARTIAL_LIMIT_CLOSE", code=code, order_side=close_side, qty=partial_qty, price=partial_tp)
 
-                # ------ 2. check succession ------ #
-                if not error_code:  # if succeeded, error_code = 0
+                #       a. if limit_order succeed, error_code = 0
+                if not error_code:
+                    order_no_list[partial_tp_idx] = order_no
+                    # order_no_list.append(order_no)
                     partial_tp_idx += 1
 
-                # ------ 3. errors ------ #
-                # ------ -1111 : quantity precision error ------ #
-                # ------ -4003 : quantity less than zero ------ #
-                # ------ -2019 (Margin is insufficient) or something else ------ #
-                # Todo, 1. 추후 error_code 파악 및 대응방안 수립.
+                #       b. errors (Todo)
                 else:
+                    #           i. unknown error : retry
+                    #   # <-- 추후 에러처리를 위해 return 시킴
+                    # if error_code == "unknown":
+                    #     return order_no_list, error_code
+                    # #           ii. known error : retry
+                    # #                   1. -1111 : quantity precision error
+                    # #                   2. -4003 : quantity less than zero
+                    # #                   3. -2019 (Margin is insufficient) or something else
+                    # else:
+                    # time.sleep(self.config.trader_set.order_term)
                     # continue
-                    return order_no_list, error_code  # <-- 추후 에러처리를 위해 return 시킴
+                    return order_no_list, error_code
 
         return order_no_list, error_code
 
     def cancel_order(self, **kwargs):
+
+        """
+        취소에 사용되는 qty, price = 1, 0 로 설정해도 무방함.
+        """
+        price = 0
 
         order_side = kwargs['order_side']
         if order_side == "BUY":
@@ -646,45 +737,189 @@ class BankModule(KiwoomModule):
         while 1:
             try:
                 # 2. code essential
-                self.send_order("", self.screen_number, self.account_number,
-                                order_side_number, kwargs['code'], 1, 0, "", kwargs["origin_order_no"])
+                self.send_order("CANCEL", self.screen_number, self.account_number,
+                                order_side_number, kwargs['code'], kwargs['qty'], price, "", kwargs["origin_order_no"])
 
             except Exception as e:
                 self.sys_log.error('error in cancel_order : {}'.format(e))
-
-                # Todo, error 처리
-                return
+                time.sleep(self.config.trader_set.order_term)
+                continue
 
             else:
-                self.sys_log.info('{} cancel_order executed.'.format(kwargs["origin_order_no"]))
-                return self.order_no
+                """
+                3. cancel_order 의 경우, 미체결 잔량이 없는 상황에서 "" 을 return 하기 때문에 send_order 자체의 error 가 아닌 이상, pass 함.
+                    a. 공백이라는 log 만 남기도록 함.
+                """
+                if self.order_no == "":
+                    self.sys_log.error("cancel_order : self.order_no == "", maybe origin_order_no already executed.")
+                #     time.sleep(self.config.trader_set.order_term)
+                #     continue
+                else:
+                    self.sys_log.info('{} cancel_order executed.'.format(kwargs["origin_order_no"]))
+                # 사실상, return value 를 사용하고 있지 않음.
+                return  # self.order_no
 
-    def cancel_order_list(self, code, order_side, order_no_list, order_type=OrderType.LIMIT):
+    # def cancel_order_list_v2(self, code, order_side, order_info_valid, order_type=OrderType.LIMIT):
+    #
+    #     """
+    #     1. order_info 를 수신해 loc 접근으로만 return data 를 추출한다.
+    #     2. open_exec_loop 내부에서 [order_no] 를 사용해 order_no_list 를 유지하는 이유는 partial_tps cancel 에도 사용되기 때문.
+    #     """
+    #
+    #     #     1. order_no_list 의 "" (공백) 에 대한 무결성 검증해야함. (loc 접근할때 안되니까)
+    #     order_no_arr = np.array(order_no_list)
+    #     order_no_arr = order_no_arr[np.where(order_no_arr != "")[0]]
+    #
+    #     # ------------ cancel limit_tp orders ------------ #
+    #     #      1. post_order_res_list 를 받아서 해당 order 만 취소
+    #     #          a. None 포함된 경우는 ? - None 처리 됨
+    #     #          b. 이미 완료된 경우 - cancel_order 가능한가 ? nope
+    #     if order_type == OrderType.LIMIT:
+    #         [self.cancel_order(code=code, order_side=order_side, origin_order_no=order_no)
+    #          for order_no in order_info_valid.index]
+    #
+    #     # -------- 취소한 order 에 대해 체결가, 체결량 조회 -------- #
+    #     if order_info is None:
+    #         order_info = self.get_order_info(계좌번호=self.account_number, 전체종목구분=0, 매매구분="0", 종목코드="", 체결구분="0")
+    #     order_info_valid = order_info.loc[order_no_arr]
+    #
+    #     #     1. get execPrice_list
+    #     exec_price_list = order_info_valid['체결가'].tolist()  # 기존의 list 형태를 유지하기 위해 tolist() 사용함.
+    #     #     2. get np.sum(executedQty_list)
+    #     exec_qty_list = order_info_valid['체결량'].tolist()
+    #     #     3. get origin_qty
+    #     orig_qty_list = order_info_valid['주문수량'].tolist()
+    #
+    #     return exec_price_list, np.sum(exec_qty_list), np.sum(orig_qty_list)
 
-        #     1. order_no_list 의 "" (공백) 에 대한 무결성 검증해야함. (loc 접근할때 안되니까)
-        order_no_arr = np.array(order_no_list)
-        order_no_arr = order_no_arr[np.where(order_no_arr != "")[0]]
+    def cancel_order_list(self, code, order_side, order_no_list_valid, order_info=None, order_type=OrderType.LIMIT):
 
-        # ------------ cancel limit_tp orders ------------ #
-        #      1. post_order_res_list 를 받아서 해당 order 만 취소
+        """
+        0. market_close 에서
+        1. order_info 를 수신해 loc 접근으로만 return data 를 추출한다.
+        2. open_exec_loop 내부에서 [order_no] 를 사용해 order_no_list_valid 를 유지하는 이유는 partial_tps cancel 에도 사용되기 때문.
+            a. 또한 market_close 의 마지막 phase 에서는 order_info 없이 order_no 로만 작업하기 때문에 필요함.
+        """
+
+        # 1. order_no_list_valid 의 "" (공백) 에 대한 무결성 검증해야함. (loc 접근할때 안되니까)
+        # order_no_arr = np.array(order_no_list_valid)
+        # order_no_arr = (order_no_arr[np.where(order_no_arr != "")[0]])
+
+        # 2. post_order_res_list 를 받아서 해당 order 만 취소
         #          a. None 포함된 경우는 ? - None 처리 됨
         #          b. 이미 완료된 경우 - cancel_order 가능한가 ? nope
+        #                   i. list comprehension 작동 안함.
         if order_type == OrderType.LIMIT:
-            [self.cancel_order(code=code, order_side=order_side, origin_order_no=order_no)
-             for order_no in order_no_arr]
+            for order_no in order_no_list_valid:
+                order_no_str = str(order_no)
+                qty = order_info.loc[order_no_str]["미체결수량"]
+                self.cancel_order(code=code, order_side=order_side, qty=int(qty), origin_order_no=order_no_str)
+                time.sleep(self.config.trader_set.order_term)
 
-        # -------- 취소한 order 에 대해 체결가, 체결량 조회 -------- #
-        order_info = self.get_order_info(계좌번호=self.account_number, 전체종목구분=0, 매매구분="0", 종목코드="", 체결구분="0")
-        order_info_valid = order_info.loc[order_no_arr]
+        # 3. 취소한 market_close_order 에 대한 체결가, 체결량 조회
+        #       a. add term for API limit.
+        if order_info is None:
+            time.sleep(self.config.trader_set.api_term)
+            order_info = self.get_order_info(계좌번호=self.account_number, 전체종목구분=0, 매매구분="0", 종목코드="", 체결구분="0")
 
-        #     1. get execPrice_list
+        # 4. row 가 1 일 경우, type = series => .loc 으로 조회되지 않는점. : key error
+        # if type(order_info) == pd.core.series.Series:
+        #     order_info_valid = order_info        #
+        #     #           i. series 의 경우 value 가 출력되기 때문에 형태 유지를 위해 list 안에 넣어줌.
+        #     exec_price_list = [order_info_valid['체결가']]
+        # else:
+
+        order_info_valid = order_info.loc[order_no_list_valid]
+
+        #     a. get execPrice_list
         exec_price_list = order_info_valid['체결가'].tolist()  # 기존의 list 형태를 유지하기 위해 tolist() 사용함.
-        #     2. get np.sum(executedQty_list)
-        exec_qty_list = order_info_valid['체결량'].tolist()
-        #     3. get origin_qty
-        orig_qty_list = order_info_valid['주문수량'].tolist()
+        #     b. get np.sum(executedQty_list)
+        exec_qty_list = order_info_valid['체결량']  # .tolist()
+        #     c. get origin_qty : market_close 에서 체결 확인을 위해 origin_qty 를 return 함.
+        orig_qty_list = order_info_valid['주문수량']  # .tolist()
 
         return exec_price_list, np.sum(exec_qty_list), np.sum(orig_qty_list)
+
+    def market_close_order_v3(self, order_no_list_valid, order_info, open_exec_qty, **kwargs):
+
+        """
+        v2 -> v3
+            1. cancel_order_list_v2 적용으로 인한 order_info parameter 추가
+            2. close_remain_quantity 을 "미체결수량" 으로부터 직접 구함
+                a. remove open_exec_qty
+            3. add open_exec_qty for invalid order_no_list.
+        """
+
+        while 1:
+            # 0. cancel partial_limit_tp order list.
+            if len(order_no_list_valid) != 0:
+                self.cancel_order_list(kwargs['code'], kwargs['order_side'], order_no_list_valid, order_info)
+                #       a. 일반적으로 entry ~ exit 이 몇 틱정도 소요된다고 가정했을때, order_info 를 close_exec 위에서 갱신하는게 무의미해진다고 봄.
+                #       b. 보유 수량 = 주문수량 - 체결량 => 한 거래에 대한 모든 주문량을 close 등록했다고 가정했을때, cancel 후 가능 수량은 미체결수량과 동일해짐.
+                # close_remain_quantity = np.sum(order_info.loc[order_no_list_valid]["주문수량"]) - np.sum(np.sum(order_info.loc[order_no_list_valid]["체결량"]))
+                close_remain_quantity = np.sum(order_info.loc[order_no_list_valid]["미체결수량"])
+            else:
+                close_remain_quantity = open_exec_qty
+
+            # 2. get price, volume precision
+            #       a. quantity_precision fixed in Stock.
+            quantity_precision = 0
+            self.sys_log.info('quantity_precision : {}'.format(quantity_precision))
+
+            close_remain_quantity = self.calc_with_precision(close_remain_quantity, quantity_precision)
+            self.sys_log.info('close_remain_quantity : {}'.format(close_remain_quantity))
+
+            order_side = kwargs['order_side']
+            if order_side == "BUY":
+                order_side_number = 1
+            else:
+                order_side_number = 2
+
+            # error_code = None
+            while 1:
+                try:
+                    self.send_order("MARKET", self.screen_number, self.account_number,
+                                    order_side_number, kwargs['code'], int(close_remain_quantity), 0, "03", "")
+
+                except Exception as e:
+                    self.sys_log.error('error in market_close_order : {}'.format(e))
+
+                    # 1. error 처리 (Todo)
+                    #       a. unknown error : return (retry 가 의미 없을테니까)
+                    # return
+                    #       b. known error : retry
+                    #               i. -2022 ReduceOnly Order is rejected
+                    #               ii. Precision is over the maximum defined for this asset
+                    time.sleep(self.config.trader_set.order_term)
+                    continue
+
+                else:
+                    # 2. 여기가 공백인거는 미체결 quantity 가 있다는 건데, 기존 close_order 를 재취소하는게 맞는 것 같음.
+                    if self.order_no == "":
+                        self.sys_log.error("market_order : self.order_no == "", cancel reorder.")
+                        # time.sleep(self.config.trader_set.order_term)
+                        # continue
+                    else:
+                        self.sys_log.info('market_order enlisted. : {}'.format(datetime.now()))
+                    break
+
+            if self.order_no == "":
+                time.sleep(self.config.trader_set.order_term)
+                continue
+
+            # order 수행 후 바로 order_info 조회 => 이런 문제 때문에, 바로 cancel_order_list_v1 type 이 유효한 것.
+            market_exec_price_list, market_exec_qty, market_orig_qty = self.cancel_order_list(kwargs['code'], kwargs['order_side'],
+                                                                                              [self.order_no], order_type=OrderType.MARKET)
+
+            if market_orig_qty - market_exec_qty < 1:  # Stock 특성상 quantity_precision = 0, devision by zero 발생해서 "< 1" 로 설정함.
+                self.sys_log.info('market close order executed.')
+                self.sys_log.info("market_exec_price_list : {}".format(market_exec_price_list))
+                return market_exec_price_list
+            else:
+                # 3. reorder
+                self.sys_log.info('market_close reorder.')
+                time.sleep(self.config.trader_set.order_term)
+                continue
 
     def market_close_order_v2(self, order_no_list, open_exec_qty, **kwargs):
 
