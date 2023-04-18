@@ -203,6 +203,7 @@ class ShieldModule(FuturesModule):
                 return new_df_
 
     def get_tpepout(self, open_side, res_df_open, res_df):
+
         self.sys_log.info('open_side : {}'.format(open_side))
         selection_id = self.config.selection_id
 
@@ -618,7 +619,7 @@ class ShieldModule(FuturesModule):
 
         return ideal_profit, real_profit, trade_log_dict
 
-    def limit_order_v2(self, code, order_type, limit_side, pos_side, limit_price, limit_quantity, order_info=None):
+    def limit_order_v2(self, code, order_type, limit_side, pos_side, limit_price, limit_quantity, order_data=None):
 
         """
         _ -> v2
@@ -628,10 +629,10 @@ class ShieldModule(FuturesModule):
         retry_count = 0
         error_code = 0
 
-        if order_info is None:
+        if order_data is None:
             over_balance = None
         else:
-            over_balance, leverage = order_info
+            over_balance, leverage = order_data
 
         while 1:
             try:
@@ -668,24 +669,26 @@ class ShieldModule(FuturesModule):
                 # 2. limit_order() 에서 해결할 error 일 경우, continue
                 #       y. -1111 : Precision is over the maximum defined for this asset = quantity precision error
                 if '-1111' in str(e):
-                    error_code = -1111
-                    retry_count += 1
+
                     try:
-                        _, quantity_precision = self.get_precision()
-                        if retry_count % 3 == 0:
-                            quantity_precision -= 1
-                        elif retry_count % 3 == 2:
-                            quantity_precision += 1
+                        #   _, quantity_precision = self.get_precision()
+                        quantity_precision = retry_count
 
                         # close_remain_quantity = get_remaining_quantity(self.config.trader_set.symbol)
                         #   error 발생한 경우 정상 체결된 qty 는 존재하지 않는다고 가정 - close_remain_quantity 에는 변함이 없을거라 봄
-                        limit_quantity = self.calc_with_precision(limit_quantity, quantity_precision, def_type='floor')
-                        self.sys_log.info('modified qty & precision : {} {}'.format(limit_quantity, quantity_precision))
+                        limit_quantity_mod = self.calc_with_precision(limit_quantity, quantity_precision, def_type='floor')
+                        self.sys_log.info('modified qty & precision : {} {}'.format(limit_quantity_mod, quantity_precision))
 
                     except Exception as e:
-                        msg = 'error in get modified qty_precision : {}'.format(e)
+                        msg = "error in get modified qty_precision : {}".format(e)
                         self.sys_log.error(msg)
                         self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+
+                    retry_count += 1
+                    if retry_count >= 10:
+                        retry_count = 0
+
+                    error_code = -1111
                     # break
                     # return None, over_balance, error_code
                     time.sleep(self.config.trader_set.order_term)
@@ -710,13 +713,12 @@ class ShieldModule(FuturesModule):
                 #       b. -2019 : Margin is insufficient
                 # Todo - for tp_exec_qty miscalc., self.overbalance 수정되었으면, return 으로 받아야할 것 => 무슨 소리야..?
                 if '-2019' in str(e):
-                    if order_info is not None:  # None 인 경우, leverage 가 정의되지 않음.
-                        retry_count += 1
+                    if order_data is not None:  # None 인 경우, leverage 가 정의되지 않음.
+                        # i. 예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치
                         try:
-                            # i. 예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치
+                            # 1. get available quantity
                             available_balance = self.get_available_balance() * 0.9
 
-                            # ii. get available quantity
                             _, quantity_precision = self.get_precision()
                             quantity = available_balance / limit_price * leverage
                             quantity = self.calc_with_precision(quantity, quantity_precision, def_type='floor')
@@ -728,116 +730,10 @@ class ShieldModule(FuturesModule):
                             self.sys_log.error(msg)
                             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
+                        # ii. balance 가 근본적으로 부족한 경우, 주문을 허용하지 않는다.
+                        retry_count += 1
                         if retry_count > 5:
                             msg = "retry_count over. : {}".format(retry_count)
-                            self.sys_log.error(msg)
-                            self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-                            error_code = -2019
-                            return None, over_balance, error_code
-                        else:
-                            time.sleep(self.config.trader_set.order_term)
-                            continue
-                else:
-                    msg = "unknown error : {}".format(e)
-                    self.sys_log.error(msg)
-                    self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-                    error_code = "unknown"
-                    return None, over_balance, error_code
-
-            else:
-                self.sys_log.info('limit_order enlisted. : {}'.format(datetime.now()))
-                return post_order_res, over_balance, error_code
-
-    def limit_order(self, order_type, limit_side, pos_side, limit_price, limit_quantity, order_info=None):
-        open_retry_cnt = 0
-        error_code = 0
-
-        if order_info is None:
-            over_balance = None
-        else:
-            over_balance, leverage = order_info
-
-        while 1:
-            try:
-                # 0. new_order (limit & market)
-                # Todo, quantity 에 float 대신 str 을 입력하는게 정확한 것으로 앎.
-                #   1. precision 보호 차원인가.
-                if order_type == OrderType.MARKET:
-                    # a. market order
-                    post_order_res = self.new_order(symbol=self.config.trader_set.symbol,
-                                                    side=limit_side,
-                                                    positionSide=pos_side,
-                                                    type=OrderType.MARKET,
-                                                    quantity=str(limit_quantity))
-                else:
-                    # b. limit order
-                    post_order_res = self.new_order(timeInForce=TimeInForce.GTC,
-                                                    symbol=self.config.trader_set.symbol,
-                                                    side=limit_side,
-                                                    positionSide=pos_side,
-                                                    type=OrderType.LIMIT,
-                                                    quantity=str(limit_quantity),
-                                                    price=str(limit_price))
-            except Exception as e:
-                msg = 'error in limit_order : {}'.format(e)
-                self.sys_log.error(msg)
-                self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-
-                # 1. limit_order() 에서 해결할 수 없는 error 일 경우, return
-                #       a. -4003 : quantity less than zero
-                if "-4003" in str(e):
-                    error_code = -4003
-                    return None, over_balance, error_code
-
-                #       b. -1111 : Precision is over the maximum defined for this asset
-                #           = quantity precision error
-                if '-1111' in str(e):
-                    error_code = -1111
-                    self.sys_log.info("limit_price : {}".format(limit_price))
-                    self.sys_log.info("limit_quantity : {}\n".format(limit_quantity))
-                    # break
-                    return None, over_balance, error_code
-
-                # 2. limit_order() 에서 해결할 error 일 경우, continue
-                #       a. -4014 : price precision validation
-                if '-4014' in str(e):
-                    try:
-                        realtime_price = self.get_market_price_v3()
-                        price_precision = self.get_precision_by_price(realtime_price)
-                        limit_price = self.calc_with_precision(limit_price, price_precision)
-                        self.sys_log.info('modified price & precision : {}, {}'.format(limit_price, price_precision))
-
-                    except Exception as e:
-                        msg = 'error in get_market_price_v3 (open_order phase): {}'.format(e)
-                        self.sys_log.error(msg)
-                        self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-
-                    time.sleep(self.config.trader_set.order_term)
-                    continue
-
-                #       b. -2019 : Margin is insufficient
-                # Todo - for tp_exec_qty miscalc., self.overbalance 수정되었으면, return 으로 받아야할 것 => 무슨 소리야..?
-                open_retry_cnt += 1
-                if '-2019' in str(e):
-                    if order_info is not None:  # None 인 경우, leverage 가 정의되지 않음.
-                        try:
-                            # i. 예기치 못한 오류로 인해 over balance 상태가 되었을때의 조치
-                            available_balance = self.get_available_balance() * 0.9
-
-                            # ii. get available quantity
-                            _, quantity_precision = self.get_precision()
-                            quantity = available_balance / limit_price * leverage
-                            quantity = self.calc_with_precision(quantity, quantity_precision, def_type='floor')
-                            self.sys_log.info('available_balance (temp) : {}'.format(available_balance))
-                            self.sys_log.info('quantity : {}'.format(quantity))
-
-                        except Exception as e:
-                            msg = 'error in get_availableBalance (-2019 phase) : {}'.format(e)
-                            self.sys_log.error(msg)
-                            self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-
-                        if open_retry_cnt > 5:
-                            msg = "open_retry_cnt over. : {}".format(open_retry_cnt)
                             self.sys_log.error(msg)
                             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
                             error_code = -2019
@@ -986,23 +882,24 @@ class ShieldModule(FuturesModule):
                     #           = quantity precision error
                     #           상당히 오래전에 만든 대응법인데, 이게 맞는 걸까.. (Todo)
                     if '-1111' in str(e):
-                        retry_count += 1
+
                         try:
-                            _, quantity_precision = self.get_precision()
-                            if retry_count % 3 == 0:
-                                quantity_precision -= 1
-                            elif retry_count % 3 == 2:
-                                quantity_precision += 1
+                            #   _, quantity_precision = self.get_precision()
+                            quantity_precision = retry_count
 
                             # close_remain_quantity = get_remaining_quantity(self.config.trader_set.symbol)
                             #   error 발생한 경우 정상 체결된 qty 는 존재하지 않는다고 가정 - close_remain_quantity 에는 변함이 없을거라 봄
-                            close_remain_quantity = self.calc_with_precision(close_remain_quantity, quantity_precision, def_type='floor')
-                            self.sys_log.info('modified qty & precision : {} {}'.format(close_remain_quantity, quantity_precision))
+                            close_remain_quantity_mod = self.calc_with_precision(close_remain_quantity, quantity_precision, def_type='floor')
+                            self.sys_log.info('modified qty & precision : {} {}'.format(close_remain_quantity_mod, quantity_precision))
 
                         except Exception as e:
                             msg = "error in get modified qty_precision : {}".format(e)
                             self.sys_log.error(msg)
                             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+
+                        retry_count += 1
+                        if retry_count >= 10:
+                            retry_count = 0
 
                     # self.config.out_set.out_type = OrderType.MARKET  # just 재시도
                     time.sleep(self.config.trader_set.order_term)

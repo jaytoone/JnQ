@@ -27,15 +27,10 @@ class Shield(ShieldModule):
     v2_4 -> v2_5
         1. Add Telegram messenger & logger.
         2. Add watch_data_dict.pop() in trade end phase.
-        3. Save watch_data_dict.
-        4. Use id_zip for data save path.
-        5. Add second condition for allow_watch (Binance Only).
     """
 
-    def __init__(self, paper_name, main_name, id_zip, config_type, mode="Bank", shield_close=None):
+    def __init__(self, paper_name, id_list, config_type, mode="Bank", shield_close=None):
 
-        self.main_name = main_name
-        self.utils_id_list, self.config_id_list = id_zip
         self.shield_close = shield_close
 
         # 1. queues for loop
@@ -45,13 +40,13 @@ class Shield(ShieldModule):
         self.close_data_dict = {}  # close_order 유효성 검증 후, close_remain_data_dict 로 전달
         self.close_remain_data_dict = {}  # out, exec 성사시 remove
 
-        self.open_data_key = ["open_side_msg", "res_df_open", "res_df", "fee", "open_side", "trade_log_dict"]
-        self.open_remain_data_key = ["open_side_msg", "res_df_open", "res_df", "fee", "open_side", "pos_side", "trade_log_dict",
+        self.open_data_key = ["name", "res_df_open", "res_df", "fee", "open_side", "trade_log_dict"]
+        self.open_remain_data_key = ["name", "res_df_open", "res_df", "fee", "open_side", "pos_side", "trade_log_dict",
                                      "tp", "ep", "out", "liqd_p", "leverage", "open_quantity", "post_order_res", "fake_order"]
-        self.close_data_key = ["open_side_msg", "res_df", "fee", "open_side", "pos_side", "trade_log_dict",
+        self.close_data_key = ["name", "res_df", "fee", "open_side", "pos_side", "trade_log_dict",
                                "tp", "ep", "out", "liqd_p", "leverage", "open_exec_price_list", "open_exec_qty", "post_order_res_list", "fake_order",
                                "real_balance", "prev_exec_tp_len", "ex_dict"]
-        self.close_remain_data_key = ["open_side_msg", "res_df", "fee", "open_side", "pos_side", "trade_log_dict",
+        self.close_remain_data_key = ["name", "res_df", "fee", "open_side", "pos_side", "trade_log_dict",
                                       "tp", "ep", "out", "liqd_p", "leverage", "open_exec_price_list", "open_exec_qty", "post_order_res_list", "fake_order",
                                       "real_balance", "prev_exec_tp_len", "ex_dict",
                                       "partial_tps", "partial_qtys", "close_side", "quantity_precision"]
@@ -71,16 +66,16 @@ class Shield(ShieldModule):
         self.public = importlib.import_module(public_name)
 
         #       b. utils
-        utils_name_list = ["Bank.papers.utils.{}_{}".format(paper_name, id_) for id_ in self.utils_id_list]
+        utils_name_list = ["Bank.papers.utils.{}_{}".format(paper_name, id_) for id_ in id_list]
         self.utils_list = [importlib.import_module(utils_name) for utils_name in utils_name_list]
 
         #       c. configuration
         if config_type == "backtrade":
-            self.config_name_list = ["{}_{}_backtrade.json".format(paper_name, id_) for id_ in self.config_id_list]
+            self.config_name_list = ["{}_{}_backtrade.json".format(paper_name, id_) for id_ in id_list]
         elif config_type == "run_validation":
-            self.config_name_list = ["{}_{}_run_validation.json".format(paper_name, id_) for id_ in self.config_id_list]
+            self.config_name_list = ["{}_{}_run_validation.json".format(paper_name, id_) for id_ in id_list]
         else:
-            self.config_name_list = ["{}_{}.json".format(paper_name, id_) for id_ in self.config_id_list]
+            self.config_name_list = ["{}_{}.json".format(paper_name, id_) for id_ in id_list]
 
         # 3. utils for individual ids
         self.config = None
@@ -113,42 +108,25 @@ class Shield(ShieldModule):
             base_cfg_copy_path = os.path.join(self.sys_log_path, log_name + ".json")
             self.set_copy_base_log(log_name, base_cfg_path, base_cfg_copy_path)
 
-        # 6. define config_path_list
-        self.config_path_list = [os.path.join(self.pkg_path, "papers/config", name_) for name_ in self.config_name_list]
-
-        # 7. we need first configuration set
-        #       a. read config (refreshed by every trades)
-        #               i. 기본 세팅을 위한 config 는 첫번째 config 사용
-        self.read_write_config_list(mode='r')
-        #       b. self.config_list loaded.
-        for cfg_idx, cfg_ in enumerate(self.config_list):
-            if cfg_idx == 0:
-                self.config = cfg_  # 첫 running 을 위한, config 선언
-            else:
-                cfg_.trader_set = self.config.trader_set
-        #       c. rewrite modified self.config_list
-        self.read_write_config_list(mode='w', edited_config_list=self.config_list)
-
-        # 8. Inherit + Set Messenger & Logger
         if "Bank" in mode:
             #   e. inherit
             #       i. websocket 에 self.config 의 code 를 기준으로 agg_trade 가 선언되기 때문에
             ShieldModule.__init__(self, self.config)
 
             #   j. add Telegram application.
-            # token = "6198556911:AAFr0FUB4F0v9SyYy2LRpGzwuNQ9sHhz1iE"  # BinanceWatch
+            token = "6198556911:AAFr0FUB4F0v9SyYy2LRpGzwuNQ9sHhz1iE"  # BinanceWatch
             # token = "5874553146:AAFbI49fpP4ELM0QX9qzQAAVjTRhjvfPz_4"  # StockWatch
 
             #       i. Telegram logger
             #               1. chat_id 는 env 동일.
-            self.msg_bot = telegram.Bot(token=self.config.trader_set.token)
+            self.msg_bot = telegram.Bot(token=token)
             self.chat_id = "5320962614"
 
             #       ii. Telegram messenger
             #           1. init.
             self.user_text = None
 
-            updater = Updater(token=self.config.trader_set.token, use_context=True)
+            updater = Updater(token=token, use_context=True)
             dispatcher = updater.dispatcher
 
             echo_handler = MessageHandler(Filters.text & (~Filters.command), self.echo)
@@ -162,10 +140,26 @@ class Shield(ShieldModule):
         #     ShieldModule.__init__(self, self.config)
         #     CybosModule.__init__(self)
 
+        # 7. define config_path_list
+        self.config_path_list = [os.path.join(self.pkg_path, "papers/config", name_) for name_ in self.config_name_list]
+
+        # 8. we need first configuration set
+        #       a. read config (refreshed by every trades)
+        #               i. 기본 세팅을 위한 config 는 첫번째 config 사용
+        self.read_write_config_list(mode='r')
+        #       b. self.config_list loaded.
+        for cfg_idx, cfg_ in enumerate(self.config_list):
+            if cfg_idx == 0:
+                self.config = cfg_  # 첫 running 을 위한, config 선언
+            else:
+                cfg_.trader_set = self.config.trader_set
+        #       c. rewrite modified self.config_list
+        self.read_write_config_list(mode='w', edited_config_list=self.config_list)
+
         # 9. balance
         self.available_balance = self.config.trader_set.initial_asset
         self.over_balance = None
-        self.min_balance = 5.0  # USDT, not used in Stock.
+        self.min_balance = 5.0  # USDT
 
         # 10. pnl
         self.income = 0.0
@@ -246,19 +240,9 @@ class Shield(ShieldModule):
 
         if self.mode == "Bank":
             # 1. self.open / close dumping 때문에, for loop 로 하지 않음.
-            data_dir_path = os.path.join(self.pkg_path, "data/{}".format(self.main_name))
+            data_dir_path = os.path.join(self.pkg_path, "data/{}".format(self.paper_name))
             os.makedirs(data_dir_path, exist_ok=True)
 
-            try:
-                save_path = os.path.join(data_dir_path, "watch_data_dict{}.pkl".format(re_id))
-
-                with open(save_path, 'wb') as f:
-                    pickle.dump(self.watch_data_dict, f)
-                    self.sys_log.warning("{} saved".format(save_path))
-            except Exception as e:
-                msg = "error in save_data : {}".format(e)
-                self.sys_log.error(msg)
-                self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
             try:
                 save_path = os.path.join(data_dir_path, "open_remain_data_dict{}.pkl".format(re_id))
 
@@ -287,25 +271,15 @@ class Shield(ShieldModule):
         watch_code = []
 
         try:
-            data_path = os.path.join(self.pkg_path, "data/{}/watch_data_dict.pkl".format(self.main_name))
-            with open(data_path, 'rb') as f:
-                self.watch_data_dict = pickle.load(f)
-
-        except Exception as e:
-            msg = "error in load watch_data_dict : {}".format(e)
-            self.sys_log.error(msg)
-            self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-
-        try:
-            data_path = os.path.join(self.pkg_path, "data/{}/close_remain_data_dict.pkl".format(self.main_name))
+            data_path = os.path.join(self.pkg_path, "data/{}/close_remain_data_dict.pkl".format(self.paper_name))
             with open(data_path, 'rb') as f:
                 #   1. self.~remain_data_queue 를 정의하고.
                 self.close_remain_data_dict = pickle.load(f)
                 for code, close_remain_data in self.close_remain_data_dict.copy().items():
 
                     #       d. 존재하는 미체결내역에 대해 get_new_df 를 위한 add to watch_code.
-                    watch_code.append([code, close_remain_data["open_side_msg"]])
-                    self.sys_log.warning("{} ({}) added to watch_code.".format(close_remain_data["open_side_msg"], code))
+                    watch_code.append([code, close_remain_data["name"]])
+                    self.sys_log.warning("{} ({}) added to watch_code.".format(close_remain_data["name"], code))
 
         except Exception as e:
             msg = "error in load close_remain_data_dict : {}".format(e)
@@ -313,13 +287,13 @@ class Shield(ShieldModule):
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
         try:
-            data_path = os.path.join(self.pkg_path, "data/{}/open_remain_data_dict.pkl".format(self.main_name))
+            data_path = os.path.join(self.pkg_path, "data/{}/open_remain_data_dict.pkl".format(self.paper_name))
             with open(data_path, 'rb') as f:
                 self.open_remain_data_dict = pickle.load(f)
                 for code, open_remain_data in self.open_remain_data_dict.copy().items():
 
-                    watch_code.append([code, open_remain_data["open_side_msg"]])
-                    self.sys_log.warning("{} ({}) added to watch_code.".format(open_remain_data["open_side_msg"], code))
+                    watch_code.append([code, open_remain_data["name"]])
+                    self.sys_log.warning("{} ({}) added to watch_code.".format(open_remain_data["name"], code))
 
         except Exception as e:
             msg = "error in load open_remain_data_dict : {}".format(e)
@@ -440,7 +414,6 @@ class Shield(ShieldModule):
             ADD WATCH
             """
 
-            open_side_msg = None
             if not self.config.trader_set.backtrade:
 
                 #       i. 특성상 code 를 맨 앞에 붙일 것.
@@ -449,56 +422,43 @@ class Shield(ShieldModule):
 
                 #   b. Telegram Messenger mode : on / off 도입.
                 if self.config.trader_set.messenger_on:
-                    #   i. get code (msg form : "code open_side_msg")
+                    #   i. get code (msg form : code, order_side)
                     if self.user_text is not None:
                         payload = self.user_text.split(" ")
 
                         if len(payload) == 2:
-                            code, open_side_msg = payload
+                            code, order_side = payload
 
                             with open(r"D:\Projects\System_Trading\JnQ\Bank\valid_code\ticker_in_futures.pkl", 'rb') as f:
                                 valid_code_list = pickle.load(f)
 
-                            #   1. code validation
-                            if code.upper() in valid_code_list and open_side_msg.upper() in [OrderSide.BUY, OrderSide.SELL]:
-                                watch_code.extend([[code.upper(), open_side_msg.upper()]])
-                                msg = "{} {} extended to watch_code.".format(code.upper(), open_side_msg.upper())
-                            #   2. remove code.
-                            elif "rm " in self.user_text.lower():
-                                code = self.user_text.split(" ")[1]
-                                if code not in self.open_remain_data_dict and code not in self.close_remain_data_dict:
-                                    self.watch_data_dict.pop(code, None)
-                                    msg = str(self.watch_data_dict)
-                                else:
-                                    msg = "{} in remain_dict.".format(code)
-                            #   3. error.
+                            #       1. code validation
+                            # if self.user_text.upper() in valid_code_list:
+                            if code.upper() in valid_code_list:
+                                watch_code.extend([[code, code]])
+                                msg = "{} extended to watch_code.".format(code)
                             else:
-                                msg = "error in self.user_text : invalid payload."
+                                msg = "error in self.user_text : invalid code."
                                 self.sys_log.error(msg)
+                            self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
                         else:
-                            #   4. watch
-                            if "watch" in self.user_text.lower():
-                                msg = "watch : {}\nopen_remain : {}\nclose_remain : {}".format(str(self.watch_data_dict), str(self.open_remain_data_dict), str(self.close_remain_data_dict))
-                            #   5. error.
-                            else:
-                                msg = "error in self.user_text : invalid payload."
-                                self.sys_log.error(msg)
-
-                        self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+                            if payload.lower() == "watch":
+                                msg = str(self.watch_data_dict)
 
                         #       2. 사용된 user_text -> None 으로 치환한다.
                         self.user_text = None
+
 
                 #       ii. Messenger off 시, default code = self.config.trader_set.symbol
                 else:
                     if len(self.watch_data_dict) == 0:
                         symbol = self.config.trader_set.symbol
-                        watch_code.extend([[symbol, open_side_msg]])
+                        watch_code.extend([[symbol, symbol]])
 
                 #   c. add data to watch_data_dict.
-                for code, open_side_msg in watch_code:
-                    self.watch_data_dict[code] = {"open_side_msg": open_side_msg, "ep_loc_point2": 0, "streamer": None}
+                for code, name in watch_code:
+                    self.watch_data_dict[code] = {"name": name, "ep_loc_point2": 0, "streamer": None}
 
                     #   i. add websocket.
                     self.websocket_client.agg_trade(symbol=code, id=1, callback=self.agg_trade_message_handler)
@@ -511,7 +471,7 @@ class Shield(ShieldModule):
                     #   d. backtrade just for a code (get code from back_data_path)
                     code = self.config.trader_set.back_data_path.split(" ")[-1][:-4]
                     #       i. bank_module 내부에 streamer 선언은 loop 이탈하면 초기화되서, Bank 의 streamer 로 유지함.
-                    self.watch_data_dict[code] = {"open_side_msg": None, "ep_loc_point2": 0, "streamer": self.get_streamer()}
+                    self.watch_data_dict[code] = {"name": None, "ep_loc_point2": 0, "streamer": self.get_streamer()}
 
             """
             WATCH LOOP
@@ -521,16 +481,16 @@ class Shield(ShieldModule):
 
             # 0.  필요없는 API 사용을 지양하기 위해 time_term 도입. : watch_loop ban_term.
             #   a. 최소 시간동안 watch loop 에 들어오지 못하도록 해야한다.
-            #       i. 최소시간 = 20 seconds --> 임의 설정.
-            #       ii. 초 단위 < 2 로 고정. (Binance)
+            #       i. 최소시간 = 20 seconds --> 임의로 설정한 것. Todo.
+
             if not self.config.trader_set.backtrade:
                 try:
-                    if time.time() - end_time_watch >= 20 and now.second < 2:
+                    if time.time() - end_time_watch >= 20:
                         self.allow_watch = 1
                         #   ii. for save_data() term.
                         self.save_data()
                     else:
-                        """
+                        """                        
                         #   iii. time.sleep() 하지 않을시, 하드웨어 팬 소리 커진다.
                         #       1. 단순 while loop 의 자원 소모가 심하다는 이야기.
                         """
@@ -560,11 +520,11 @@ class Shield(ShieldModule):
                         if time.time() - start_time > self.config.trader_set.loop_duration:
                             break
 
-                    open_side_msg, ep_loc_point2, streamer = watch_data.values()
-                    self.sys_log.warning("WATCH : {} {}".format(code, open_side_msg))
+                    name, ep_loc_point2, streamer = watch_data.values()
+                    self.sys_log.warning("WATCH : {} {}".format(code, name))
 
                     # 0. param init.
-                    # open_side = None
+                    open_side = None
                     self.utils = None
 
                     # 1. get_new_df
@@ -625,55 +585,50 @@ class Shield(ShieldModule):
                         continue
 
                     # 3. signal check
-                    # if open_side is None:
+                    if open_side is None:
 
-                    #   a. ep_loc - get_open_side_v2
-                    #       i. open_signal 포착한 utils & config type 으로 bank.utils & config 변경함.
-                    try:
-                        papers = (self.public, self.utils_list, self.config_list)
-                        open_side, self.utils, self.config = self.get_open_side_v2(res_df, papers, np_timeidx, open_num=1)
+                        #   a. ep_loc - get_open_side_v2
+                        #       i. open_signal 포착한 utils & config type 으로 bank.utils & config 변경함.
+                        try:
+                            papers = (self.public, self.utils_list, self.config_list)
+                            open_side, self.utils, self.config = self.get_open_side_v2(res_df, papers, np_timeidx, open_num=1)
 
-                    except Exception as e:
-                        msg = "error in ep_loc phase : {}".format(e)
-                        self.sys_log.error(msg)
-                        self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-                        # time.sleep(self.config.trader_set.api_term)
-                        continue
+                        except Exception as e:
+                            msg = "error in ep_loc phase : {}".format(e)
+                            self.sys_log.error(msg)
+                            self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+                            # time.sleep(self.config.trader_set.api_term)
+                            continue
 
-                    #   b. df logging
-                    if self.config.trader_set.df_log:  # save res_df at ep_loc
-                        excel_name = str(datetime.now()).replace(":", "").split(".")[0]
-                        res_df.reset_index().to_feather(os.path.join(self.df_log_path, "{}.ftr".format(excel_name)), compression='lz4')
+                        #   b. df logging
+                        if self.config.trader_set.df_log:  # save res_df at ep_loc
+                            excel_name = str(datetime.now()).replace(":", "").split(".")[0]
+                            res_df.reset_index().to_feather(os.path.join(self.df_log_path, "{}.ftr".format(excel_name)), compression='lz4')
 
-                    #   c. open_signal 발생의 경우
-                    if open_side is not None:
+                        #   c. open_signal 발생의 경우
+                        if open_side is not None:
 
-                        #       x. check open_side_msg.
-                        if open_side_msg is not None:
-                            if open_side != open_side_msg:
-                                continue
+                            #       i. res_df_open 정의는 이곳에서 해야함 - 아래서 할 경우 res_df_open 갱신되는 문제
+                            res_df_open = res_df.copy()  # point2 에 사용됨.
 
-                        #       i. res_df_open 정의는 이곳에서 해야함 - 아래서 할 경우 res_df_open 갱신되는 문제
-                        res_df_open = res_df.copy()  # point2 에 사용됨.
+                            #       ii. market_check_term for market_entry - deprecated
+                            # #             1. 바로 진행할 경우, data loading delay 로 인한 오류 방지
+                            # if self.config.ep_set.entry_type == "MARKET" and not self.config.trader_set.backtrade:
+                            #     market_check_term = datetime.now().second
+                            #     if market_check_term > self.config.trader_set.market_check_term:
+                            #         open_side = None
+                            #         self.sys_log.warning("market_check_term : {}".format(market_check_term))
+                            #         continue  # ep_loc_check = False 라서 open_side None phase 로 감 -> 무슨 의미 ? 어쨌든 wait_zone 으로 회귀
 
-                        #       ii. market_check_term for market_entry - deprecated
-                        # #             1. 바로 진행할 경우, data loading delay 로 인한 오류 방지
-                        # if self.config.ep_set.entry_type == "MARKET" and not self.config.trader_set.backtrade:
-                        #     market_check_term = datetime.now().second
-                        #     if market_check_term > self.config.trader_set.market_check_term:
-                        #         open_side = None
-                        #         self.sys_log.warning("market_check_term : {}".format(market_check_term))
-                        #         continue  # ep_loc_check = False 라서 open_side None phase 로 감 -> 무슨 의미 ? 어쨌든 wait_zone 으로 회귀
+                            #       iv. init fee
+                            if self.config.ep_set.entry_type == "MARKET":
+                                fee = self.config.trader_set.market_fee
+                            else:
+                                fee = self.config.trader_set.limit_fee
 
-                        #       iv. init fee
-                        if self.config.ep_set.entry_type == "MARKET":
-                            fee = self.config.trader_set.market_fee
-                        else:
-                            fee = self.config.trader_set.limit_fee
-
-                        #       z. queue result
-                        open_data_value = [open_side_msg, res_df_open, res_df, fee, open_side, {}]
-                        self.open_data_dict[code] = dict(zip(self.open_data_key, open_data_value))
+                            #       z. queue result
+                            open_data_value = [name, res_df_open, res_df, fee, open_side, {}]
+                            self.open_data_dict[code] = dict(zip(self.open_data_key, open_data_value))
 
                     # z. queue result
                     #       a. watch_queue 는 append 되는 것이 아님. => update 되는 것. (누적에 대해 염려할 필요가 없다는 이야기)
@@ -716,8 +671,8 @@ class Shield(ShieldModule):
             for code, open_data in self.open_data_dict.copy().items():
 
                 # y. data water_fall
-                open_side_msg, res_df_open, res_df, fee, open_side, trade_log_dict = open_data.values()
-                self.sys_log.warning("OPEN :{} {}".format(code, open_side_msg))
+                name, res_df_open, res_df, fee, open_side, trade_log_dict = open_data.values()
+                self.sys_log.warning("OPEN :{} {}".format(code, name))
 
                 # 0. param init.
                 fake_order = 0  # order 하는 것처럼 시간을 소비하기 위함임.
@@ -806,14 +761,14 @@ class Shield(ShieldModule):
                         time.sleep(self.config.trader_set.order_term)
                         # break  # 기존, trade_v1_5 에서는 break 해버림.
                 else:
-                    #   b. we don't use post_order_res in backtrade.
+                    #   b. we don't use order_no in backtrade.
                     post_order_res = None
 
                 if not error_code:
                     # z. queue result
                     #       i. add new order for preventing invalid close_order (popping old open_remain_data)
                     #       ii. 유효성이 검증된 open_data 는 지워줄 것.
-                    open_remain_data_value = [open_side_msg, res_df_open, res_df, fee, open_side, pos_side, trade_log_dict, tp, ep, out, liqd_p, leverage, open_quantity, post_order_res, fake_order]
+                    open_remain_data_value = [name, res_df_open, res_df, fee, open_side, pos_side, trade_log_dict, tp, ep, out, liqd_p, leverage, open_quantity, post_order_res, fake_order]
                     self.open_remain_data_dict[code] = dict(zip(self.open_remain_data_key, open_remain_data_value))
                     self.open_data_dict.pop(code)
 
@@ -835,20 +790,20 @@ class Shield(ShieldModule):
                 #         break
 
                 # y. data water_fall
-                open_side_msg, res_df_open, res_df, fee, open_side, pos_side, trade_log_dict, tp, ep, out, liqd_p, leverage, open_quantity, post_order_res, fake_order = open_remain_data.values()
-                self.sys_log.warning("OPEN_REMAIN : {} {}".format(code, open_side_msg))
+                name, res_df_open, res_df, fee, open_side, pos_side, trade_log_dict, tp, ep, out, liqd_p, leverage, open_quantity, post_order_res, fake_order = open_remain_data.values()
+                self.sys_log.warning("OPEN_REMAIN : {} {}".format(code, name))
 
                 # 0. param init.
                 #       a. expired 가 없는 경우를 위한 init.
                 expired = 0
 
                 # 1. OPEN REMAIN LOOP 를 위한 data.
-                #       a. .loc 을 post_order_res 로 접근하면 order_info_valid type 이 Series 가 됨. => [post_order_res] 를 통해 DataFrame 으로 촐력한다.
+                #       a. .loc 을 order_no 로 접근하면 order_info_valid type 이 Series 가 됨. => [order_no] 를 통해 DataFrame 으로 촐력한다.
                 # if not self.config.trader_set.backtrade:
                 #     #   b. open 후에 order_info 는 update 된 상태가 아님, 따라서 .loc 접근시 key_error 가 한번은 발생함.
                 #     #   [ API ] : open_order_info_valid
                 #     try:
-                #         open_order_info_valid = order_info.loc[[post_order_res]]
+                #         open_order_info_valid = order_info.loc[[order_no]]
                 #     except Exception as e:
                 #           msg = "error in order_info.loc[post_order_res_list], open_remain_loop : {}".format(e)
                 #           self.sys_log.error(msg)
@@ -864,7 +819,7 @@ class Shield(ShieldModule):
                 # 2. limit
                 else:
                     if not self.config.trader_set.backtrade:
-                        #   a. type validation => [0] 으로 접근하는 이유는 len(post_order_res) = 1, info_valid's type = DataFrame, return int.
+                        #   a. type validation => [0] 으로 접근하는 이유는 len(order_no) = 1, info_valid's type = DataFrame, return int.
                         #   [ API ] : order_info
                         realtime_price = self.get_market_price_v3()
 
@@ -939,7 +894,7 @@ class Shield(ShieldModule):
                         #       i. executed open_order 가 old_order (매칭되는 close_order 가 존재하는 경우.) 가 아니라면, close_order.
                         #       ii. new / old order 상관없이 미체결 open 의 체결 이후는 close 하는게 맞음.
                         #       iii. add 0, {} for 누적형 parameter : prev_exec_tp_len, ex_dict
-                        close_data_value = [open_side_msg, res_df, fee, open_side, pos_side, trade_log_dict,
+                        close_data_value = [name, res_df, fee, open_side, pos_side, trade_log_dict,
                                             tp, ep, out, liqd_p, leverage, open_exec_price_list, open_exec_qty, post_order_res_list, fake_order,
                                             real_balance, 0, {}]
                         self.close_data_dict[code] = dict(zip(self.close_data_key, close_data_value))
@@ -957,10 +912,10 @@ class Shield(ShieldModule):
             for code, close_data in self.close_data_dict.copy().items():
 
                 # y. data water_fall
-                open_side_msg, res_df, fee, open_side, pos_side, trade_log_dict,\
+                name, res_df, fee, open_side, pos_side, trade_log_dict,\
                 tp, ep, out, liqd_p, leverage, open_exec_price_list, open_exec_qty, post_order_res_list, fake_order,\
                 real_balance, prev_exec_tp_len, ex_dict = close_data.values()
-                self.sys_log.warning("CLOSE : {} {}".format(code, open_side_msg))
+                self.sys_log.warning("CLOSE : {} {}".format(code, name))
 
                 # 0. get close_side
                 if open_side == OrderSide.BUY:
@@ -998,7 +953,7 @@ class Shield(ShieldModule):
                 #               1. 지속되는 post_order_res_list 를 고려해, close_data_dict, close_remain_data_dict 의 값을 수정함.
                 self.close_data_dict[code]["post_order_res_list"] = post_order_res_list
                 #               2. code 별로 1개의 data 만 허용하도록. => 새로운 post_order_res_list 로 변경하는건 필요한 작업임. (기존 remain_data overwrite.)
-                close_remain_data_value = [open_side_msg, res_df, fee, open_side, pos_side, trade_log_dict,
+                close_remain_data_value = [name, res_df, fee, open_side, pos_side, trade_log_dict,
                                            tp, ep, out, liqd_p, leverage, open_exec_price_list, open_exec_qty, post_order_res_list, fake_order,
                                            real_balance, prev_exec_tp_len, ex_dict,
                                            partial_tps, partial_qtys, close_side, quantity_precision]
@@ -1024,11 +979,11 @@ class Shield(ShieldModule):
                 #         break
 
                 # y. data water_fall
-                open_side_msg, res_df, fee, open_side, pos_side, trade_log_dict,\
+                name, res_df, fee, open_side, pos_side, trade_log_dict,\
                 tp, ep, out, liqd_p, leverage, open_exec_price_list, open_exec_qty, post_order_res_list, fake_order,\
                 real_balance, prev_exec_tp_len, ex_dict,\
                 partial_tps, partial_qtys, close_side, quantity_precision = close_remain_data.values()
-                self.sys_log.warning("CLOSE_REMAIN : {} {}".format(code, open_side_msg))
+                self.sys_log.warning("CLOSE_REMAIN : {} {}".format(code, name))
 
                 # 0. param init.
                 #       a. tp / out 이 없는 경우를 위한 init.
@@ -1037,14 +992,14 @@ class Shield(ShieldModule):
                 all_executed = 0
                 market_close_on = 0
 
-                # post_order_res_list_valid = [post_order_res_ for post_order_res_ in post_order_res_list if post_order_res_ != ""]
-                # post_order_res_validation = len(post_order_res_list_valid) != 0
+                # post_order_res_list_valid = [order_no_ for order_no_ in post_order_res_list if order_no_ != ""]
+                # order_no_validation = len(post_order_res_list_valid) != 0
 
                 # 1. CLOSE REMAIN LOOP 를 위한 data.
                 #       a. open remain 와는 다르게, post_order_res_list 로 접근하기 때문에 내부에서 수행함.
                 #               i. 한 종목에 대한 close post_order_res_list 를 의미함.
                 # if not self.config.trader_set.backtrade:
-                #     if post_order_res_validation:
+                #     if order_no_validation:
                 #         #   b. close 후에 order_info 는 update 된 상태가 아님, 따라서 .loc 접근시 key_error 가 한번은 발생함.
                 #         try:
                 #             close_order_info_valid = order_info.loc[post_order_res_list_valid]
@@ -1060,13 +1015,12 @@ class Shield(ShieldModule):
                 if not self.config.trader_set.backtrade and not fake_order:
                     # [ API ] : close_exec_series, close_order_info_valid
                     #       a. 손매매로 인한 order_info.status == EXPIRED 는 고려 대상이 아님. (손매매 이왕이면 하지 말라는 소리.)
-                    # if post_order_res_validation:
+                    # if order_no_validation:
                     #     exec_tp_len = np.sum(close_exec_series)
                     #     if len(close_exec_series) == exec_tp_len:
                     #         all_executed = 1
                     #
                     #     tp_exec_price_list = close_order_info_valid[close_exec_series == 1]["체결가"].tolist()
-
                     all_executed, tp_exec_price_list = self.check_limit_tp_exec_v2(post_order_res_list, quantity_precision)
                     exec_tp_len = len(tp_exec_price_list)
                 else:
@@ -1090,7 +1044,7 @@ class Shield(ShieldModule):
 
                 # 2. check out
                 if not self.config.trader_set.backtrade:
-                    #       a. invalid post_order_res_list 에 대응하기 위해, order_info 에 종목명으로 접근함.
+                    #       a. invalid order_no_lsit 에 대응하기 위해, order_info 에 종목명으로 접근함.
                     # [ API ] : order_info
                     realtime_price = self.get_market_price_v3()
 
