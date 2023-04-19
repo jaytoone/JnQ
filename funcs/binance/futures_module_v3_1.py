@@ -30,8 +30,8 @@ class FuturesModule(UMFutures):
         self.config = config
         self.sys_log = logging.getLogger()
 
-    def get_limit_leverage(self):
-        response = self.leverage_brackets(symbol=self.config.trader_set.symbol, recvWindow=6000)
+    def get_limit_leverage(self, code):
+        response = self.leverage_brackets(symbol=code, recvWindow=6000)
         return response[0]['brackets'][0]['initialLeverage']
 
     def get_available_balance(self, asset_type='USDT'):
@@ -58,29 +58,29 @@ class FuturesModule(UMFutures):
         except Exception as e:
             pass
 
-    def get_market_price_v3(self):
+    def get_market_price_v3(self, code):
         while 1:
             try:
-                return self.market_price[self.config.trader_set.symbol]
+                return self.market_price[code]
             except Exception as e:
-                # msg = "error in get_market_price_v3 : {}".format(e)
-                # self.sys_log.error(msg)
+                msg = "error in get_market_price_v3 : {}".format(e)
+                self.sys_log.error(msg)
                 # self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
                 time.sleep(self.config.trader_set.api_term)
 
-    def get_market_price_v2(self):
+    def get_market_price_v2(self, code):
         """
         1. agg_trades is faster than ticker_price
             a. subscribe method 가 24시간 이상 유지되지 않는다고해, restful api method 사용함.
         """
-        response = self.agg_trades(self.config.trader_set.symbol)
+        response = self.agg_trades(code)
         return float(response[-1]['p'])
 
-    def get_order_info(self, orderId):
+    def get_order_info(self, code, order_id):
         while 1:
             try:
-                order_info_res = self.query_order(symbol=self.config.trader_set.symbol, orderId=orderId, recvWindow=2000)
+                order_info_res = self.query_order(symbol=code, orderId=order_id, recvWindow=2000)
             except Exception as e:
                 msg = "error in get_order_info : {}".format(e)
                 self.sys_log.error(msg)
@@ -90,7 +90,7 @@ class FuturesModule(UMFutures):
             else:
                 return order_info_res
 
-    def get_precision(self):
+    def get_precision(self, code):
         while 1:
             try:
                 response = self.exchange_info()
@@ -102,7 +102,7 @@ class FuturesModule(UMFutures):
                 time.sleep(self.config.trader_set.api_term)
             else:
                 price_precision, quantity_precision = [[data['pricePrecision'], data['quantityPrecision']]
-                                                       for data in response['symbols'] if data['symbol'] == self.config.trader_set.symbol][0]
+                                                       for data in response['symbols'] if data['symbol'] == code][0]
                 self.sys_log.info('price_precision : {}'.format(price_precision))
                 self.sys_log.info('quantity_precision : {}'.format(quantity_precision))
                 return price_precision, quantity_precision
@@ -163,6 +163,7 @@ if __name__ == '__main__':
     t_quantity_precision = 1
     # t_symbol = 'XRPUSDT'
     t_symbol = 'ETHUSDT'
+    t_symbol = 'BNBUSDT'
     # quantity =
     # symbol = 'ADAUSDT'
 
@@ -183,24 +184,24 @@ if __name__ == '__main__':
     # um_futures_client = UMFutures(key=api_key, secret=secret_key)
 
     start_time = time.time()
-    futures_module.websocket_client.agg_trade(
-        symbol='ethusdt',
-        id=1,
-        callback=futures_module.agg_trade_message_handler,
-    )
+    # futures_module.websocket_client.agg_trade(
+    #     symbol='ethusdt',
+    #     id=1,
+    #     callback=futures_module.agg_trade_message_handler,
+    # )
 
     try:
         # futures_module.get_limit_leverage()
-        while 1:
-            # response = futures_module.get_market_price_v2()
-            # print(response)
-            try:
-                print(futures_module.market_price)
-                # print(futures_module.websocket_client._conns.keys())
-                # print(type(futures_module.market_price['ETHUSDT']))
-            except:
-                pass
-            time.sleep(1)
+        # while 1:
+        #     # response = futures_module.get_market_price_v2()
+        #     # print(response)
+        #     try:
+        #         print(futures_module.market_price)
+        #         # print(futures_module.websocket_client._conns.keys())
+        #         # print(type(futures_module.market_price['ETHUSDT']))
+        #     except:
+        #         pass
+        #     time.sleep(1)
 
         #     if time.time() - start_time > 3:
         #         # futures_module.websocket_client.agg_trade(
@@ -231,6 +232,7 @@ if __name__ == '__main__':
         #     #     pass
         #     time.sleep(0.1)
 
+        response = futures_module.get_order_info(t_symbol, 46216493671)
         # response = futures_module.get_limit_leverage()
         # response = futures_module.get_available_balance()
         # response = futures_module.get_precision()
@@ -245,7 +247,7 @@ if __name__ == '__main__':
         # response = um_futures_client.agg_trades(t_symbol)
 
         # print(type(response[0]))
-        # print(response)
+        print(response)
         # {'orderId': 8389765589627969208, 'symbol': 'ETHUSDT', 'status': 'NEW', 'clientOrderId': '5sLtSYvidsGdLf6Zyo0c2s', 'price': '1700', 'avgPrice': '0.00000', 'origQty': '0.010',
         # 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0', 'timeInForce': 'GTC', 'type': 'LIMIT', 'reduceOnly': False, 'closePosition': False, 'side': 'BUY', 'positionSide': 'LONG',
         # 'stopPrice': '0', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'LIMIT', 'updateTime': 1680420492874}

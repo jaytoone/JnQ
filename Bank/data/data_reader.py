@@ -1,7 +1,7 @@
 import os
 import pickle
 
-data_dir_path = r"D:\Projects\System_Trading\JnQ\Bank\data\wave_cci_wrr32_spread_wave_length"
+data_dir_path = r"D:\Projects\System_Trading\JnQ\Bank\data\wave_cci_wrr32_spread_wave_length_shield2"
 file_list = os.listdir(data_dir_path)
 
 remove_list = []
@@ -15,10 +15,10 @@ for file in file_list:
             for code, data_ in data.copy().items():
 
                 # 1. pop data.
-                if data_["name"] in remove_list:
-                    data.pop(code)
-                    print("{} removed.".format(data_["name"]))
-                    continue
+                # if data_["name"] in remove_list:
+                #     data.pop(code)
+                #     print("{} removed.".format(data_["name"]))
+                #     continue
                 for key in data_.keys():
                     # if key == "order_no_list":
                     #     data[code]["order_no_list"] = [""]

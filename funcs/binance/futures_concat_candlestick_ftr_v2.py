@@ -63,10 +63,10 @@ def concat_candlestick(symbol, interval, days, limit, end_date=None, show_proces
                 start_time = int(start_time_)
 
             response = um_futures_client.klines(symbol=symbol,
-                              interval=interval,
-                              startTime=start_time,
-                              endTime=int(end_time),
-                              limit=limit)
+                                                interval=interval,
+                                                startTime=start_time,
+                                                endTime=int(end_time),
+                                                limit=limit)
 
             df = pd.DataFrame(np.array(response)).set_index(0).iloc[:, :5]
             df.index = list(map(lambda x: datetime.fromtimestamp(int(x) / 1000), df.index))

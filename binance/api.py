@@ -77,7 +77,8 @@ class API(object):
     def sign_request(self, http_method, url_path, payload=None, special=False):
         if payload is None:
             payload = {}
-        payload["timestamp"] = get_timestamp()
+        if 'timestamp' not in payload.keys():
+            payload["timestamp"] = get_timestamp()
         query_string = self._prepare_params(payload, special)
         payload["signature"] = self._get_sign(query_string)
         return self.send_request(http_method, url_path, payload, special)

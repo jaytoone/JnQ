@@ -1,4 +1,4 @@
-from Bank.traders.shield_v2_5 import *
+from Bank.traders.shield_v2_7 import *
 from multiprocessing import Process
 from datetime import datetime
 from pandas import to_datetime

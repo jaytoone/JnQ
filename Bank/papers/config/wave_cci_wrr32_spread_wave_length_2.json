@@ -17,7 +17,7 @@
     "symbol": "BNBUSDT",
     "symbol_changed": 0,
     "token": "6198556911:AAFr0FUB4F0v9SyYy2LRpGzwuNQ9sHhz1iE",
-    "messenger_on": 1,
+    "messenger_on": 0,
     "itv_list": "['T', '3T', '5T', '15T', '30T', 'H', '4H']",
     "row_list": "[500, 1, 1, 1, 1, 1, 1]",
     "rec_row_list": "[1, 1, 1, 1, 1, 1, 1]",
@@ -151,8 +151,8 @@
     "rsi_exit": 0
   },
   "lvrg_set": {
-    "static_lvrg_short": 0,
-    "static_lvrg_long": 0,
+    "static_lvrg_short": 1,
+    "static_lvrg_long": 1,
     "limit_leverage": "None",
     "leverage": 1,
     "target_pct": 0.1,

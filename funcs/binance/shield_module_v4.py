@@ -30,42 +30,52 @@ class ShieldModule(FuturesModule):
         with open(key_abspath, 'rb') as f:
             return pickle.load(f)
 
-    def posmode_margin_leverage(self):
+    def posmode_margin_leverage(self, code):
+
         while 1:  # for completion
-            # ------ 0. position mode => hedge_mode (long & short) ------ #
+            # 0. position mode => hedge_mode (long & short)
             try:
                 self.change_position_mode(dualSidePosition="true", recvWindow=2000)
             except Exception as e:
-                msg = 'error in change_position_mode : {}'.format(e)
-                self.sys_log.error(msg)
-                self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+                #   i. allow -4059, "No need to change position side."
+                if '-4059' not in str(e):
+                    msg = "error in change_position_mode : {}".format(e)
+                    self.sys_log.error(msg)
+                    self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
             else:
-                self.sys_log.info('position mode --> hedge_mode')
+                self.sys_log.info("position mode --> hedge_mode")
 
-            # ------ 1. margin type => "cross or isolated" ------ #
+            # 1. margin type => "cross or isolated"
             try:
-                # self.change_margin_type(symbol=self.config.trader_set.symbol, marginType=FuturesMarginType.CROSSED)
-                self.change_margin_type(symbol=self.config.trader_set.symbol, marginType="ISOLATED", recvWindow=6000)
+                # self.change_margin_type(symbol=code, marginType=FuturesMarginType.CROSSED)
+                self.change_margin_type(symbol=code, marginType="ISOLATED", recvWindow=6000)
             except Exception as e:
-                msg = 'error in change_margin_type : {}'.format(e)
-                self.sys_log.error(msg)
-                self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+                #   i. allow -4046, "No need to change margin type."
+                if '-4046' not in str(e):
+                    msg = "error in change_margin_type : {}".format(e)
+                    self.sys_log.error(msg)
+                    self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
             else:
-                self.sys_log.info('leverage type --> isolated')
+                self.sys_log.info("leverage type --> isolated")
 
-            # ------ 2. check limit leverage ------ #
-            #   1. limit_leverage == None 인 경우만, server 로 부터 limit_leverage 불러옴.
+            # 2. check limit leverage
+            #       a. limit_leverage == None 인 경우만, server 로 부터 limit_leverage 불러옴.
             if self.config.lvrg_set.limit_leverage == "None":
                 try:
-                    limit_leverage = self.get_limit_leverage()
+                    limit_leverage = self.get_limit_leverage(code)
                 except Exception as e:
-                    msg = 'error in get limit_leverage : {}'.format(e)
+                    msg = "error in get limit_leverage : {}".format(e)
                     self.sys_log.error(msg)
                     self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
                     continue
                 else:
                     self.sys_log.info('limit_leverage : {}'.format(limit_leverage))
                     return limit_leverage
+            else:
+                #   b. default = 1.
+                limit_leverage = 1
+                self.sys_log.info('limit_leverage : {}'.format(limit_leverage))
+                return limit_leverage
 
     def get_open_side_v2(self, res_df, papers, np_timeidx, open_num=1):
 
@@ -144,6 +154,7 @@ class ShieldModule(FuturesModule):
         else:
             start_idx = use_rows
 
+        # 시작하는 idx 는 필요로하는 rows 보다 커야함.
         assert start_idx >= use_rows, "more dataframe rows required"
 
         for i in range(start_idx + 1, len(back_df)):  # +1 for i inclusion
@@ -161,7 +172,7 @@ class ShieldModule(FuturesModule):
         else:
             return res_df
 
-    def get_new_df(self, calc_rows=True, mode="OPEN"):
+    def get_new_df(self, code, calc_rows=True, mode="OPEN"):
         while 1:
             try:
                 row_list = literal_eval(self.config.trader_set.row_list)
@@ -171,7 +182,7 @@ class ShieldModule(FuturesModule):
                     use_rows, days = calc_rows_and_days(itv_list, row_list, rec_row_list)
                 else:
                     use_rows, days = row_list[0], 1  # load_new_df3 사용 의도 = close, time logging
-                new_df_, _ = concat_candlestick(self.config.trader_set.symbol, '1m',
+                new_df_, _ = concat_candlestick(code, '1m',
                                                 days=days,
                                                 limit=use_rows,
                                                 timesleep=None,
@@ -256,7 +267,7 @@ class ShieldModule(FuturesModule):
         # Todo
         #  1. 한번 멈췄는데 이유를 모르겠음, exec_qty, open_qty 둘다 잘찍히는데.. runtime 상의 오류인가?
         #       a. order_info['status'] == "FILLED" 일단은, 추가해봄.
-        order_info = self.get_order_info(post_order_res['orderId'])
+        order_info = self.get_order_info(post_order_res['symbol'], post_order_res['orderId'])
         open_exec = (abs(self.get_exec_qty(order_info) / open_quantity) >= self.config.trader_set.open_exec_qty_ratio) or order_info['status'] == "FILLED"
         return open_exec
 
@@ -269,7 +280,7 @@ class ShieldModule(FuturesModule):
         # Todo
         #  1. 한번 멈췄는데 이유를 모르겠음, exec_qty, open_qty 둘다 잘찍히는데.. runtime 상의 오류인가?
         if first_exec_qty_check or time.time() - check_time >= self.config.trader_set.qty_check_term:
-            order_info = self.get_order_info(post_order_res['orderId'])
+            order_info = self.get_order_info(post_order_res['symbol'], post_order_res['orderId'])
             breakout = abs(self.get_exec_qty(order_info) / open_quantity) >= self.config.trader_set.breakout_qty_ratio
             return 0, time.time(), breakout
         return 0, check_time, 0  # breakout_qty survey 실행한 경우만 check_time 갱신
@@ -404,7 +415,7 @@ class ShieldModule(FuturesModule):
         """
 
         all_executed = 0
-        order_info_list = [self.get_order_info(post_order_res['orderId'])
+        order_info_list = [self.get_order_info(post_order_res['symbol'], post_order_res['orderId'])
                            for post_order_res in post_order_res_list if post_order_res is not None]
         order_exec_check_list = [self.check_execution(order_info, quantity_precision) for order_info in order_info_list]
 
@@ -627,12 +638,13 @@ class ShieldModule(FuturesModule):
             2. rename to retry_count & -1111 error update.
         """
         retry_count = 0
-        error_code = 0
 
         if order_data is None:
             over_balance = None
         else:
             over_balance, leverage = order_data
+
+        limit_quantity_org = limit_quantity
 
         while 1:
             try:
@@ -656,7 +668,7 @@ class ShieldModule(FuturesModule):
                                                     quantity=str(limit_quantity),
                                                     price=str(limit_price))
             except Exception as e:
-                msg = 'error in limit_order : {}'.format(e)
+                msg = "error in limit_order : {}".format(e)
                 self.sys_log.error(msg)
                 self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
@@ -674,10 +686,10 @@ class ShieldModule(FuturesModule):
                         #   _, quantity_precision = self.get_precision()
                         quantity_precision = retry_count
 
-                        # close_remain_quantity = get_remaining_quantity(self.config.trader_set.symbol)
+                        # close_remain_quantity = get_remaining_quantity(code)
                         #   error 발생한 경우 정상 체결된 qty 는 존재하지 않는다고 가정 - close_remain_quantity 에는 변함이 없을거라 봄
-                        limit_quantity_mod = self.calc_with_precision(limit_quantity, quantity_precision, def_type='floor')
-                        self.sys_log.info('modified qty & precision : {} {}'.format(limit_quantity_mod, quantity_precision))
+                        limit_quantity = self.calc_with_precision(limit_quantity_org, quantity_precision, def_type='floor')
+                        self.sys_log.info('modified qty & precision : {} {}'.format(limit_quantity, quantity_precision))
 
                     except Exception as e:
                         msg = "error in get modified qty_precision : {}".format(e)
@@ -688,8 +700,7 @@ class ShieldModule(FuturesModule):
                     if retry_count >= 10:
                         retry_count = 0
 
-                    error_code = -1111
-                    # break
+                    # error_code = -1111
                     # return None, over_balance, error_code
                     time.sleep(self.config.trader_set.order_term)
                     continue
@@ -697,7 +708,7 @@ class ShieldModule(FuturesModule):
                 #       a. -4014 : price precision error
                 if '-4014' in str(e):
                     try:
-                        realtime_price = self.get_market_price_v3()
+                        realtime_price = self.get_market_price_v3(code)
                         price_precision = self.get_precision_by_price(realtime_price)
                         limit_price = self.calc_with_precision(limit_price, price_precision)
                         self.sys_log.info('modified price & precision : {}, {}'.format(limit_price, price_precision))
@@ -719,7 +730,7 @@ class ShieldModule(FuturesModule):
                             # 1. get available quantity
                             available_balance = self.get_available_balance() * 0.9
 
-                            _, quantity_precision = self.get_precision()
+                            _, quantity_precision = self.get_precision(code)
                             quantity = available_balance / limit_price * leverage
                             quantity = self.calc_with_precision(quantity, quantity_precision, def_type='floor')
                             self.sys_log.info('available_balance (temp) : {}'.format(available_balance))
@@ -749,8 +760,9 @@ class ShieldModule(FuturesModule):
                     return None, over_balance, error_code
 
             else:
+                # 3. 정상 order 의 error_code = 0.
                 self.sys_log.info('limit_order enlisted. : {}'.format(datetime.now()))
-                return post_order_res, over_balance, error_code
+                return post_order_res, over_balance, 0
 
     def partial_limit_order_v5(self, code, post_order_res_list, partial_tps, partial_qtys, close_side, pos_side, open_exec_qty, quantity_precision):
 
@@ -794,10 +806,10 @@ class ShieldModule(FuturesModule):
 
         return post_order_res_list
 
-    def cancel_order_wrapper(self, orderId):
+    def cancel_order_wrapper(self, code, order_id):
         while 1:
             try:
-                _ = self.cancel_order(symbol=self.config.trader_set.symbol, orderId=orderId)
+                _ = self.cancel_order(symbol=code, orderId=order_id)
             except Exception as e:
                 if '-2011' in str(e):  # -2011 : "Unknown order sent." --> already canceled or filled
                     return
@@ -819,9 +831,9 @@ class ShieldModule(FuturesModule):
 
         # 1. cancel limit_tp orders
         if order_type == OrderType.LIMIT:
-            [self.cancel_order_wrapper(post_order_res['orderId']) for post_order_res in post_order_res_list if post_order_res is not None]
+            [self.cancel_order_wrapper(post_order_res['symbol'], post_order_res['orderId']) for post_order_res in post_order_res_list if post_order_res is not None]
 
-        order_info_list = [self.get_order_info(post_order_res['orderId'])
+        order_info_list = [self.get_order_info(post_order_res['symbol'], post_order_res['orderId'])
                            for post_order_res in post_order_res_list if post_order_res is not None]
         # 2. get execPrice_list
         exec_price_list = [self.get_exec_price(order_info) for order_info in order_info_list]
@@ -830,7 +842,7 @@ class ShieldModule(FuturesModule):
 
         return exec_price_list, np.sum(exec_qty_list)
 
-    def market_close_order_v2(self, post_order_res_list, close_side, pos_side, open_exec_qty):
+    def market_close_order_v2(self, code, post_order_res_list, close_side, pos_side, open_exec_qty):
 
         """
         retry_count updated.
@@ -845,17 +857,18 @@ class ShieldModule(FuturesModule):
 
             # 2. get price, volume precision
             #       a. reatlime 가격 변동으로 인한 precision 변동 가능성 고려
-            _, quantity_precision = self.get_precision()
+            _, quantity_precision = self.get_precision(code)
             self.sys_log.info('quantity_precision : {}'.format(quantity_precision))
 
             close_remain_quantity = self.calc_with_precision(close_remain_quantity, quantity_precision)
             self.sys_log.info('close_remain_quantity : {}'.format(close_remain_quantity))
 
             retry_count = 0
-            error_code = None
+            error_code = 0
+            close_remain_quantity_org = close_remain_quantity
             while 1:
                 try:
-                    post_order_res = self.new_order(symbol=self.config.trader_set.symbol,
+                    post_order_res = self.new_order(symbol=code,
                                                     side=close_side,
                                                     positionSide=pos_side,
                                                     type=OrderType.MARKET,
@@ -887,10 +900,10 @@ class ShieldModule(FuturesModule):
                             #   _, quantity_precision = self.get_precision()
                             quantity_precision = retry_count
 
-                            # close_remain_quantity = get_remaining_quantity(self.config.trader_set.symbol)
+                            # close_remain_quantity = get_remaining_quantity(code)
                             #   error 발생한 경우 정상 체결된 qty 는 존재하지 않는다고 가정 - close_remain_quantity 에는 변함이 없을거라 봄
-                            close_remain_quantity_mod = self.calc_with_precision(close_remain_quantity, quantity_precision, def_type='floor')
-                            self.sys_log.info('modified qty & precision : {} {}'.format(close_remain_quantity_mod, quantity_precision))
+                            close_remain_quantity = self.calc_with_precision(close_remain_quantity_org, quantity_precision, def_type='floor')
+                            self.sys_log.info('modified qty & precision : {} {}'.format(close_remain_quantity, quantity_precision))
 
                         except Exception as e:
                             msg = "error in get modified qty_precision : {}".format(e)
