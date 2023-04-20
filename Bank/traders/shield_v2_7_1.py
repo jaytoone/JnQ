@@ -448,14 +448,18 @@ class Shield(ShieldModule):
             open_side_msg = None
             if not self.config.trader_set.backtrade:
 
-                #       i. 특성상 code 를 맨 앞에 붙일 것.
-                #           1. prev_w_i reset 해주어 앞의 code 부터 순회하게 됨.
-                #           y. save 에 대비해 먼저 이전 data load.
+                #   1. 특성상 code 를 맨 앞에 붙일 것.
+                #       i. prev_w_i reset 해주어 앞의 code 부터 순회하게 됨.
+                #       ii. save 에 대비해 먼저 이전 data load.
 
-                #   b. Telegram Messenger mode : on / off 도입.
-                if self.config.trader_set.messenger_on:
-                    #   i. get code (msg form : "code open_side_msg")
-                    if self.user_text is not None:
+                #   2. get code (msg form : "code open_side_msg")
+                if self.user_text is not None:
+
+                    #   a. Telegram Messenger mode : on / off 도입.
+                    #       i. default msg = invalid payload.
+                    msg = "error in self.user_text : invalid payload."
+
+                    if self.config.trader_set.messenger_on:
                         payload = self.user_text.upper().split(" ")
 
                         if len(payload) == 2:
@@ -464,11 +468,12 @@ class Shield(ShieldModule):
                             with open(r"D:\Projects\System_Trading\JnQ\Bank\valid_code\ticker_in_futures.pkl", 'rb') as f:
                                 valid_code_list = pickle.load(f)
 
-                            #   1. code validation
+                            #   i. code validation
                             if code in valid_code_list and open_side_msg in [OrderSide.BUY, OrderSide.SELL]:
                                 watch_code_dict[code] = open_side_msg
                                 msg = "{} {} added to watch_code_dict.".format(code, open_side_msg)
-                            #   2. remove code.
+
+                            #   ii. remove code.
                             elif "rm " in self.user_text.lower():
                                 code = self.user_text.split(" ")[1].upper()
                                 if code not in self.open_remain_data_dict and code not in self.close_remain_data_dict:
@@ -476,32 +481,24 @@ class Shield(ShieldModule):
                                     msg = "watch : {}".format(self.watch_data_dict.keys())
                                 else:
                                     msg = "{} in remain_dict.".format(code)
-                            #   3. error.
-                            else:
-                                msg = "error in self.user_text : invalid payload."
-                                self.sys_log.error(msg)
 
-                        else:
-                            #   4. watch
-                            if "watch" in self.user_text.lower():
-                                msg = "watch : {}\nopen_remain : {}\nclose_remain : {}".format(self.watch_data_dict.keys(), self.open_remain_data_dict.keys(), self.close_remain_data_dict.keys())
-                            #   5. error.
-                            else:
-                                msg = "error in self.user_text : invalid payload."
-                                self.sys_log.error(msg)
+                    #   b. watch
+                    if "watch" in self.user_text.lower():
+                        msg = "watch : {}\nopen_remain : {}\nclose_remain : {}".format(self.watch_data_dict.keys(), self.open_remain_data_dict.keys(), self.close_remain_data_dict.keys())
 
-                        self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+                    self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
-                        #       2. 사용된 user_text -> None 으로 치환한다.
-                        self.user_text = None
+                    #   d. 사용된 user_text -> None 으로 치환한다.
+                    self.user_text = None
 
-                #       ii. Messenger off 시, default code = self.config.trader_set.symbol
+                #   3. Messenger off 시, default code = self.config.trader_set.symbol
                 else:
-                    if len(self.watch_data_dict) == 0:
-                        symbol = self.config.trader_set.symbol
-                        watch_code_dict[symbol] = open_side_msg
+                    if not self.config.trader_set.messenger_on:
+                        if len(self.watch_data_dict) == 0:
+                            symbol = self.config.trader_set.symbol
+                            watch_code_dict[symbol] = open_side_msg
 
-                #   c. add data to watch_data_dict.
+                #   4. add data to watch_data_dict.
                 for code, open_side_msg in watch_code_dict.items():
                     #   i. add websocket.
                     self.websocket_client.agg_trade(symbol=code, id=1, callback=self.agg_trade_message_handler)
@@ -509,7 +506,7 @@ class Shield(ShieldModule):
                     limit_leverage = self.posmode_margin_leverage(code)
                     self.watch_data_dict[code] = {"open_side_msg": open_side_msg, "limit_leverage": limit_leverage, "ep_loc_point2": 0, "streamer": None}
 
-                #   d. reset watch_code_dict. --> watch_data_dict 에 data 지속적으로 추가하는 것을 방지하기 위함.
+                #   5. reset watch_code_dict. --> watch_data_dict 에 data 지속적으로 추가하는 것을 방지하기 위함.
                 watch_code_dict = {}
 
             else:

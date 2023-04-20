@@ -167,7 +167,7 @@ class ShieldModule(FuturesModule):
             msg = "error in get_new_df_onstream : {}".format(e)
             self.sys_log.error(msg)
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
-            quit()  # error 처리할 필요없이, backtrader 프로그램 종료
+            self.kill_proc()  # error 처리할 필요없이, backtrader 프로그램 종료
             # return None, None   # output len 유지
         else:
             return res_df

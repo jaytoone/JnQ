@@ -14,7 +14,7 @@
     "initial_asset": 10,
     "profit_mode": "SUM",
     "asset_changed": 0,
-    "symbol": "BNBUSDT",
+    "symbol": "FTMUSDT",
     "symbol_changed": 0,
     "token": "6198556911:AAFr0FUB4F0v9SyYy2LRpGzwuNQ9sHhz1iE",
     "messenger_on": 0,
@@ -148,7 +148,8 @@
     "static_out": 1,
     "out_onexec": 0,
     "tf_exit": "None",
-    "rsi_exit": 0
+    "rsi_exit": 0,
+    "cci_exit": 0
   },
   "lvrg_set": {
     "static_lvrg_short": 1,
