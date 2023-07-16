@@ -14,7 +14,7 @@
     "initial_asset": 10,
     "profit_mode": "SUM",
     "asset_changed": 0,
-    "symbol": "FTMUSDT",
+    "symbol": "BNBUSDT",
     "symbol_changed": 0,
     "token": "6198556911:AAFr0FUB4F0v9SyYy2LRpGzwuNQ9sHhz1iE",
     "messenger_on": 0,
@@ -56,9 +56,9 @@
       "wrr_10": "None",
       "wrr_21": "None",
       "wrr_32_min_short": "None",
-      "wrr_32_max_short": 0.9,
+      "wrr_32_max_short": 0.7,
       "wrr_32_min_long": "None",
-      "wrr_32_max_long": 0.9,
+      "wrr_32_max_long": 0.7,
       "co_es": "None",
       "cu_es": "None",
       "crr": "None",
@@ -144,6 +144,7 @@
     "partial_qty_ratio": "[1]"
   },
   "out_set": {
+    "non_out": 0,
     "hl_out": 1,
     "static_out": 1,
     "out_onexec": 0,
@@ -152,11 +153,11 @@
     "cci_exit": 0
   },
   "lvrg_set": {
-    "static_lvrg_short": 1,
-    "static_lvrg_long": 1,
+    "static_lvrg_short": 0,
+    "static_lvrg_long": 0,
     "limit_leverage": "None",
     "leverage": 1,
-    "target_pct": 0.1,
+    "target_pct": 0.01,
     "allow_float": 0,
     "lvrg_rejection": 0
   }

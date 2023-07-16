@@ -7,12 +7,12 @@
 # from binance_f import RequestClient
 # from binance_f.model import *
 # from binance_f.base.printobject import *
-from funcs.binance.futures_concat_candlestick_ftr import concat_candlestick
+from funcs.binance.futures_concat_candlestick_ftr_v2 import concat_candlestick
 import matplotlib.pyplot as plt
 from funcs.public.broker import *
 # from funcs.olds.funcs_indicator_candlescore import *
 from funcs.public.indicator import *
-import mpl_finance as mf
+# import mpl_finance as mf
 
 # import numpy as np
 # import pandas as pd
@@ -25,15 +25,23 @@ pd.set_option('display.max_columns', 2500)
 def sync_check(df, plot_size=45, plotting=False):
 
 
-    # ------ supertrend ------ #
+    # 2. supertrend
     # print(talib.ATR(df.high, df.low, df.close, timeperiod=14).tail(20))
     # quit()
 
     # print(rma(df.close, 15).tail())
     # quit()
     #
-    # print(supertrend_v2(df, 10, 3)[1][-20:])
-    # quit()
+    print(supertrend_v2(df, 10, 2)[0][-20:])
+    quit()
+
+    # 1. ichimoku
+    df = ichimoku_v2(df)
+    # a, b = ichimoku(df, chikou_period=26)
+    print(df.tail(10))
+    # print(a)
+    quit()
+    #
 
     df_15T = to_htf(df, '15T', '1h')
     df = st_price_line(df, df_15T)
@@ -213,9 +221,6 @@ def sync_check(df, plot_size=45, plotting=False):
     # print(df.tail(40))
     # quit()
 
-    # #           ichimoku            #
-    # # df['senkou_a'], df['senkou_b'] = ichimoku(df)
-    #
     # second_df['senkou_a'], second_df['senkou_b'] = ichimoku(second_df)
     # df = df.join( pd.DataFrame(index=df.index, data=to_lower_tf(df, second_df, [-2, -1]), columns=['senkou_a', 'senkou_b']))
     #
@@ -314,9 +319,12 @@ if __name__=="__main__":
 
     symbol = "ETHUSDT"
 
-    df, _ = concat_candlestick(symbol, '1m', days=2, limit=1500, show_process=True)    # 1500- 13:15:59.999  1104.302208   1104.753715 - 1.075345 1500 - 1108.071810    days(1) 14:35:00    2638.234157
+    df, _ = concat_candlestick(symbol, '1m', days=1, limit=1500, show_process=True)    # 1500- 13:15:59.999  1104.302208   1104.753715 - 1.075345 1500 - 1108.071810    days(1) 14:35:00    2638.234157
     #  days(3) 16:55:00    3125.530734 days(4) 16:55:00    3126.399747 days(5) 16:55:00    3126.441473 days(6) 16:55:00    3126.443448
     #  days(7) 16:55:00    3126.443546
+    # days=2,  1797.42825095 1797.31793327 1797.24913994 1797.24913994 1797.94522595
+    # days=1, 1797.42825095 1797.31793327 1797.24913994 1797.24913994
+    # days=1, limit=300, 1797.42825095 1797.31793327 1797.24913994 1797.24913994
 
     #   days(1) 11:30:59.999    3159.573597  <-> days(2) len_data : 2156 11:30:59.999    3161.769875796363 days(3) len_data : 3596 11:30:59.999    3161.769876393427694
     #   days(4) 11:30:59.999    3161.769876393427694     11:30:59.999    3161.769876  days(1) len_data : 715 11:30:59.999    3159.573597

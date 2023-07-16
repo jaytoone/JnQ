@@ -3,6 +3,10 @@ import pandas as pd
 from funcs.public.broker import to_lower_tf_v2, to_lower_tf_v4, intmin, ffill, itv_to_number
 import talib
 
+from scipy.signal import savgol_filter
+from statsmodels.nonparametric.smoothers_lowess import lowess
+from scipy.ndimage import gaussian_filter1d
+
 
 # Todo,  nz() deprecated for vectorization, use fillna()
 def nz(x, y=0):
@@ -13,7 +17,7 @@ def nz(x, y=0):
         return x
 
 
-def round(x):
+def round_v2(x):
     x = float(x)
     if x > 0.99:
         return 0.999
@@ -28,9 +32,9 @@ def iszero(val, eps):
     return abs(val) <= eps
 
 
-def tozero(fst, snd):
+def tozero_v2(result):
     eps = 1e-10
-    result = fst + snd
+
     if iszero(result, eps):
         result = 0
     else:
@@ -42,9 +46,9 @@ def tozero(fst, snd):
     return result
 
 
-def tozero_v2(result):
+def tozero(fst, snd):
     eps = 1e-10
-
+    result = fst + snd
     if iszero(result, eps):
         result = 0
     else:
@@ -90,6 +94,36 @@ def dev(data, period):
     return dev_
 
 
+def filter_savgol_ud_broad(ltf_df, htf_df, period=51, polyorder=3, backing_i=1, itv=None):
+    close = htf_df['close'].to_numpy()
+
+    len_df = len(htf_df)
+    realtime_ud = np.full(len_df, np.nan)
+
+    for i in range(period, len_df):
+        res = savgol_filter(close[i + 1 - period:i + 1], period, polyorder)
+        realtime_ud[i] = 1 if res[-1] > res[-2] else 0
+
+    if itv is None:
+        interval = pd.infer_freq(htf_df.index)
+    else:
+        interval = itv
+
+    htf_df['realtime_ud_{}{}{}'.format(interval, period, polyorder)] = realtime_ud
+
+    ud_series = htf_df['realtime_ud_{}{}{}'.format(interval, period, polyorder)]
+    htf_df['buy_{}{}{}'.format(interval, period, polyorder)] = ud_series.shift(1) < ud_series
+    htf_df['sell_{}{}{}'.format(interval, period, polyorder)] = ud_series.shift(1) > ud_series
+
+    if interval not in ['T', '1m']:
+        return ltf_df.join(to_lower_tf_v4(ltf_df, htf_df, htf_df.columns[-3:], ltf_itv='T', backing_i=backing_i), how='inner')
+    else:
+        ltf_df['realtime_ud__{}{}{}'.format(interval, period, polyorder)] = htf_df['realtime_ud__{}{}{}'.format(interval, period, polyorder)]
+        ltf_df['buy__{}{}{}'.format(interval, period, polyorder)] = htf_df['buy__{}{}{}'.format(interval, period, polyorder)]
+        ltf_df['sell__{}{}{}'.format(interval, period, polyorder)] = htf_df['sell__{}{}{}'.format(interval, period, polyorder)]
+        return ltf_df
+
+
 def get_wave_time_ratio(res_df, wave_itv1, wave_period1):
     wave_cu_prime_idx_fill_ = res_df['wave_cu_prime_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
     wave_co_prime_idx_fill_ = res_df['wave_co_prime_idx_fill_{}{}'.format(wave_itv1, wave_period1)].shift(1).to_numpy()
@@ -119,14 +153,84 @@ def add_roll_idx(res_df, valid_prime_idx, roll_idx_arr, data_col, roll_hl_cnt):
     return res_df
 
 
+def ud_cci(t_df, wave_period, itv):
+
+    """
+    작성된 itv 로부터
+    """
+
+    # itv = pd.infer_freq(t_df.index)
+
+    # t_df = cci_v2(t_df, wave_period)
+
+    cci_ = t_df['cci_{}{}'.format(itv, wave_period)].to_numpy()
+    b1_cci_ = t_df['cci_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
+
+    baseline = 0
+
+    t_df['short_ud_{}{}'.format(itv, wave_period)] = (b1_cci_ > baseline) & (baseline > cci_)
+    t_df['long_ud_{}{}'.format(itv, wave_period)] = (b1_cci_ < baseline) & (baseline < cci_)
+
+    return t_df
+
+
+def tc_bb(t_df, bb_period, multiple, itv=None):
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    t_df = bb_width_v3(t_df, bb_period, multiple=multiple, itv=itv)
+
+    bb_upper_ = t_df['bb_upper_{}{}'.format(itv, bb_period)].to_numpy()
+    bb_lower_ = t_df['bb_lower_{}{}'.format(itv, bb_period)].to_numpy()
+
+    close = t_df['close'].to_numpy()
+    b1_close = t_df['close'].shift(1).to_numpy()
+
+    t_df['short_tc_{}{}'.format(itv, bb_period)] = (b1_close > bb_lower_) & (bb_lower_ > close)
+    t_df['long_tc_{}{}'.format(itv, bb_period)] = (b1_close < bb_upper_) & (bb_upper_ < close)
+
+    return t_df
+
+
+def tc_cci_v3(t_df, wave_period, itv=None):
+
+    """
+    1. tc 로 wave_public 을 사용함.
+    """
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    t_df = cci_v2(t_df, wave_period, itv=itv)
+
+    cci_ = t_df['cci_{}{}'.format(itv, wave_period)].to_numpy()
+    b1_cci_ = t_df['cci_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
+
+    baseline = 0
+    band_width = 100
+    upper_band = baseline + band_width
+    lower_band = baseline - band_width
+
+    data_cols = ['open', 'high', 'low', 'close']
+    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+
+    cu_bool = (b1_cci_ > lower_band) & (lower_band > cci_)
+    co_bool = (b1_cci_ < upper_band) & (upper_band < cci_)
+
+    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=itv)
+
+
 def tc_cci_v2(t_df, wave_period):
+
     """
     v1 -> v2
         1. higher_bias confirmation
             a. b1_cci, cci & band 의 부호를 변경함으로써 higher_bias 를 공략해봄.
     """
-    t_df = cci_v2(t_df, wave_period)
     itv = pd.infer_freq(t_df.index)
+
+    t_df = cci_v2(t_df, wave_period)
 
     cci_ = t_df['cci_{}{}'.format(itv, wave_period)].to_numpy()
     b1_cci_ = t_df['cci_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
@@ -146,9 +250,12 @@ def tc_cci_v2(t_df, wave_period):
     return t_df
 
 
-def tc_cci(t_df, wave_period):
-    t_df = cci_v2(t_df, wave_period)
-    itv = pd.infer_freq(t_df.index)
+def tc_cci(t_df, wave_period, itv=None):
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    t_df = cci_v2(t_df, wave_period, itv=itv)
 
     cci_ = t_df['cci_{}{}'.format(itv, wave_period)].to_numpy()
     b1_cci_ = t_df['cci_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
@@ -158,9 +265,9 @@ def tc_cci(t_df, wave_period):
     upper_band = baseline + band_width
     lower_band = baseline - band_width
 
-    data_cols = ['open', 'high', 'low', 'close']
-    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
-    open, high, low, close = ohlc_list
+    # data_cols = ['open', 'high', 'low', 'close']
+    # ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+    # open, high, low, close = ohlc_list
 
     t_df['short_tc_{}{}'.format(itv, wave_period)] = (b1_cci_ > lower_band) & (lower_band > cci_)
     t_df['long_tc_{}{}'.format(itv, wave_period)] = (b1_cci_ < upper_band) & (upper_band < cci_)
@@ -168,9 +275,12 @@ def tc_cci(t_df, wave_period):
     return t_df
 
 
-def tc_dc_base(t_df, dc_period):
-    t_df = donchian_channel_v4(t_df, dc_period)
-    itv = pd.infer_freq(t_df.index)
+def tc_dc_base(t_df, dc_period, itv=None):
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    t_df = donchian_channel_v4(t_df, dc_period, itv=itv)
 
     dc_base_ = t_df['dc_base_{}{}'.format(itv, dc_period)].to_numpy()
 
@@ -182,6 +292,19 @@ def tc_dc_base(t_df, dc_period):
 
     return t_df
 
+
+def ma_v2(df, period=30, itv=None):
+
+    if itv == 'None':
+        itv = pd.infer_freq(df.index)
+    else:
+        itv = itv
+
+    close = df['close'].to_numpy()
+
+    df['ma_{}{}'.format(itv, period)] = talib.MA(close, timeperiod=period)
+
+    return df
 
 def ma(df, period=30):
     itv = pd.infer_freq(df.index)
@@ -200,31 +323,6 @@ def macd_hist(df, short=5, long=35, signal=5):
 
     df['macd_{}{}{}'.format(itv, short, long)] = macd
     df['macd_hist_{}{}{}{}'.format(itv, short, long, signal)] = macd - macd_signal
-
-    return df
-
-
-def stoch_v2(df, fastk_period=13, slowk_period=3, slowd_period=3):
-    itv = pd.infer_freq(df.index)
-    high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
-    slowk, slowd = talib.STOCH(high, low, close, fastk_period=fastk_period, slowk_period=slowk_period,
-                               slowk_matype=0, slowd_period=slowd_period, slowd_matype=0)
-
-    df['stoch_{}{}{}{}'.format(itv, fastk_period, slowk_period, slowd_period)] = slowd
-
-    return df
-
-
-def cci_v2(df, period=20, smooth=None, itv=None):
-    if itv is None:
-        itv = pd.infer_freq(df.index)
-
-    high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
-
-    if smooth is None:
-        df['cci_{}{}'.format(itv, period)] = talib.CCI(high, low, close, timeperiod=period)
-    else:
-        df['cci_{}{}'.format(itv, period)] = talib.MA(talib.CCI(high, low, close, timeperiod=period), timeperiod=smooth)
 
     return df
 
@@ -296,6 +394,7 @@ def wave_range_ratio_v4_2(res_df, wave_itv, wave_period, roll_hl_cnt=3):
 
 
 def get_terms_info_v4(cu_idx, co_idx, len_df, len_df_range):
+
     cu_fill_idx = fill_arr(cu_idx)
     co_fill_idx = fill_arr(co_idx)
 
@@ -599,6 +698,63 @@ def imb_ratio(df, itv):
     df['long_ir_{}'.format(itv)] = np.where(close > open, (close - b1_high) / candle_range, np.nan)  # close > open & close > b1_high
 
     return
+
+
+def wave_range_savgol_ud(t_df, period, polyorder, itv=None):
+    close = t_df['close'].to_numpy()
+
+    len_df = len(t_df)
+    realtime_ud = np.full(len_df, np.nan)
+
+    for i in range(period, len_df):
+        res = savgol_filter(close[i + 1 - period:i + 1], period, polyorder)
+        realtime_ud[i] = 1 if res[-1] > res[-2] else 0
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    t_df['realtime_ud_{}{}{}'.format(itv, period, polyorder)] = realtime_ud
+
+    ud_series = t_df['realtime_ud_{}{}{}'.format(itv, period, polyorder)]
+    ud = ud_series.to_numpy()
+    b1_ud = ud_series.shift(1).to_numpy()
+
+    data_cols = ['open', 'high', 'low', 'close']
+    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+
+    # 2. define co, cu <- point missing 과 관련해 정교해아함
+    cu_bool = b1_ud > ud
+    co_bool = b1_ud < ud
+
+    t_df['buy_{}{}{}'.format(itv, period, polyorder)] = co_bool
+    t_df['sell_{}{}{}'.format(itv, period, polyorder)] = cu_bool
+
+    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, period, itv=itv)
+
+
+def wave_range_rsi_v1(t_df, wave_period, band_width=20, itv=None):
+    t_df = rsi_v2(t_df, wave_period, itv=itv)
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    rsi_ = t_df['rsi_{}{}'.format(itv, wave_period)].to_numpy()
+    b1_rsi_ = t_df['rsi_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
+
+    baseline = 50
+    upper_band = baseline + band_width
+    lower_band = baseline - band_width
+
+    data_cols = ['open', 'high', 'low', 'close']
+    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+    # open, high, low, close = ohlc_list
+
+    # ============ modules ============ #
+    # ------ define co, cu ------ # <- point missing 과 관련해 정교해아함
+    cu_bool = (b1_rsi_ > upper_band) & (upper_band > rsi_)
+    co_bool = (b1_rsi_ < lower_band) & (lower_band < rsi_)
+
+    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=itv)
 
 
 def wave_range_bb_v1(t_df, wave_period, multiple=1, itv=None):
@@ -1284,9 +1440,6 @@ def ema(data, period, adjust=False):
 #
 #     return sum_
 
-def cloud_bline(df, period):
-    return (df['high'].rolling(period).max() + df['low'].rolling(period).min()) / 2
-
 
 def cloud_bline_v2(df, period):  # dc_base 와 다를게 없는데 ?
     itv = pd.infer_freq(df.index)
@@ -1295,19 +1448,8 @@ def cloud_bline_v2(df, period):  # dc_base 와 다를게 없는데 ?
     return
 
 
-def heikinashi(df):
-    ha_df = df.copy()
-    ha_df['close'] = (df['open'] + df['close'] + df['high'] + df['low']) / 4
-    ha_df['open'] = np.nan
-    for i in range(1, len(df)):
-        if pd.isna(ha_df['open'].iloc[i - 1]):
-            ha_df['open'].iloc[i] = (df['open'].iloc[i] + df['close'].iloc[i]) / 2
-        else:
-            ha_df['open'].iloc[i] = (ha_df['open'].iloc[i - 1] + ha_df['close'].iloc[i - 1]) / 2
-    ha_df['high'] = np.max(ha_df.iloc[:, [0, 1, 3]].values, axis=1)
-    ha_df['low'] = np.min(ha_df.iloc[:, [0, 2, 3]].values, axis=1)
-
-    return ha_df
+def cloud_bline(df, period):
+    return (df['high'].rolling(period).max() + df['low'].rolling(period).min()) / 2
 
 
 def heikinashi_v2(res_df_):
@@ -1327,6 +1469,21 @@ def heikinashi_v2(res_df_):
         res_df_['ha' + cols] = data
 
     return
+
+
+def heikinashi(df):
+    ha_df = df.copy()
+    ha_df['close'] = (df['open'] + df['close'] + df['high'] + df['low']) / 4
+    ha_df['open'] = np.nan
+    for i in range(1, len(df)):
+        if pd.isna(ha_df['open'].iloc[i - 1]):
+            ha_df['open'].iloc[i] = (df['open'].iloc[i] + df['close'].iloc[i]) / 2
+        else:
+            ha_df['open'].iloc[i] = (ha_df['open'].iloc[i - 1] + ha_df['close'].iloc[i - 1]) / 2
+    ha_df['high'] = np.max(ha_df.iloc[:, [0, 1, 3]].values, axis=1)
+    ha_df['low'] = np.min(ha_df.iloc[:, [0, 2, 3]].values, axis=1)
+
+    return ha_df
 
 
 def roc(data, period):
@@ -1488,8 +1645,15 @@ def cct_bbo(df, period, smooth):
     return cctbbo, ema_cctbbo
 
 
-def donchian_channel_v4(df, period):
-    itv = pd.infer_freq(df.index)
+def donchian_channel_v4(df, period, itv=None):
+
+    """
+    1. itv added.
+    """
+
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
     upper_name = 'dc_upper_{}{}'.format(itv, period)
     lower_name = 'dc_lower_{}{}'.format(itv, period)
     base_name = 'dc_base_{}{}'.format(itv, period)
@@ -1616,7 +1780,7 @@ def dc_line_v4(ltf_df, htf_df, dc_period=20):
     interval = pd.infer_freq(htf_df.index)
     if interval not in ['T', '1m']:
         htf_df = donchian_channel_v4(htf_df, dc_period)
-        return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
+        return ltf_df.join(to_lower_tf_v4(ltf_df, htf_df, htf_df.columns[-3:], ltf_itv='T'), how='inner')
     else:
         ltf_df = donchian_channel_v4(ltf_df, dc_period)
         return ltf_df
@@ -1685,17 +1849,6 @@ def dc_level(ltf_df, interval, dc_gap_multiple):
     return ltf_df
 
 
-def rs_channel(df, period=20, itv='T'):  # htf ohlc 는 itv 조사가 안되서 itv 변수 필요함
-    if itv == 'T':
-        rolled_data = df[['open', 'close']].rolling(period)
-    else:
-        rolled_data = df[['open_{}'.format(itv), 'close_{}'.format(itv)]].rolling(period)
-    df['resi_{}'.format(itv)] = rolled_data.max().max(1)
-    df['sup_{}'.format(itv)] = rolled_data.min().min(1)
-
-    return
-
-
 def rs_channel_v2(df, period=20, itv='T', type='TP'):
     if itv == 'T':
         rolled_data = df['close'].rolling(period)
@@ -1712,7 +1865,19 @@ def rs_channel_v2(df, period=20, itv='T', type='TP'):
     return
 
 
+def rs_channel(df, period=20, itv='T'):  # htf ohlc 는 itv 조사가 안되서 itv 변수 필요함
+    if itv == 'T':
+        rolled_data = df[['open', 'close']].rolling(period)
+    else:
+        rolled_data = df[['open_{}'.format(itv), 'close_{}'.format(itv)]].rolling(period)
+    df['resi_{}'.format(itv)] = rolled_data.max().max(1)
+    df['sup_{}'.format(itv)] = rolled_data.min().min(1)
+
+    return
+
+
 def bb_width_v3(df, period, multiple, itv=None):
+
     upper, base, lower = talib.BBANDS(df.close, timeperiod=period, nbdevup=multiple, nbdevdn=multiple, matype=0)
 
     if itv is None:
@@ -1770,6 +1935,26 @@ def bb_width(df, period, multiple):
     return upper, lower, basis, bbw
 
 
+def bb_line_v3(ltf_df, htf_df, period=20, multiple=1):
+    interval = pd.infer_freq(htf_df.index)
+    if interval not in ['T', '1m']:
+        bb_width_v3(htf_df, period, multiple)
+        return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
+    else:
+        bb_width_v3(ltf_df, period, multiple)
+        return ltf_df
+
+
+def bb_line_v2(ltf_df, htf_df, interval, period=20, multi=1):
+    # interval = pd.infer_freq(htf_df.index)
+    if interval not in ['T', '1m']:
+        bb_width_v2(htf_df, period, multi)
+        return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
+    else:
+        bb_width(ltf_df, period, multi)
+        return ltf_df
+
+
 def bb_line(ltf_df, htf_df, interval, period=20, multi=1):  # deprecated - join 을 따로 사용해도 될터인데.. (v2 만들면서 느낀점)
 
     bb_upper = 'bb_upper_%s' % interval
@@ -1784,26 +1969,6 @@ def bb_line(ltf_df, htf_df, interval, period=20, multi=1):  # deprecated - join 
         joined_ltf_df[bb_upper], joined_ltf_df[bb_lower], joined_ltf_df[bb_base], _ = bb_width(ltf_df, period, multi)
 
     return joined_ltf_df
-
-
-def bb_line_v2(ltf_df, htf_df, interval, period=20, multi=1):
-    # interval = pd.infer_freq(htf_df.index)
-    if interval not in ['T', '1m']:
-        bb_width_v2(htf_df, period, multi)
-        return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
-    else:
-        bb_width(ltf_df, period, multi)
-        return ltf_df
-
-
-def bb_line_v3(ltf_df, htf_df, period=20, multiple=1):
-    interval = pd.infer_freq(htf_df.index)
-    if interval not in ['T', '1m']:
-        bb_width_v3(htf_df, period, multiple)
-        return ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-3, 0, 1)]), how='inner')
-    else:
-        bb_width_v3(ltf_df, period, multiple)
-        return ltf_df
 
 
 def bb_level_v2(res_df, itv, period):
@@ -1875,7 +2040,7 @@ def fisher(df, period):
         value.iloc[i] = (0.66 * ((hl2.iloc[i] - low_.iloc[i]) / max(high_.iloc[i] - low_.iloc[i], .001) - .5)
                          + .67 * nz(value.iloc[i - 1]))
         # print(value.iloc[i])
-        value.iloc[i] = round(value.iloc[i])
+        value.iloc[i] = round_v2(value.iloc[i])
         # print(value.iloc[i])
         # print()
         fish.iloc[i] = .5 * np.log((1 + value.iloc[i]) / max(1 - value.iloc[i], .001)) + .5 * nz(fish.iloc[i - 1])
@@ -1926,84 +2091,6 @@ def fisher_trend(df, column, tc_upper, tc_lower):
                         start_i = j - 1
 
     return fisher_trend_df.values
-
-
-#       Todo - recursive ?       #
-def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_uptrend=True):
-    uptrend = pd.Series(True, index=df.index)
-    new_trend = pd.Series(False, index=df.index)
-    reversal_state = pd.Series(0, index=df.index)
-    af = pd.Series(af_initial, index=df.index)
-
-    ep = df['high'].copy()
-    sar = df['low'].copy()
-
-    for i in range(1, len(df)):
-        # if not pd.isna(uptrend.iloc[i - 1]) and pd.isna(new_trend.iloc[i - 1]):
-        if reversal_state.iloc[i] == 0:
-            if uptrend.iloc[i - 1]:
-                ep.iloc[i] = max(df['high'].iloc[i], ep.iloc[i - 1])
-            else:
-                ep.iloc[i] = min(df['low'].iloc[i], ep.iloc[i - 1])
-            if new_trend.iloc[i - 1]:
-                af.iloc[i] = af_initial
-            else:
-                if ep.iloc[i] != ep.iloc[i - 1]:
-                    af.iloc[i] = min(af_maximum, af.iloc[i - 1] + af_increment)
-                else:
-                    af.iloc[i] = af.iloc[i - 1]
-            sar.iloc[i] = sar.iloc[i - 1] + af.iloc[i] * (ep.iloc[i] - sar.iloc[i - 1])
-
-            if uptrend.iloc[i - 1]:
-                sar.iloc[i] = min(sar.iloc[i], df['low'].iloc[i - 1])
-                # if not pd.isna(df['low'].iloc[i - 2]):
-                if i >= 2:
-                    sar.iloc[i] = min(sar.iloc[i], df['low'].iloc[i - 2])
-                if sar.iloc[i] > df['low'].iloc[i]:
-                    uptrend.iloc[i] = False
-                    new_trend.iloc[i] = True
-                    sar.iloc[i] = max(df['high'].iloc[i], ep.iloc[i - 1])
-                    ep.iloc[i] = min(df['low'].iloc[i], df['low'].iloc[i - 1])
-                    reversal_state.iloc[i] = 2
-                else:
-                    uptrend.iloc[i] = True
-                    new_trend.iloc[i] = False
-
-            else:
-                sar.iloc[i] = max(sar.iloc[i], df['high'].iloc[i - 1])
-                # if not pd.isna(df['high'].iloc[i - 2]):
-                if i >= 2:
-                    sar.iloc[i] = max(sar.iloc[i], df['high'].iloc[i - 2])
-                if sar.iloc[i] < df['high'].iloc[i]:
-                    uptrend.iloc[i] = True
-                    new_trend.iloc[i] = True
-                    sar.iloc[i] = min(df['low'].iloc[i], ep.iloc[i - 1])
-                    ep.iloc[i] = max(df['high'].iloc[i], df['high'].iloc[i - 1])
-                    reversal_state.iloc[i] = 1
-                else:
-                    uptrend.iloc[i] = False
-                    new_trend.iloc[i] = False
-
-        else:
-            if reversal_state.iloc[i] == 1:
-                ep.iloc[i] = df['high'].iloc[i]
-                if df['low'].iloc[i] < sar.iloc[i]:
-                    sar.iloc[i] = ep.iloc[i]
-                    ep.iloc[i] = df['low'].iloc[i]
-                    reversal_state.iloc[i] = 2
-                    uptrend.iloc[i] = False
-            else:
-                ep.iloc[i] = df['low'].iloc[i]
-                if df['high'].iloc[i] > sar.iloc[i]:
-                    sar.iloc[i] = ep.iloc[i]
-                    ep.iloc[i] = df['high'].iloc[i]
-                    reversal_state.iloc[i] = 1
-                    uptrend.iloc[i] = True
-
-    if return_uptrend:
-        return sar, uptrend
-
-    return sar
 
 
 def lucid_sar_v2(df, af_initial=0.03, af_increment=0.02, af_maximum=0.2, return_uptrend=True):
@@ -2090,6 +2177,84 @@ def lucid_sar_v2(df, af_initial=0.03, af_increment=0.02, af_maximum=0.2, return_
     return
 
 
+#       Todo - recursive ?       #
+def lucid_sar(df, af_initial=0.02, af_increment=0.02, af_maximum=0.2, return_uptrend=True):
+    uptrend = pd.Series(True, index=df.index)
+    new_trend = pd.Series(False, index=df.index)
+    reversal_state = pd.Series(0, index=df.index)
+    af = pd.Series(af_initial, index=df.index)
+
+    ep = df['high'].copy()
+    sar = df['low'].copy()
+
+    for i in range(1, len(df)):
+        # if not pd.isna(uptrend.iloc[i - 1]) and pd.isna(new_trend.iloc[i - 1]):
+        if reversal_state.iloc[i] == 0:
+            if uptrend.iloc[i - 1]:
+                ep.iloc[i] = max(df['high'].iloc[i], ep.iloc[i - 1])
+            else:
+                ep.iloc[i] = min(df['low'].iloc[i], ep.iloc[i - 1])
+            if new_trend.iloc[i - 1]:
+                af.iloc[i] = af_initial
+            else:
+                if ep.iloc[i] != ep.iloc[i - 1]:
+                    af.iloc[i] = min(af_maximum, af.iloc[i - 1] + af_increment)
+                else:
+                    af.iloc[i] = af.iloc[i - 1]
+            sar.iloc[i] = sar.iloc[i - 1] + af.iloc[i] * (ep.iloc[i] - sar.iloc[i - 1])
+
+            if uptrend.iloc[i - 1]:
+                sar.iloc[i] = min(sar.iloc[i], df['low'].iloc[i - 1])
+                # if not pd.isna(df['low'].iloc[i - 2]):
+                if i >= 2:
+                    sar.iloc[i] = min(sar.iloc[i], df['low'].iloc[i - 2])
+                if sar.iloc[i] > df['low'].iloc[i]:
+                    uptrend.iloc[i] = False
+                    new_trend.iloc[i] = True
+                    sar.iloc[i] = max(df['high'].iloc[i], ep.iloc[i - 1])
+                    ep.iloc[i] = min(df['low'].iloc[i], df['low'].iloc[i - 1])
+                    reversal_state.iloc[i] = 2
+                else:
+                    uptrend.iloc[i] = True
+                    new_trend.iloc[i] = False
+
+            else:
+                sar.iloc[i] = max(sar.iloc[i], df['high'].iloc[i - 1])
+                # if not pd.isna(df['high'].iloc[i - 2]):
+                if i >= 2:
+                    sar.iloc[i] = max(sar.iloc[i], df['high'].iloc[i - 2])
+                if sar.iloc[i] < df['high'].iloc[i]:
+                    uptrend.iloc[i] = True
+                    new_trend.iloc[i] = True
+                    sar.iloc[i] = min(df['low'].iloc[i], ep.iloc[i - 1])
+                    ep.iloc[i] = max(df['high'].iloc[i], df['high'].iloc[i - 1])
+                    reversal_state.iloc[i] = 1
+                else:
+                    uptrend.iloc[i] = False
+                    new_trend.iloc[i] = False
+
+        else:
+            if reversal_state.iloc[i] == 1:
+                ep.iloc[i] = df['high'].iloc[i]
+                if df['low'].iloc[i] < sar.iloc[i]:
+                    sar.iloc[i] = ep.iloc[i]
+                    ep.iloc[i] = df['low'].iloc[i]
+                    reversal_state.iloc[i] = 2
+                    uptrend.iloc[i] = False
+            else:
+                ep.iloc[i] = df['low'].iloc[i]
+                if df['high'].iloc[i] > sar.iloc[i]:
+                    sar.iloc[i] = ep.iloc[i]
+                    ep.iloc[i] = df['high'].iloc[i]
+                    reversal_state.iloc[i] = 1
+                    uptrend.iloc[i] = True
+
+    if return_uptrend:
+        return sar, uptrend
+
+    return sar
+
+
 def cmo(df, period=9):
     df['closegap_cunsum'] = (df['close'] - df['close'].shift(1)).cumsum()
     df['closegap_abs_cumsum'] = abs(df['close'] - df['close'].shift(1)).cumsum()
@@ -2123,8 +2288,20 @@ def rma(series, period):
     return rma_
 
 
-#       Todo - recursive       #
+def rsi_v2(df, period, itv=None):
+
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
+    df['rsi_{}{}'.format(itv, period)] = talib.RSI(df['close'].to_numpy(), period)
+
+    return df
+
+
 def rsi(ohlcv_df, period=14):
+    """
+    recursive
+    """
     #       rma 에 rolling, index 가 필요해서 series 로 남겨두고 del 하는 것임     #
     ohlcv_df['up'] = np.where(ohlcv_df['close'].diff(1) > 0, ohlcv_df['close'].diff(1), 0)
     ohlcv_df['down'] = np.where(ohlcv_df['close'].diff(1) < 0, ohlcv_df['close'].diff(1) * (-1), 0)
@@ -2138,12 +2315,38 @@ def rsi(ohlcv_df, period=14):
     return rsi_
 
 
+def cci_v2(df, period=20, smooth=None, itv=None):
+
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
+    high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
+
+    if smooth is None:
+        df['cci_{}{}'.format(itv, period)] = talib.CCI(high, low, close, timeperiod=period)
+    else:
+        df['cci_{}{}'.format(itv, period)] = talib.MA(talib.CCI(high, low, close, timeperiod=period), timeperiod=smooth)
+
+    return df
+
+
 def cci(df, period=20):
     hlc3 = (df['high'] + df['low'] + df['close']) / 3
     ma_ = hlc3.rolling(period).mean()
     cci_ = (hlc3 - ma_) / (0.015 * dev(hlc3, period))
 
     return cci_
+
+
+def stoch_v2(df, fastk_period=13, slowk_period=3, slowd_period=3):
+    itv = pd.infer_freq(df.index)
+    high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
+    slowk, slowd = talib.STOCH(high, low, close, fastk_period=fastk_period, slowk_period=slowk_period,
+                               slowk_matype=0, slowd_period=slowd_period, slowd_matype=0)
+
+    df['stoch_{}{}{}{}'.format(itv, fastk_period, slowk_period, slowd_period)] = slowd
+
+    return df
 
 
 def stoch(ohlcv_df, period_sto=13, k=3, d=3):
@@ -2248,8 +2451,13 @@ def atr(df, period):
     return atr
 
 
-# ------ vectorized supertrend ------ #
 def supertrend_v2(df, period, multiplier):
+
+    """
+    1. vectorized supertrend - non recursive.
+    2. tradingview 와 일치하지는 않는다.
+    """
+
     hl2 = (df.high.to_numpy() + df.low.to_numpy()) / 2
 
     atr = talib.ATR(df.high, df.low, df.close, timeperiod=period)
@@ -2341,27 +2549,6 @@ def st_price_line(ltf_df, htf_df):
     return joined_ltf_df
 
 
-#
-# def st_price_line(ltf_df, htf_df, interval):
-#
-#     ha_htf_df = heikinashi(htf_df)
-#
-#     st1_up, st2_up, st3_up = 'ST1_Up_%s' % interval, 'ST2_Up_%s' % interval, 'ST3_Up_%s' % interval
-#     st1_down, st2_down, st3_down = 'ST1_Down_%s' % interval, 'ST2_Down_%s' % interval, 'ST3_Down_%s' % interval
-#     st1_trend, st2_trend, st3_trend = 'ST1_Trend_%s' % interval, 'ST2_Trend_%s' % interval, 'ST3_Trend_%s' % interval
-#
-#     htf_df[st1_up], htf_df[st1_down], htf_df[st1_trend] = supertrend(htf_df, 10, 2)
-#     htf_df[st2_up], htf_df[st2_down], htf_df[st2_trend] = supertrend(ha_htf_df, 7, 2)
-#     htf_df[st3_up], htf_df[st3_down], htf_df[st3_trend] = supertrend(ha_htf_df, 7, 2.5)
-#     # print(df.head(20))
-#     # quit()
-#
-#     # startTime = time.time()
-#
-#     joined_ltf_df = ltf_df.join(to_lower_tf_v2(ltf_df, htf_df, [i for i in range(-9, 0, 1)]), how='inner')
-#
-#     return joined_ltf_df
-
 def st_level(ltf_df, interval, st_gap_multiple):
     st1_up, st2_up, st3_up = 'st1_up_%s' % interval, 'st2_up_%s' % interval, 'st3_up_%s' % interval
     st1_down, st2_down, st3_down = 'st1_down_%s' % interval, 'st2_down_%s' % interval, 'st3_down_%s' % interval
@@ -2430,6 +2617,31 @@ def mmh_st(df, mp1, pd1=10):  # makemoney_hybrid
     tls = np.where(trend1 == 1, up1, down1)
 
     return tls
+
+
+def ichimoku_v2(df, tenkan_period=9, kijun_period=26, senkou_period=52, displacement=26, itv=None):
+
+    """
+    _ --> v2
+        1. itv added.
+    """
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
+    assert tenkan_period != 1 and kijun_period != 1 and senkou_period != 1, "period should not 1." \
+
+    tenkan_sen = (talib.MAX(df.high, tenkan_period).to_numpy() + talib.MIN(df.low, tenkan_period).to_numpy()) / 2
+    kijun_sen = (talib.MAX(df.high, kijun_period).to_numpy() + talib.MIN(df.low, kijun_period).to_numpy()) / 2
+
+    a_col = 'cloud_a_{}{}_{}_{}_{}'.format(itv, tenkan_period, kijun_period, senkou_period, displacement)
+    b_col = 'cloud_b_{}{}_{}_{}_{}'.format(itv, tenkan_period, kijun_period, senkou_period, displacement)
+
+    df[a_col] = (tenkan_sen + kijun_sen) / 2
+    df[b_col] = (talib.MAX(df.high, senkou_period).to_numpy() + talib.MIN(df.low, senkou_period).to_numpy()) / 2
+    df[a_col] = df[a_col].shift(displacement - 1)
+    df[b_col] = df[b_col].shift(displacement - 1)
+
+    return df
 
 
 def ichimoku(ohlc, tenkan_period=9, kijun_period=26, senkou_period=52, chikou_period=1):

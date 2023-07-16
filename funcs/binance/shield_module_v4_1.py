@@ -47,8 +47,8 @@ class ShieldModule(FuturesModule):
 
             # 1. margin type => "cross or isolated"
             try:
-                # self.change_margin_type(symbol=code, marginType=FuturesMarginType.CROSSED)
-                self.change_margin_type(symbol=code, marginType="ISOLATED", recvWindow=6000, timestamp=server_time)
+                self.change_margin_type(symbol=code, marginType=FuturesMarginType.CROSSED, recvWindow=6000, timestamp=server_time)
+                # self.change_margin_type(symbol=code, marginType=FuturesMarginType.ISOLATED, recvWindow=6000, timestamp=server_time)
             except Exception as e:
                 #   i. allow -4046, "No need to change margin type."
                 if '-4046' not in str(e):
@@ -206,7 +206,8 @@ class ShieldModule(FuturesModule):
             except Exception as e:
                 msg = "error in get_new_df : {}".format(e)
                 self.sys_log.error(msg)
-                self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+                if 'sum_df' not in msg:
+                    self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
                 #        1. adequate term for retries
                 time.sleep(self.config.trader_set.api_term)
                 continue
@@ -285,6 +286,49 @@ class ShieldModule(FuturesModule):
             return 0, time.time(), breakout
         return 0, check_time, 0  # breakout_qty survey 실행한 경우만 check_time 갱신
 
+    def check_ei_k_v3(self, res_df_open, res_df, realtime_price, open_side, expired):
+
+        """
+        v2 --> v3
+            1. expired variable added.
+        """
+
+        selection_id = self.config.selection_id
+
+        if self.config.tr_set.expire_tick != "None":
+            if time.time() - datetime.timestamp(res_df_open.index[self.config.trader_set.latest_index]) \
+                    >= self.config.tr_set.expire_tick * 60:
+                expired = 1
+
+        # Todo, expire_k2 vs expire_k1, 추후 p2 사용시 재고해야할 것
+        if self.config.tr_set.expire_k1 != "None":  # Todo -> 이거 None 이면 "무한 대기" 발생 가능함
+
+            # realtime_price = self.get_market_price_v3()
+
+            tp_j = self.config.trader_set.complete_index
+            #       Todo        #
+            #        2. 추후, dynamic_tp 사용시 res_df 갱신해야할 것
+            #           a. 그에 따른 res_df 종속 변수 check
+            #        3. ei_k - expired 변수 달아주고, close bar waiting 추가할지 고민중
+            #        4. warning - 체결량 존재하는데, expired 가능함 - market 고민중
+            #        5. funcs_trader_modules 에서 order_side check 하는 function 모두 inversion 고려해야할 것
+            #           a. "단, order_side change 후로만 해당됨
+            if open_side == OrderSide.SELL:
+                short_tp_ = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
+                short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(selection_id)].to_numpy()
+                if realtime_price <= short_tp_[tp_j] + short_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+                    expired = 1
+            else:
+                long_tp_ = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
+                long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(selection_id)].to_numpy()
+                if realtime_price >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+                    expired = 1
+
+        if expired:
+            self.sys_log.warning("cancel open_order by ei_k\n")
+
+        return expired
+
     def check_ei_k_v2(self, res_df_open, res_df, realtime_price, open_side):
 
         """
@@ -327,6 +371,38 @@ class ShieldModule(FuturesModule):
             self.sys_log.warning("cancel open_order by ei_k\n")
 
         return ep_out
+
+    def check_ei_k_onbarclose_v3(self, res_df_open, res_df, e_j, tp_j, open_side, expired):  # for point2
+
+        """
+        = expire_tp
+        """
+
+        selection_id = self.config.selection_id
+
+        if self.config.tr_set.expire_tick != "None":
+            if datetime.timestamp(res_df.index[-1]) - datetime.timestamp(res_df_open.index[self.config.trader_set.latest_index]) \
+                    >= self.config.tr_set.expire_tick * 60:
+                expired = 1
+
+        if self.config.tr_set.expire_k1 != "None":  # Todo - onbarclose 에서는, res_df_open 으로 open_index 의 tp 정보를 사용
+            if open_side == OrderSide.SELL:
+                low = res_df['low'].to_numpy()
+                short_tp_ = res_df_open['short_tp_{}'.format(selection_id)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
+                short_tp_gap_ = res_df_open['short_tp_gap_{}'.format(selection_id)].to_numpy()
+                if low[e_j] <= short_tp_[tp_j] + short_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+                    expired = 1
+            else:
+                high = res_df['high'].to_numpy()
+                long_tp_ = res_df_open['long_tp_{}'.format(selection_id)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
+                long_tp_gap_ = res_df_open['long_tp_gap_{}'.format(selection_id)].to_numpy()
+                if high[e_j] >= long_tp_[tp_j] - long_tp_gap_[tp_j] * self.config.tr_set.expire_k1:
+                    expired = 1
+
+        if expired:
+            self.sys_log.warning("cancel open_order by ei_k\n")
+
+        return expired
 
     def check_ei_k_onbarclose_v2(self, res_df_open, res_df, e_j, tp_j, open_side):  # for point2
 
@@ -412,6 +488,7 @@ class ShieldModule(FuturesModule):
             1. tp_type 에 의한 condition phase 를 제거함.
                 a. 외부에서 참조하도록 구성함.
             2. return_price parameter 제거하고 all_executed, exec_price_list 반환
+            3. add len(order_exec_check_list) validation.
         """
 
         all_executed = 0
@@ -420,9 +497,11 @@ class ShieldModule(FuturesModule):
         order_exec_check_list = [self.check_execution(order_info, quantity_precision) for order_info in order_info_list]
 
         # 손매매로 인한 order_info['status'] == EXPIRED 는 고려 대상이 아님. (손매매 이왕이면 하지 말라는 이야기)
-        if np.sum(order_exec_check_list) == len(order_exec_check_list):
-            self.sys_log.info("all limit tp order executed")
-            all_executed = 1
+        order_exec_check_list_len = len(order_exec_check_list)
+        if order_exec_check_list_len != 0:
+            if np.sum(order_exec_check_list) == order_exec_check_list_len:
+                self.sys_log.info("all limit tp order executed")
+                all_executed = 1
 
         exec_price_list = [self.get_exec_price(order_info) for order_info, executed in zip(order_info_list, order_exec_check_list) if executed]
         return all_executed, exec_price_list

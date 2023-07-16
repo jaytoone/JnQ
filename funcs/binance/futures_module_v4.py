@@ -178,7 +178,7 @@ if __name__ == '__main__':
     with open(key_abspath, 'rb') as f:
         api_key, secret_key = pickle.load(f)
 
-    json_file_path = r"D:\Projects\System_Trading\JnQ\Bank\papers\config\wave_cci_wrr32_wave_length_1.json"
+    json_file_path = r"D:\Projects\System_Trading\JnQ\Bank\papers\config\wave_cci_wrr32_spread_wave_length_4.json"
     with open(json_file_path, 'r') as f:
         futures_module = FuturesModule(EasyDict(json.load(f)), api_key=api_key, secret_key=secret_key)
 
@@ -187,6 +187,11 @@ if __name__ == '__main__':
     # um_futures_client = UMFutures(key=api_key, secret=secret_key)
 
     start_time = time.time()
+    futures_module.websocket_client.agg_trade(
+        symbol='ethusdt',
+        id=1,
+        callback=futures_module.agg_trade_message_handler,
+    )
     futures_module.websocket_client.agg_trade(
         symbol='ethusdt',
         id=1,

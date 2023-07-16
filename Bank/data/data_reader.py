@@ -1,13 +1,16 @@
 import os
 import pickle
 
-data_dir_path = r"D:\Projects\System_Trading\JnQ\Bank\data\wave_cci_wrr32_spread_wave_length_shield2"
+data_dir_path = r"D:\Projects\System_Trading\JnQ\Bank\data\wave_cci_wrr32_spread_wave_length4"
+post_fix = "_dict.pkl"
+data_dir_path = r"D:\Projects\System_Trading\JnQ\Bank\data\wave_cci_wrr32_spread_wave_length4\replication"
+post_fix = "1688202990.pkl"
 file_list = os.listdir(data_dir_path)
 
 remove_list = []
 
 for file in file_list:
-    if file.endswith("_dict.pkl"):
+    if file.endswith(post_fix):
         file_path = os.path.join(data_dir_path, file)
         with open(file_path, 'rb') as f:
             data = pickle.load(f)

@@ -1,0 +1,2 @@
+xfCxyqxQnhz4aS9aYPoyyJWUns5htfnGMUKofWSN  	# access_key
+7wDXK69hbnN5dBGSYVPOmSVjgYZwWJKG40KZC6M5	# secret_key

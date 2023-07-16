@@ -114,36 +114,39 @@ def whole_plot_check(data, win_idxs, selected_op_idxs, selected_ex_idxs, plot_ch
     return
 
 
-def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exit_idx, p1_idx, p2_idx, lvrg, fee, tp_level, out_level, tp_1, tp_0,
-                     out_1, out_0, ep2_0, back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict):
+def eptp_hvline_v10(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exit_idx, p1_idx, p2_idx, lvrg, fee, tp_level, out_level, tp_1, tp_0,
+                    out_1, out_0, ep2_0, back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict):
     """
-    기존 y_lim 에서 tr_set 기준 min & max 를 추가함 (indicator 에 의한 y_lim 을 유지하기 위해 추가하는 방법 사용함.)
+    v9_1 -> v10
+        1. back_plot = 0's x_max 개념 지움. (불필요하다고 봄), post_data_size 로 치환.
+            a. back_plot 으로 back_plot_data 의 시작점이 정해진다.
     """
 
-    # ------ get vertical ticks ------ #
+    # 1. get vertical ticks
     entry_tick = int(entry_idx - iin)
     exit_tick = entry_tick + int(exit_idx - entry_idx)
     p1_tick = entry_tick - int(entry_idx - p1_idx)
     p2_tick = p1_tick + int(p2_idx - p1_idx)
 
     if back_plot == 1:
-        x_max = p1_tick + 20
+        x_max = p1_tick + x_max
     elif back_plot == 2:
-        x_max = p2_tick + 20
+        x_max = p2_tick + x_max
     elif back_plot == 3:
-        x_max = entry_tick + 20
+        x_max = entry_tick + x_max
     elif back_plot == 4:
-        x_max = exit_tick + 20
+        x_max = exit_tick + x_max
 
-    # ------ get_xlim ------ #
+    # 2. get_xlim
+    #    a. iout - iin : 보여지는 data_size, 즉 plot_size 가 data_size 보다 작아지면 (짤리면).
     if (iout - iin) > x_max:
         x_margin = x_max * x_margin_mult
         ax1.set_xlim(0 - x_margin, x_max + x_margin)
         ax2.set_xlim(0 - x_margin, x_max + x_margin)
     x0, x1 = ax1.get_xlim()
 
-    """ Axis_1 """
-    # ------ entry & exit ------ #
+    """ 1. Axis_1 """
+    #     a. entry & exit
     en_xmin = entry_tick / x1
     ex_xmin = exit_tick / x1
     ax1.text(x0, en_p, 'en_p :\n {:.3f}'.format(en_p), ha='right', va='center', fontweight='bold', fontsize=15)  # en_p line label
@@ -151,7 +154,7 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
     ax1.axhline(ex_p, ex_xmin, 1, linewidth=2, linestyle='--', alpha=1, color='lime')  # ex_p line axhline (signal 도 포괄함, 존재 의미)
     ax1.text(x1, ex_p, 'ex_p :\n {}'.format(ex_p), ha='left', va='center', fontweight='bold', fontsize=15)  # ex_p line label
 
-    # ------ tr_set line ------ #
+    #     b. tr_set line
     left_point = 0.1
     right_point = 1
     text_x_pos_left = (x0 + x1) * (left_point + 0.05)
@@ -170,32 +173,32 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
     ax1.axhline(out_level, left_point, right_point, linewidth=2, linestyle='-', alpha=1, color='#ff0000')
     ax1.text(text_x_pos_left, out_level, 'outg {}'.format(config.tr_set.out_gap), ha='right', va='bottom', fontweight='bold', fontsize=15, color='#ff0000')
 
+    #     c. tp_box
     left_point = 0.3
     right_point = 1
     text_x_pos_left = (x0 + x1) * (left_point + 0.05)
     text_x_pos_right = (x0 + x1) * right_point
 
-    # ------ tp_box ------ #
     ax1.axhline(tp_1, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
     ax1.text(text_x_pos_left, tp_1, ' tp_1', ha='right', va='bottom', fontweight='bold', fontsize=15)
     ax1.axhline(tp_0, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
     ax1.text(text_x_pos_left, tp_0, ' tp_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
 
-    # ------ octa_wave_box ------ #
+    #     d. octa_wave_box
     wave_gap = (tp_1 - tp_0) / 8
     [ax1.axhline(tp_0 + wave_gap * gap_i, left_point, right_point, linewidth=1, linestyle='--', alpha=1, color='#ffffff') for gap_i in range(1, 8)]
 
-    # ------ ep_box ------ #
+    #     e. ep_box
     ax1.axhline(ep2_0, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
     ax1.text(text_x_pos_left, ep2_0, ' ep2_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
 
-    # ------ out_box ------ #
+    #     f. out_box
     ax1.axhline(out_1, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
     ax1.text(text_x_pos_right, out_1, ' out_1', ha='right', va='bottom', fontweight='bold', fontsize=15)
     ax1.axhline(out_0, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
     ax1.text(text_x_pos_right, out_0, ' out_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
 
-    # ------ volume profile ------ #
+    #     g. volume profile
     if len(vp_info) > 0:
         close, volume, kde_factor, num_samples = vp_info
         # if iin >= vp_range:
@@ -216,24 +219,165 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
         # ax1.barh(kdy * kdy_ratio, kdx, color='white')  # Todo, bars 가능 ?
         ax1.barh(kdx, kdy * kdy_ratio, color='#00ff00', alpha=0.5)  # Todo, bars 가능 ?
 
-    """ Axis_2 """
+    #     c. ylim - ax1 only
+    #         i. ylim by tr_set
+    y_min = min(tp_level, out_level, tp_1, tp_0, out_1, out_1)
+    y_max = max(tp_level, out_level, tp_1, tp_0, out_1, out_1)
 
-    # ------ cci_band ------ #
+    #         ii. ylim by indicator
+    if len(col_idx_dict['ylim_col_idxs']) != 0:
+        y_lim_data = a_data[:x_max + 1, col_idx_dict['ylim_col_idxs']]  # +1 for including p1_tick
+        # if back_plot:
+        #     y_lim_data = a_data[:x_max + 1, col_idx_dict['ylim_col_idxs']]  # +1 for including p1_tick
+        # else:
+        #     y_lim_data = a_data[:, col_idx_dict['ylim_col_idxs']]
+
+        y_min = min(y_lim_data.min(), y_min)
+        y_max = max(y_lim_data.max(), y_max)
+
+    y_margin = (y_max - y_min) * y_margin_mult
+    ax1.set_ylim(y_min - y_margin, y_max + y_margin)
+
+    """ 2. Axis_2 """
+    #     x. realtime_ud
+    # ax2.axhline(0, color="#ffffff")
+
+    #     a. cci_band
     ax2.axhline(100, color="#ffffff")
     ax2.axhline(0, color="#ffffff")
     ax2.axhline(-100, color="#ffffff")
 
-    # ------ stoch_band ------ #
+    #     b. stoch_band
     # ax2.axhline(67, color="#ffffff")
     # ax2.axhline(33, color="#ffffff")
     # ax2.axhline(0, color="#ffffff")
 
-    # ------ ylim ------ # - ax1 only
-    # 1. ylim by tr_set
+    # 3. public vline (p1_tick, entry_tick, exit_tick - add p1_tick on ax2
+    y0, y1 = ax1.get_ylim()
+    low_data = a_data[:exit_tick + 1, col_idx_dict['ohlc_col_idxs'][2]]  # +1 for including exit_tick
+    p2_ymax, en_ymax, ex_ymax = [(low_data[tick_] - y0) / (y1 - y0) - .01 for tick_ in [p2_tick, entry_tick, exit_tick]]  # -.05 for margin
+    if p1_tick > 0:
+        p1_ymax = (low_data[p1_tick] - y0) / (y1 - y0) - .01
+        ax1.axvline(p1_tick, 0, p1_ymax, alpha=1, linewidth=2, linestyle='--', color='#ff0000')  # 추후, tick 별 세부 정의가 달라질 수 있음을 고려해 multi_line 작성 유지
+        ax2.axvline(p1_tick, 0, 1, alpha=1, linewidth=2, linestyle='--', color='#ff0000')
+    ax1.axvline(p2_tick, 0, p2_ymax, alpha=1, linewidth=2, linestyle='--', color='#2196f3')
+    ax1.axvline(entry_tick, 0, en_ymax, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')
+    ax1.axvline(exit_tick, 0, ex_ymax, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')
+    ax2.axvline(p2_tick, 0, 1, alpha=1, linewidth=2, linestyle='--', color='#2196f3')
+    ax2.axvline(entry_tick, 0, 1, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')
+    ax2.axvline(exit_tick, 0, 1, alpha=1, linewidth=2, linestyle='--', color='#ffeb3b')
+
+    return
+
+
+def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exit_idx, p1_idx, p2_idx, lvrg, fee, tp_level, out_level, tp_1, tp_0,
+                     out_1, out_0, ep2_0, back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict):
+    """
+    기존 y_lim 에서 tr_set 기준 min & max 를 추가함 (indicator 에 의한 y_lim 을 유지하기 위해 추가하는 방법 사용함.)
+    """
+
+    # 1. get vertical ticks
+    entry_tick = int(entry_idx - iin)
+    exit_tick = entry_tick + int(exit_idx - entry_idx)
+    p1_tick = entry_tick - int(entry_idx - p1_idx)
+    p2_tick = p1_tick + int(p2_idx - p1_idx)
+
+    if back_plot == 1:
+        x_max = p1_tick + 20
+    elif back_plot == 2:
+        x_max = p2_tick + 20
+    elif back_plot == 3:
+        x_max = entry_tick + 20
+    elif back_plot == 4:
+        x_max = exit_tick + 20
+
+    # 2. get_xlim
+    if (iout - iin) > x_max:
+        x_margin = x_max * x_margin_mult
+        ax1.set_xlim(0 - x_margin, x_max + x_margin)
+        ax2.set_xlim(0 - x_margin, x_max + x_margin)
+    x0, x1 = ax1.get_xlim()
+
+    """ 1. Axis_1 """
+    #     a. entry & exit
+    en_xmin = entry_tick / x1
+    ex_xmin = exit_tick / x1
+    ax1.text(x0, en_p, 'en_p :\n {:.3f}'.format(en_p), ha='right', va='center', fontweight='bold', fontsize=15)  # en_p line label
+
+    ax1.axhline(ex_p, ex_xmin, 1, linewidth=2, linestyle='--', alpha=1, color='lime')  # ex_p line axhline (signal 도 포괄함, 존재 의미)
+    ax1.text(x1, ex_p, 'ex_p :\n {}'.format(ex_p), ha='left', va='center', fontweight='bold', fontsize=15)  # ex_p line label
+
+    #     b. tr_set line
+    left_point = 0.1
+    right_point = 1
+    text_x_pos_left = (x0 + x1) * (left_point + 0.05)
+
+    ax1.axhline(en_p, left_point, right_point, linewidth=2, linestyle='-', alpha=1, color='#005eff')  # en_p line axhline
+
+    if config.tr_set.check_hlm in [0, 1]:
+        plot_epg_tuple = ("epg1", config.tr_set.ep_gap1)
+    else:
+        plot_epg_tuple = ("epg2", config.tr_set.ep_gap2)
+    ax1.text(text_x_pos_left, en_p, '{} {}'.format(*plot_epg_tuple), ha='right', va='bottom', fontweight='bold', fontsize=15, color='#005eff')
+
+    ax1.axhline(tp_level, left_point, right_point, linewidth=2, linestyle='-', alpha=1, color='#00ff00')  # ep 와 gap 비교 용이하기 위해 ex_xmin -> 0.1 사용
+    ax1.text(text_x_pos_left, tp_level, 'tpg {}'.format(config.tr_set.tp_gap), ha='right', va='bottom', fontweight='bold', fontsize=15, color='#00ff00')
+
+    ax1.axhline(out_level, left_point, right_point, linewidth=2, linestyle='-', alpha=1, color='#ff0000')
+    ax1.text(text_x_pos_left, out_level, 'outg {}'.format(config.tr_set.out_gap), ha='right', va='bottom', fontweight='bold', fontsize=15, color='#ff0000')
+
+    #     c. tp_box
+    left_point = 0.3
+    right_point = 1
+    text_x_pos_left = (x0 + x1) * (left_point + 0.05)
+    text_x_pos_right = (x0 + x1) * right_point
+
+    ax1.axhline(tp_1, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
+    ax1.text(text_x_pos_left, tp_1, ' tp_1', ha='right', va='bottom', fontweight='bold', fontsize=15)
+    ax1.axhline(tp_0, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
+    ax1.text(text_x_pos_left, tp_0, ' tp_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
+
+    #     d. octa_wave_box
+    wave_gap = (tp_1 - tp_0) / 8
+    [ax1.axhline(tp_0 + wave_gap * gap_i, left_point, right_point, linewidth=1, linestyle='--', alpha=1, color='#ffffff') for gap_i in range(1, 8)]
+
+    #     e. ep_box
+    ax1.axhline(ep2_0, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
+    ax1.text(text_x_pos_left, ep2_0, ' ep2_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
+
+    #     f. out_box
+    ax1.axhline(out_1, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
+    ax1.text(text_x_pos_right, out_1, ' out_1', ha='right', va='bottom', fontweight='bold', fontsize=15)
+    ax1.axhline(out_0, left_point, right_point, linewidth=1, linestyle='-', alpha=1, color='#ffffff')
+    ax1.text(text_x_pos_right, out_0, ' out_0', ha='right', va='bottom', fontweight='bold', fontsize=15)
+
+    #     g. volume profile
+    if len(vp_info) > 0:
+        close, volume, kde_factor, num_samples = vp_info
+        # if iin >= vp_range:
+        # start_0 = time.time()
+        kde = stats.gaussian_kde(close, weights=volume, bw_method=kde_factor)
+        kdx = np.linspace(close.min(), close.max(), num_samples)
+        kdy = kde(kdx)
+        kdy_max = kdy.max()
+        # print("kde elapsed_time :", time.time() - start_0)
+
+        # peaks,_ = signal.find_peaks(kdy, prominence=kdy_max * 0.3)   # get peak_entries
+        # peak_list = kdx[peaks]   # peak_list
+        # [ax1.axhline(peak, linewidth=1, linestyle='-', alpha=1, color='orange') for peak in peak_list]
+
+        kdy_ratio = p1_tick / kdy_max  # 30 / 0.0001   # max_value 가 p1_tick 까지 닿을 수 있게.
+        # print("kdx :", kdx)
+        # ax1.plot(kdy * kdy_ratio, kdx, color='white')  # Todo, bars 가능 ?
+        # ax1.barh(kdy * kdy_ratio, kdx, color='white')  # Todo, bars 가능 ?
+        ax1.barh(kdx, kdy * kdy_ratio, color='#00ff00', alpha=0.5)  # Todo, bars 가능 ?
+
+    #     c. ylim - ax1 only
+    #         i. ylim by tr_set
     y_min = min(tp_level, out_level, tp_1, tp_0, out_1, out_1)
     y_max = max(tp_level, out_level, tp_1, tp_0, out_1, out_1)
 
-    # 2. ylim by indicator
+    #         ii. ylim by indicator
     if len(col_idx_dict['ylim_col_idxs']) != 0:
         if back_plot:
             y_lim_data = a_data[:x_max + 1, col_idx_dict['ylim_col_idxs']]  # +1 for including p1_tick
@@ -246,7 +390,21 @@ def eptp_hvline_v9_1(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exi
     y_margin = (y_max - y_min) * y_margin_mult
     ax1.set_ylim(y_min - y_margin, y_max + y_margin)
 
-    # ------ vline (p1_tick, entry_tick, exit_tick) ------ # - add p1_tick on ax2
+    """ 2. Axis_2 """
+    #     x. realtime_ud
+    ax2.axhline(0, color="#ffffff")
+
+    #     a. cci_band
+    # ax2.axhline(100, color="#ffffff")
+    # ax2.axhline(0, color="#ffffff")
+    # ax2.axhline(-100, color="#ffffff")
+
+    #     b. stoch_band
+    # ax2.axhline(67, color="#ffffff")
+    # ax2.axhline(33, color="#ffffff")
+    # ax2.axhline(0, color="#ffffff")
+
+    # 3. public vline (p1_tick, entry_tick, exit_tick - add p1_tick on ax2
     y0, y1 = ax1.get_ylim()
     low_data = a_data[:exit_tick + 1, col_idx_dict['ohlc_col_idxs'][2]]  # +1 for including exit_tick
     p2_ymax, en_ymax, ex_ymax = [(low_data[tick_] - y0) / (y1 - y0) - .01 for tick_ in [p2_tick, entry_tick, exit_tick]]  # -.05 for margin
@@ -287,38 +445,40 @@ def plot_check_v9(res_df, config, param_zip, pr_msg, x_max, x_margin_mult, y_mar
         # if p1_idx != 370259:
         #   break
 
-        # ============ define ax1 & ax2 ============ #
+        # 1. define ax1 & ax2
         ax1 = fig.add_subplot(gs[gs_idx])
         ax2 = fig.add_subplot(gs[gs_idx + 2])
 
-        # ------ date range ------ #
-        if back_plot == 0:
-            iout = iin + x_max
+        # 2. data range
+        #    a. hvline phase 에서 ylime 을 data[:x_max 로 정하기 때문에 iin + x_max 사용한다.
+        # if back_plot == 0:
+        #     iout = iin + x_max
+            # iout = iout + x_max
             # print("iin, iout :", iin, iout)
 
         a_data = res_df.iloc[int(iin):int(iout + 1)].to_numpy()
         # a_data = data[iin:iout]
 
-        # ------------ add_col section ------------ #
-        # ------ candles ------ #
+        # 3. add_col section
+        #     a. candles
         candle_plot_v2(ax1, a_data[:, col_idx_dict['ohlc_col_idxs']], alpha=1.0, wickwidth=1.0)
 
-        # ------ add cols ------ #
+        #     b. add cols
         [nonstep_col_plot_v2(ax1, a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['nonstep_col_info']]
         [step_col_plot_v2(ax1, a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['step_col_info']]
         [stepmark_col_plot_v2(ax1, a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['stepmark_col_info']]
 
         [step_col_plot_v2(ax2, a_data[:, params_[0]], *params_[1:]) for params_ in col_idx_dict['step_col_info2']]
 
-        # ------ get vp_info ------ #
+        #     c. get vp_info
         kde_factor = 0.1  # 커질 수록 전체적인 bars_shape 이 곡선이됨, 커질수록 latency 좋아짐 (0.00003s 정도)
         num_samples = 100  # plot 되는 volume bars (y_axis) 와 비례관계
 
-        """1. vp by lookback"""
+        #         i. get vp_infovp by lookback
         # vp_lookback = 500
         # vp_data = res_df.iloc[int(p1_idx - 500):int(p1_idx), col_idx_dict['vp_col_idxs']].to_numpy().T
 
-        """2. vp by wave_point"""
+        #         ii. vp by wave_point
         #     if tp_1 < out_0:  # SELL order
         #       post_co_idx = res_df.iloc[int(p1_idx), col_idx_dict['post_co_idx']]
         #       # vp_iin = res_df.iloc[int(p1_idx) - 1, col_idx_dict['post_cu_idx']].to_numpy()  # Todo, co_idx 와 co_post_idx 의 차별을 위해서 -1 해줌 <-- 중요 point
@@ -334,16 +494,16 @@ def plot_check_v9(res_df, config, param_zip, pr_msg, x_max, x_margin_mult, y_mar
         #     vp_info = [*vp_data, kde_factor, num_samples]
         vp_info = []
 
-        # ------ ep, tp + xlim ------ #
+        #     d. ep, tp + xlim
         try:
-            eptp_hvline_v9_1(ax1, ax2, config, *params, back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict)
+            eptp_hvline_v10(ax1, ax2, config, *params, back_plot, x_max, x_margin_mult, y_margin_mult, a_data, vp_info, **col_idx_dict)
         except Exception as e:
             print("error in eptp_hvline :", e)
 
-        #     Todo    #
-        #     3. outer_price plot 일 경우, gs_idx + nrows 하면 됨
+        """ Todo """
+        #     e. outer_price plot 일 경우, gs_idx + nrows 하면 됨
 
-        # ------ trade_info ------ #
+        # 4. trade_info
         data_msg_list = ["\n {} : {:.3f}".format(*params_[1:], *res_df.iloc[int(p1_idx), params_[0]]) for params_ in
                          col_idx_dict['data_window_p1_col_info']]  # * for unsupported format for arr
         data_msg_list += ["\n {} : {:.3f}".format(*params_[1:], *res_df.iloc[int(p2_idx), params_[0]]) for params_ in

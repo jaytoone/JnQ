@@ -76,12 +76,13 @@ def concat_candlestick(symbol, interval, days, limit, end_date=None, show_proces
             # b. validation
             if len(df) == 0:
                 # quit()
+                print("len(df) == 0")
                 break
+            # assert len(df) != 0, "len(df) == 0"
 
             if show_process:
                 print(df.index[0], end=" --> ")
                 print(df.index[-1])
-            assert len(df) != 0, "len(df) == 0"
 
             if day_cnt == 0:
                 sum_df = df
@@ -92,7 +93,7 @@ def concat_candlestick(symbol, interval, days, limit, end_date=None, show_proces
                 time.sleep(timesleep)
 
         except Exception as e:
-            print('error in get_candlestick_data :', e)
+            print("error in get_candlestick_data :", e)
 
     # keep = 'last' 로 해야 중복기준 최신 df 를 넣는건데, 왜 first 로 해놓은거지
     return sum_df[~sum_df.index.duplicated(keep='last')], end_date
@@ -100,7 +101,7 @@ def concat_candlestick(symbol, interval, days, limit, end_date=None, show_proces
 
 if __name__ == '__main__':
 
-    days = 1  # 330
+    days = 90  # 330
     end_date = None  # "2023-01-06" "2021-04-12" "2021-03-23"
     intervals = ['1m']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
 
@@ -137,9 +138,9 @@ if __name__ == '__main__':
                                                            show_process=True,
                                                            timesleep=0.2)
                 # print(concated_df.iloc[[0, -1]].dtypes)
-                print(concated_df.open.iloc[-1])
-                print(type(concated_df.open.iloc[-1]))
-                quit()
+                # print(concated_df.open.iloc[-1])
+                # print(type(concated_df.open.iloc[-1]))
+                # quit()
                 concated_df.reset_index().to_feather(os.path.join(save_dir, save_name), compression='lz4')
             except Exception as e:
                 print("error in save to_excel : {}".format(e))

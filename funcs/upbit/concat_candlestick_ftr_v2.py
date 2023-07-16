@@ -98,11 +98,13 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
 if __name__ == '__main__':
 
-    days = None  # 330 3
+    days = 120  # 330 3
+
     """
     upbit 에서 당일 기준 이전 데이터를 조회할지도 None 은 성립하지 않는다.
     """
-    end_date = "2023-03-23"  # None  # "2023-01-06" "2021-04-12" "2021-03-23"
+
+    end_date = None  # None 2023-07-04 # "2023-01-06" "2021-04-12" "2021-03-23"
     intervals = ['1m']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
 
     concat_path = r'D:\Projects\System_Trading\JnQ\database\upbit'
@@ -115,9 +117,11 @@ if __name__ == '__main__':
 
     exist_files = os.listdir(save_dir)
 
-    with open(r'D:\Projects\System_Trading\JnQ\olds\ticker_list\upbit_20230324.pkl', 'rb') as f:
-        symbol_list = pickle.load(f)
-    print(symbol_list)
+    # with open(r'D:\Projects\System_Trading\JnQ\olds\ticker_list\upbit_20230324.pkl', 'rb') as f:
+    #     symbol_list = pickle.load(f)
+    # print(symbol_list)
+    # symbol_list = ['KRW-CBK', 'KRW-CHZ', 'KRW-FCT2', 'KRW-IOST', 'KRW-MBL', 'KRW-SHIB', 'KRW-STPT']
+    symbol_list = ['KRW-XRP']
 
     for symbol in symbol_list:
         for interval in intervals:
@@ -133,9 +137,9 @@ if __name__ == '__main__':
             try:
                 concated_df, end_date = concat_candlestick(symbol, interval, days, limit=limit,
                                                            end_date=end_date, show_process=True, timesleep=0.11)
-                save_path = os.path.join(save_dir, save_name)
-                concated_df.reset_index().to_feather(save_path, compression='lz4')
-                print(save_path, "saved.\n")
+                # save_path = os.path.join(save_dir, save_name)
+                # concated_df.reset_index().to_feather(save_path, compression='lz4')
+                # print(save_path, "saved.\n")
             except Exception as e:
                 print("error in save to_feather :", e)
                 continue

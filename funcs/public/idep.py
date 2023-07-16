@@ -124,7 +124,17 @@ def get_next_fibo_gap(x):
 
 def get_touch_idx_fill(tp_1_touch_idxs, net_p1_pair, net_p1_idx, len_df):
     tp_1_touch_idx = np.full(len_df, np.nan)
-    tp_1_touch_idx[net_p1_idx] = [np.nanmin(tp_1_touch_idxs[iin:iout]) for iin, iout in net_p1_pair]
+    # Todo -> get_valid_p1_idx : p1_pair_idx.
+    # iin
+    # print(net_p1_pair)
+
+    # net_p1_idx_valid = [net_p1_idx[i_] for i_, (iin, iout) in enumerate(net_p1_pair) if iin != iout]
+    valid_idx = [i_ for i_, (iin, iout) in enumerate(net_p1_pair) if iin != iout]
+
+    # tp_1_touch_idx[net_p1_idx] = [np.nanmin(tp_1_touch_idxs[iin:iout]) for iin, iout in net_p1_pair]
+    net_p1_idx_np = np.array(net_p1_idx)
+    net_p1_pair_np = np.array(net_p1_pair)
+    tp_1_touch_idx[net_p1_idx_np[valid_idx]] = [np.nanmin(tp_1_touch_idxs[iin:iout]) for iin, iout in net_p1_pair_np[valid_idx]]
 
     return fill_arr(tp_1_touch_idx)
 
@@ -1456,6 +1466,7 @@ def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, 
     v4 -> v5
         1. add periodic sum_pr
         2. remove return value
+        3. use get_period_pr_v3 for Stock.
     """
 
     plt.subplot(gs[gs_idx])
@@ -1465,7 +1476,7 @@ def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, 
     plt.xlim(0, len_df)
 
     title_msg = "periodic_pr (acc | sum)\n day : {:.2f} | {:.2f}\n month : {:.2f} | {:.2f}\n year : {:.2f} | {:.2f}"  # \n rev_acc_day : {:.4f}\n month : {:.4f}\n year : {:.4f}"
-    array_zip = np.array(list(zip(get_period_pr_v2(sample_len, acc_pr), get_period_pr_v2(sample_len, sum_pr, pr_type="SUM")))).ravel()
+    array_zip = np.array(list(zip(get_period_pr_v3(sample_len, acc_pr), get_period_pr_v3(sample_len, sum_pr, pr_type="SUM")))).ravel()
 
     plt.title(title_msg.format(*array_zip, fontsize=fontsize))
 
@@ -1686,12 +1697,16 @@ def get_pr_v6(open_side, h, l, obj, tpout, lvrg, fee, partial_ranges, partial_qt
             p_tps = en_ps - (en_ps - tps) * partial_ranges
             # min_low = np.full_like(en_p, np.nan)
             # min_low[~equal_idx] = np.array([np.min(l[int(iin + 1):int(iout + 1)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)  # start from iin + 1 (tp 체결을 entry_idx 부터 보지 않음)
-            tp_idx = (np.tile(min_low, (1, len_p)) <= p_tps) * (np.tile(max_high, (1, len_p)) <= outs)  # entry_idx 포함해서 out touch 금지 (보수적 검증)
+
+            # 보수적 검증은 이곳에서 하는 것이 아니다.
+            tp_idx = (np.tile(min_low, (1, len_p)) <= p_tps) * (np.tile(max_high, (1, len_p)) <= outs)
         else:
             p_tps = en_ps + (tps - en_ps) * partial_ranges
             # max_high = np.full_like(en_p, np.nan)
             # max_high[~equal_idx] = np.array([np.max(h[int(iin + 1):int(iout + 1)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
-            tp_idx = (np.tile(max_high, (1, len_p)) >= p_tps) * (np.tile(min_low, (1, len_p)) >= outs)  # out_line touch 이력이 없고 partial_tp_line touch 이력이 있는 경우 => tp 체결 완료.
+
+            # out_line touch 이력이 없고 partial_tp_line touch 이력이 있는 경우 => tp 체결 완료.
+            tp_idx = (np.tile(max_high, (1, len_p)) >= p_tps) * (np.tile(min_low, (1, len_p)) >= outs)
 
         # 1. 위 구간에서 tps 설정으로 인해, signal_out 에 대한 고려가 진행되지 않고 있음.
         ex_ps = outs.copy()
@@ -1856,6 +1871,20 @@ def get_pr_nb(open_side, ep, tp, lvrg, fee):
         pr = (tp / ep - fee - 1) * lvrg + 1
 
     return pr
+
+
+def get_period_pr_v3(len_df, pr_, pr_type="PROD", mode='STOCK'):
+    if mode == 'STOCK':
+        days = len_df / 360
+    else:
+        days = len_df / 1440
+    months = days / 30
+    years = days / 365
+
+    if pr_type == "PROD":
+        return [pr_ ** (1 / period) for period in [days, months, years]]
+    else:
+        return [(pr_ - 1) / period for period in [days, months, years]]  # sum_pr 은 초기 자산을 제외한 증분에 대해서만 진행함 (sum 특성상.)
 
 
 def get_period_pr_v2(len_df, pr_, pr_type="PROD"):
