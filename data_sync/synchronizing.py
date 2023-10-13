@@ -31,7 +31,17 @@ def sync_check(df, plot_size=45, plotting=False):
 
     # print(rma(df.close, 15).tail())
     # quit()
-    #
+
+    #          fisher           #
+    # df['fisher'] = fisher_v2(df, 30)
+    # df = fisher_v2(df, 30)
+    df_15T = to_htf(df, '15T', '1h')
+    df_15T = fisher_v2(df_15T, 30, itv='15T')
+    df = df.join(to_lower_tf_v4(df, df_15T, df_15T.columns[-1:], backing_i=1, ltf_itv='T'), how='inner')  # tf_entry 진입이면, backing_i = 0 가 가능한 것 아닌가.
+
+    print(df.tail(10))
+    quit()
+
     print(supertrend_v2(df, 10, 2)[0][-20:])
     quit()
 
@@ -260,8 +270,6 @@ def sync_check(df, plot_size=45, plotting=False):
     #          stochastic           #
     df['stoch'] = stoch(df)
 
-    #          fisher           #
-    df['fisher'] = fisher(df, 30)
 
     #          cctbbo           #
     df['cctbbo'], _ = cct_bbo(df, 21, 13)
@@ -317,7 +325,7 @@ def sync_check(df, plot_size=45, plotting=False):
 
 if __name__=="__main__":
 
-    symbol = "ETHUSDT"
+    symbol = "BNBUSDT"
 
     df, _ = concat_candlestick(symbol, '1m', days=1, limit=1500, show_process=True)    # 1500- 13:15:59.999  1104.302208   1104.753715 - 1.075345 1500 - 1108.071810    days(1) 14:35:00    2638.234157
     #  days(3) 16:55:00    3125.530734 days(4) 16:55:00    3126.399747 days(5) 16:55:00    3126.441473 days(6) 16:55:00    3126.443448

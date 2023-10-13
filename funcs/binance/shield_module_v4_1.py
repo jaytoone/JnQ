@@ -2,7 +2,7 @@ from funcs.binance.futures_module_v4 import FuturesModule
 from binance_f.model import *
 
 from funcs.binance.futures_concat_candlestick_ftr_v2 import concat_candlestick
-from funcs.public.broker import calc_rows_and_days
+from funcs.public.broker import calc_rows_and_days, itv_to_number
 
 import numpy as np
 import pandas as pd
@@ -67,6 +67,10 @@ class ShieldModule(FuturesModule):
                     msg = "error in get limit_leverage : {}".format(e)
                     self.sys_log.error(msg)
                     self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
+
+                    # 'Symbol is closed.'
+                    if '-4141' in str(e):
+                        return
                     continue
                 else:
                     self.sys_log.info('limit_leverage : {}'.format(limit_leverage))
@@ -182,6 +186,9 @@ class ShieldModule(FuturesModule):
                     use_rows, days = calc_rows_and_days(itv_list, row_list, rec_row_list)
                 else:
                     use_rows, days = row_list[0], 1  # load_new_df3 사용 의도 = close, time logging
+                # print(use_rows, days)
+                use_rows = min(1500, use_rows)
+
                 new_df_, _ = concat_candlestick(code, '1m',
                                                 days=days,
                                                 limit=use_rows,
@@ -512,6 +519,7 @@ class ShieldModule(FuturesModule):
         v1 -> v2
             1. add liquidation platform.
             2. add log_out
+            3. add non_out
         """
 
         log_out = None
@@ -535,33 +543,35 @@ class ShieldModule(FuturesModule):
                 log_out = liqd_p
                 self.sys_log.info("{} : {} {}".format(const_str, low, liqd_p))
 
-        # ------ 2. hl_out ------ #
-        if self.config.out_set.hl_out:
-            if open_side == OrderSide.SELL:
-                const_str = "high >= out"
-                if eval(const_str):
-                    market_close_on = True
-                    log_out = out
-                    self.sys_log.info("{} : {} {}".format(const_str, high, out))
-            else:
-                const_str = "low <= out"
-                if eval(const_str):
-                    market_close_on = True
-                    log_out = out
-                    self.sys_log.info("{} : {} {}".format(const_str, low, out))
+        if not self.config.out_set.non_out:
 
-        # ------ 3. close_out ------ #
-        else:
-            if open_side == OrderSide.SELL:
-                if close >= out:
-                    market_close_on = True
-                    log_out = close
-                    self.sys_log.info("{} : {} {}".format("close >= out", log_out, out))
+            # ------ 2. hl_out ------ #
+            if self.config.out_set.hl_out:
+                if open_side == OrderSide.SELL:
+                    const_str = "high >= out"
+                    if eval(const_str):
+                        market_close_on = True
+                        log_out = out
+                        self.sys_log.info("{} : {} {}".format(const_str, high, out))
+                else:
+                    const_str = "low <= out"
+                    if eval(const_str):
+                        market_close_on = True
+                        log_out = out
+                        self.sys_log.info("{} : {} {}".format(const_str, low, out))
+
+            # ------ 3. close_out ------ #
             else:
-                if close <= out:
-                    market_close_on = True
-                    log_out = close
-                    self.sys_log.info("{} : {} {}".format("close <= out", log_out, out))
+                if open_side == OrderSide.SELL:
+                    if close >= out:
+                        market_close_on = True
+                        log_out = close
+                        self.sys_log.info("{} : {} {}".format("close >= out", log_out, out))
+                else:
+                    if close <= out:
+                        market_close_on = True
+                        log_out = close
+                        self.sys_log.info("{} : {} {}".format("close <= out", log_out, out))
 
         return market_close_on, log_out
 
@@ -572,6 +582,7 @@ class ShieldModule(FuturesModule):
             1. get realtime_price from outer_scope
             2. inversion 고려 아직임. (inversion 사용하게 되면 고려할 것.) (Todo)
             3. add log_out
+            4. add non_out.
         """
 
         log_out = None
@@ -590,46 +601,48 @@ class ShieldModule(FuturesModule):
                 log_out = liqd_p
                 self.sys_log.info("{} : {} {}".format(const_str, realtime_price, liqd_p))
 
-        # ------ 2. hl_out ------ #
-        if self.config.out_set.hl_out:
-            if open_side == OrderSide.SELL:
-                const_str = "realtime_price >= out"
-                if eval(const_str):
-                    market_close_on = True
-                    log_out = out
-                    self.sys_log.info("{} : {} {}".format(const_str, realtime_price, out))
-            else:
-                const_str = "realtime_price <= out"
-                if eval(const_str):
-                    market_close_on = True
-                    log_out = out
-                    self.sys_log.info("{} : {} {}".format(const_str, realtime_price, out))
+        if not self.config.out_set.non_out:
 
-        # ------ 3. close_out ------ #
-        else:
-            close = res_df['close'].to_numpy()
+            # ------ 2. hl_out ------ #
+            if self.config.out_set.hl_out:
+                if open_side == OrderSide.SELL:
+                    const_str = "realtime_price >= out"
+                    if eval(const_str):
+                        market_close_on = True
+                        log_out = out
+                        self.sys_log.info("{} : {} {}".format(const_str, realtime_price, out))
+                else:
+                    const_str = "realtime_price <= out"
+                    if eval(const_str):
+                        market_close_on = True
+                        log_out = out
+                        self.sys_log.info("{} : {} {}".format(const_str, realtime_price, out))
 
-            if open_side == OrderSide.SELL:
-                j = self.config.trader_set.complete_index
-                if close[j] >= out:
-                    market_close_on = True
-                    log_out = close[j]
-                    self.sys_log.info("{} : {} {}".format("close >= out", log_out, out))
+            # ------ 3. close_out ------ #
             else:
-                j = self.config.trader_set.complete_index
-                if close[j] <= out:
-                    market_close_on = True
-                    log_out = close[j]
-                    self.sys_log.info("{} : {} {}".format("close <= out", log_out, out))
+                close = res_df['close'].to_numpy()
+
+                if open_side == OrderSide.SELL:
+                    j = self.config.trader_set.complete_index
+                    if close[j] >= out:
+                        market_close_on = True
+                        log_out = close[j]
+                        self.sys_log.info("{} : {} {}".format("close >= out", log_out, out))
+                else:
+                    j = self.config.trader_set.complete_index
+                    if close[j] <= out:
+                        market_close_on = True
+                        log_out = close[j]
+                        self.sys_log.info("{} : {} {}".format("close <= out", log_out, out))
 
         return market_close_on, log_out
 
-    def check_signal_out_v3(self, res_df, market_close_on, open_side):
+    def check_signal_out_v4(self, res_df, np_timeidx, market_close_on, open_side):
 
         """
-        v2 -> v3
-            3. add log_out
-            4. remove cross_on
+        v3 -> v4
+            1. add fisher_exit.
+            2. add np_timeidx
         """
 
         log_out = None
@@ -637,7 +650,34 @@ class ShieldModule(FuturesModule):
 
         close = res_df['close'].to_numpy()[c_i]
 
-        # ------ 1. rsi_exit ------ #
+        # 1. timestamp
+        # if self.config.out_set.tf_exit != "None":
+        #     if np_timeidx[i] % self.config.out_set.tf_exit == self.config.out_set.tf_exit - 1 and i != open_i:
+        #         market_close_on = True
+
+        # 2. fisher
+        if self.config.out_set.fisher_exit:
+
+            itv_num = itv_to_number(self.config.loc_set.point1.tf_entry)
+
+            if np_timeidx[c_i] % itv_num == itv_num - 1:
+
+                fisher_ = res_df['fisher_{}30'.format(self.config.loc_set.point1.tf_entry)].to_numpy()
+                fisher_band = self.config.out_set.fisher_band
+                fisher_band2 = self.config.out_set.fisher_band2
+
+                if open_side == OrderSide.SELL:
+                    if (fisher_[c_i - itv_num] > -fisher_band) & (fisher_[c_i] <= -fisher_band):
+                        market_close_on = True
+                    elif (fisher_[c_i - itv_num] < fisher_band2) & (fisher_[c_i] >= fisher_band2):
+                        market_close_on = True
+                else:
+                    if (fisher_[c_i - itv_num] < fisher_band) & (fisher_[c_i] >= fisher_band):
+                        market_close_on = True
+                    elif (fisher_[c_i - itv_num] > fisher_band2) & (fisher_[c_i] <= fisher_band2):
+                        market_close_on = True
+
+        # 3. rsi_exit
         if self.config.out_set.rsi_exit:
             rsi_ = res_df['rsi_%s' % self.config.loc_set.point.exp_itv].to_numpy()
             osc_band = self.config.loc_set.point.osc_band
@@ -649,7 +689,58 @@ class ShieldModule(FuturesModule):
                 if (rsi_[c_i - 1] <= 50 + osc_band) & (rsi_[c_i] > 50 + osc_band):
                     market_close_on = True
 
-        # ------ 2. cci_exit ------ #
+        # 4. cci_exit
+        #           a. deprecated.
+        # if self.config.out_set.cci_exit:
+        #     wave_itv1 = self.config.tr_set.wave_itv1
+        #     wave_period1 = self.config.tr_set.wave_period1
+        #
+        #     if open_side == OrderSide.SELL:
+        #         wave_co_ = res_df['wave_co_{}{}'.format(wave_itv1, wave_period1)].to_numpy()[c_i]
+        #         if wave_co_:
+        #             market_close_on = True
+        #     else:
+        #         wave_cu_ = res_df['wave_cu_{}{}'.format(wave_itv1, wave_period1)].to_numpy()[c_i]
+        #         if wave_cu_:
+        #             market_close_on = True
+
+        if market_close_on:
+            log_out = close
+            self.sys_log.info("signal out : {}".format(log_out))
+
+        return market_close_on, log_out
+
+    def check_signal_out_v3(self, res_df, market_close_on, open_side):
+
+        """
+        v3 -> v4
+            1. add fisher_exit.
+            2. add np_timeidx
+        """
+
+        log_out = None
+        c_i = self.config.trader_set.complete_index
+
+        close = res_df['close'].to_numpy()[c_i]
+
+        # 1. timestamp
+        # if self.config.out_set.tf_exit != "None":
+        #     if np_timeidx[i] % self.config.out_set.tf_exit == self.config.out_set.tf_exit - 1 and i != open_i:
+        #         market_close_on = True
+
+        # 3. rsi_exit
+        if self.config.out_set.rsi_exit:
+            rsi_ = res_df['rsi_%s' % self.config.loc_set.point.exp_itv].to_numpy()
+            osc_band = self.config.loc_set.point.osc_band
+
+            if open_side == OrderSide.SELL:
+                if (rsi_[c_i - 1] >= 50 - osc_band) & (rsi_[c_i] < 50 - osc_band):
+                    market_close_on = True
+            else:
+                if (rsi_[c_i - 1] <= 50 + osc_band) & (rsi_[c_i] > 50 + osc_band):
+                    market_close_on = True
+
+        # 4. cci_exit
         #           a. deprecated.
         # if self.config.out_set.cci_exit:
         #     wave_itv1 = self.config.tr_set.wave_itv1

@@ -122,6 +122,23 @@ def get_next_fibo_gap(x):
         return np.nan  # 일단은, wrr_32 < 1 만 허용키로.
 
 
+def get_touch_idx_fill_v2(tp_1_touch_idxs, net_p1_pair, net_p1_idx, len_df):
+    tp_1_touch_idx = np.full(len_df, np.nan)
+    # Todo -> get_valid_p1_idx : p1_pair_idx.
+    # iin
+    # print(net_p1_pair)
+
+    # net_p1_idx_valid = [net_p1_idx[i_] for i_, (iin, iout) in enumerate(net_p1_pair) if iin != iout]
+    valid_idx = [i_ for i_, (iin, iout) in enumerate(net_p1_pair) if iin != iout if iin != len_df - 1 if iin + 1 != iout]
+
+    # tp_1_touch_idx[net_p1_idx] = [np.nanmin(tp_1_touch_idxs[iin:iout]) for iin, iout in net_p1_pair]
+    net_p1_idx_np = np.array(net_p1_idx)
+    net_p1_pair_np = np.array(net_p1_pair)
+    tp_1_touch_idx[net_p1_idx_np[valid_idx]] = [np.nanmin(tp_1_touch_idxs[iin + 1:iout]) for iin, iout in net_p1_pair_np[valid_idx]]
+
+    return fill_arr(tp_1_touch_idx)
+
+
 def get_touch_idx_fill(tp_1_touch_idxs, net_p1_pair, net_p1_idx, len_df):
     tp_1_touch_idx = np.full(len_df, np.nan)
     # Todo -> get_valid_p1_idx : p1_pair_idx.
@@ -300,7 +317,167 @@ def get_wave_bias_v7(res_df, config, high, low, len_df, short_net_p1_idx_arr, lo
            short_ep2_0[short_en_idx], long_ep2_0[long_en_idx]  # plot_check 을 위해 en_idx 넣음
 
 
+def get_wave_bias_v6_2(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj, long_obj):
+
+    """
+    v6_1 -> v6_2
+    1. p1's tr_set 을 사용하는 p2 (en_ex_pairing_v9_43) 의 올바른 out_box plotting 을 위해 ffill_line 에 p2_idx -> net_p1_idx 사용함.
+    2. hlm = 1.0 으로 오차없이 나오는 version.
+
+    Todo : p2_idx -> en2_idx 도 필요함 (outbox 를 위한 hhm)
+    """
+
+    short_net_p1_idx = short_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
+    short_p1_idx = short_obj[-1].astype(int).ravel()
+    short_p2_idx = short_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
+    short_en_idx = short_obj[2].astype(int).ravel()
+
+    # tr_set 은 p1 기준이 맞음.
+    short_tp_1 = ffill_line(res_df['short_tp_1_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)  # net_p1_idx ~ net_p1_idx' 사이에 대한 momentum 조사 (net 이유는 logic's validation)
+    short_tp_0 = ffill_line(res_df['short_tp_0_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)
+    short_out_1 = ffill_line(res_df['short_out_1_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)  # 체결된, p2_idx ~ p2_idx' 사이에 대한 momentum 조사
+    short_out_0 = ffill_line(res_df['short_out_0_{}'.format(config.selection_id)].to_numpy(), short_net_p1_idx)
+    short_ep2_0 = ffill_line(res_df['short_ep2_0_{}'.format(config.selection_id)].to_numpy(), short_p2_idx)
+    # short_net_wave_1 = ffill_line(res_df['short_wave_1_{}'.format(config.selection_id)].to_numpy(), short_op_idx)  # en_idx 에 sync 된 open_idx 를 사용해야함
+    # short_net_wave_0 = ffill_line(res_df['short_wave_0_{}'.format(config.selection_id)].to_numpy(), short_op_idx)
+
+    long_net_p1_idx = long_net_p1_idx_arr.astype(int)  # .reshape(-1, 1)
+    long_p1_idx = long_obj[-1].astype(int).ravel()
+    long_p2_idx = long_p2_idx_arr.astype(int).ravel()  # .reshape(-1, 1)
+    long_en_idx = long_obj[2].astype(int).ravel()
+
+    long_tp_1 = ffill_line(res_df['long_tp_1_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+    long_tp_0 = ffill_line(res_df['long_tp_0_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+    long_out_1 = ffill_line(res_df['long_out_1_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)  # 체결된, p2_idx ~ p2_idx' 사이에 대한 momentum 조사
+    long_out_0 = ffill_line(res_df['long_out_0_{}'.format(config.selection_id)].to_numpy(), long_net_p1_idx)
+    long_ep2_0 = ffill_line(res_df['long_ep2_0_{}'.format(config.selection_id)].to_numpy(), long_p2_idx)
+
+    short_p2exec_p1_idx = np.unique(short_p1_idx)  # .reshape(-1, 1)   # 통일성을 위해 2d 로 설정
+    long_p2exec_p1_idx = np.unique(long_p1_idx)  # .reshape(-1, 1)
+
+    # print("long_net_p1_idx.shape :", long_net_p1_idx.shape)
+    # print("long_en_idx.shape :", long_en_idx.shape)
+
+    # ================== touch idx ================== #
+    # 1. min 에 초점을 맞추는 거니까, touch 없을시 len_df 로 설정
+    # 2. future_data 사용이니까, shift(-bias_info_tick) 설정 --> olds
+    # 3. entry 다음 idx 부터 -> tp & out 체결 logic 이 현재 entry_idx 부터 되어있어서 취소
+    # Todo, high 와 low 중 어디에 먼저닿느냐가 중요함을 key 로 잡고만든 logic 임
+    len_df_range = np.arange(len_df)
+    last_idx = len_df - 1  # nan 발생하면 대소 비교로 hhm 확인이 불가능해짐, np.nan <= np.nan --> false
+
+    # ------------ pair & idxs ------------ #
+    short_en_pair = list(zip(short_en_idx, np.append(short_en_idx[1:], last_idx)))  # p1's 1st & 2nd pair 위해서 last_idx 마지막에 붙여준 것
+    long_en_pair = list(zip(long_en_idx, np.append(long_en_idx[1:], last_idx)))
+
+    short_p2_pair = list(zip(short_p2_idx, np.append(short_p2_idx[1:], last_idx)))
+    long_p2_pair = list(zip(long_p2_idx, np.append(long_p2_idx[1:], last_idx)))
+
+    short_tp_1_touch_idxs = np.where(low <= short_tp_1, len_df_range, last_idx)
+    short_tp_0_touch_idxs = np.where(high >= short_tp_0, len_df_range, last_idx)
+    long_tp_1_touch_idxs = np.where(high >= long_tp_1, len_df_range, last_idx)
+    long_tp_0_touch_idxs = np.where(low <= long_tp_0, len_df_range, last_idx)
+
+    short_out_1_touch_idxs = np.where(low <= short_out_1, len_df_range, last_idx)
+    short_out_0_touch_idxs = np.where(high >= short_out_0, len_df_range, last_idx)
+    long_out_1_touch_idxs = np.where(high >= long_out_1, len_df_range, last_idx)
+    long_out_0_touch_idxs = np.where(low <= long_out_0, len_df_range, last_idx)
+
+    # ------------ min touch_idx ------------ #
+    # print(short_en_pair)
+    short_tp_1_touch_idx = get_touch_idx_fill_v2(short_tp_1_touch_idxs, short_en_pair, short_en_idx, len_df)  # pair means 구간
+    short_tp_0_touch_idx = get_touch_idx_fill_v2(short_tp_0_touch_idxs, short_en_pair, short_en_idx, len_df)
+    long_tp_1_touch_idx = get_touch_idx_fill_v2(long_tp_1_touch_idxs, long_en_pair, long_en_idx, len_df)
+    long_tp_0_touch_idx = get_touch_idx_fill_v2(long_tp_0_touch_idxs, long_en_pair, long_en_idx, len_df)
+
+    short_out_1_touch_idx = get_touch_idx_fill_v2(short_out_1_touch_idxs, short_en_pair, short_en_idx, len_df)  # pair means 구간
+    short_out_0_touch_idx = get_touch_idx_fill_v2(short_out_0_touch_idxs, short_en_pair, short_en_idx, len_df)
+    long_out_1_touch_idx = get_touch_idx_fill_v2(long_out_1_touch_idxs, long_en_pair, long_en_idx, len_df)
+    long_out_0_touch_idx = get_touch_idx_fill_v2(long_out_0_touch_idxs, long_en_pair, long_en_idx, len_df)
+
+    # ------------ point's touch_idx ------------ #
+    short_tp_1_en_touch_idx = short_tp_1_touch_idx[short_en_idx]  # for tp_box's net_hhm
+    short_tp_0_en_touch_idx = short_tp_0_touch_idx[short_en_idx]
+    long_tp_1_en_touch_idx = long_tp_1_touch_idx[long_en_idx]
+    long_tp_0_en_touch_idx = long_tp_0_touch_idx[long_en_idx]
+    # print("long_tp_1_en_touch_idx :", long_tp_1_en_touch_idx)
+
+    short_tp_1_p2exec_p1_touch_idx = short_tp_1_touch_idx[short_p2exec_p1_idx]  # p2 까지 체결된 p1's hhm (p2 executed p1_hhm)
+    short_tp_0_p2exec_p1_touch_idx = short_tp_0_touch_idx[short_p2exec_p1_idx]
+    long_tp_1_p2exec_p1_touch_idx = long_tp_1_touch_idx[long_p2exec_p1_idx]
+    long_tp_0_p2exec_p1_touch_idx = long_tp_0_touch_idx[long_p2exec_p1_idx]
+
+    short_tp_1_p2_touch_idx = short_tp_1_touch_idx[short_en_idx]  # hlm 을 위한 hhm (on p2)
+    short_tp_0_p2_touch_idx = short_tp_0_touch_idx[short_en_idx]
+    long_tp_1_p2_touch_idx = long_tp_1_touch_idx[long_en_idx]
+    long_tp_0_p2_touch_idx = long_tp_0_touch_idx[long_en_idx]
+
+    short_out_1_p2_touch_idx = short_out_1_touch_idx[short_en_idx]  # for out_box's executed_hhm
+    short_out_0_p2_touch_idx = short_out_0_touch_idx[short_en_idx]
+    long_out_1_p2_touch_idx = long_out_1_touch_idx[long_en_idx]
+    long_out_0_p2_touch_idx = long_out_0_touch_idx[long_en_idx]
+
+    # ------------ get wave's bias_tick ------------ #
+    short_tp_1_en_touch_idx2 = np.where(short_tp_1_en_touch_idx == last_idx, np.nan, short_tp_1_en_touch_idx)
+    long_tp_1_en_touch_idx2 = np.where(long_tp_1_en_touch_idx == last_idx, np.nan, long_tp_1_en_touch_idx)
+
+    short_tp_1_p2exec_p1_touch_idx2 = np.where(short_tp_1_p2exec_p1_touch_idx == last_idx, np.nan, short_tp_1_p2exec_p1_touch_idx)
+    long_tp_1_p2exec_p1_touch_idx2 = np.where(long_tp_1_p2exec_p1_touch_idx == last_idx, np.nan, long_tp_1_p2exec_p1_touch_idx)
+
+    # short_net_p1_bias_tick = short_tp_1_en_touch_idx2 - short_net_p1_idx
+    # long_net_p1_bias_tick = long_tp_1_en_touch_idx2 - long_net_p1_idx
+    short_en_bias_tick = short_tp_1_en_touch_idx2 - short_en_idx
+    long_en_bias_tick = long_tp_1_en_touch_idx2 - long_en_idx
+
+    short_p2exec_p1_bias_tick = short_tp_1_p2exec_p1_touch_idx2 - short_p2exec_p1_idx
+    long_p2exec_p1_bias_tick = long_tp_1_p2exec_p1_touch_idx2 - long_p2exec_p1_idx
+
+    # ------------------ bias_bool & hhm ------------------ #
+    short_en_true_bias_bool = short_tp_1_en_touch_idx < short_tp_0_en_touch_idx  # true_bias 의 조건
+    short_en_false_bias_bool = short_tp_1_en_touch_idx >= short_tp_0_en_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = en_idx
+    long_en_true_bias_bool = long_tp_1_en_touch_idx < long_tp_0_en_touch_idx
+    long_en_false_bias_bool = long_tp_1_en_touch_idx >= long_tp_0_en_touch_idx
+
+    short_p2exec_p1_true_bias_bool = short_tp_1_p2exec_p1_touch_idx < short_tp_0_p2exec_p1_touch_idx  # true_bias 의 조건
+    short_p2exec_p1_false_bias_bool = short_tp_1_p2exec_p1_touch_idx >= short_tp_0_p2exec_p1_touch_idx  # false_bias 의 조건, ~true_bias_bool 와 같지 않음, why ..? = en_idx
+    long_p2exec_p1_true_bias_bool = long_tp_1_p2exec_p1_touch_idx < long_tp_0_p2exec_p1_touch_idx
+    long_p2exec_p1_false_bias_bool = long_tp_1_p2exec_p1_touch_idx >= long_tp_0_p2exec_p1_touch_idx
+
+    short_p2_true_bias_bool = short_tp_1_p2_touch_idx < short_tp_0_p2_touch_idx
+    # short_p2_false_bias_bool = short_tp_1_p2_touch_idx >= short_tp_0_p2_touch_idx
+    long_p2_true_bias_bool = long_tp_1_p2_touch_idx < long_tp_0_p2_touch_idx
+    # long_p2_false_bias_bool = long_tp_1_p2_touch_idx >= long_tp_0_p2_touch_idx
+
+    short_p2_out_true_bias_bool = short_out_1_p2_touch_idx < short_out_0_p2_touch_idx
+    short_p2_out_false_bias_bool = short_out_1_p2_touch_idx >= short_out_0_p2_touch_idx
+    long_p2_out_true_bias_bool = long_out_1_p2_touch_idx < long_out_0_p2_touch_idx
+    long_p2_out_false_bias_bool = long_out_1_p2_touch_idx >= long_out_0_p2_touch_idx
+
+    short_tpbox_hhm = hhm(short_en_true_bias_bool, short_en_false_bias_bool)
+    long_tpbox_hhm = hhm(long_en_true_bias_bool, long_en_false_bias_bool)
+
+    short_p2exec_tpbox_hhm = hhm(short_p2exec_p1_true_bias_bool, short_p2exec_p1_false_bias_bool)
+    long_p2exec_tpbox_hhm = hhm(long_p2exec_p1_true_bias_bool, long_p2exec_p1_false_bias_bool)
+
+    # short_p2_hhm = hhm(short_p2_true_bias_bool, short_p2_false_bias_bool)
+    # long_p2_hhm = hhm(long_p2_true_bias_bool, long_p2_false_bias_bool)
+
+    short_outbox_hhm = hhm(short_p2_out_true_bias_bool, short_p2_out_false_bias_bool)
+    long_outbox_hhm = hhm(long_p2_out_true_bias_bool, long_p2_out_false_bias_bool)
+
+    # print("short_tpbox_hhm, short_p2_hhm, short_outbox_hhm :", short_tpbox_hhm, short_p2_hhm, short_outbox_hhm)
+    short_en_idx_2d = short_en_idx.reshape(-1, 1)
+    long_en_idx_2d = long_en_idx.reshape(-1, 1)
+
+    return short_tpbox_hhm, long_tpbox_hhm, short_p2exec_tpbox_hhm, long_p2exec_tpbox_hhm, short_outbox_hhm, long_outbox_hhm, \
+           short_en_bias_tick, long_en_bias_tick, short_p2exec_p1_bias_tick, long_p2exec_p1_bias_tick, short_p2_true_bias_bool, long_p2_true_bias_bool, \
+           short_tp_1[short_en_idx_2d], short_tp_0[short_en_idx_2d], long_tp_1[long_en_idx_2d], long_tp_0[long_en_idx_2d], \
+           short_out_1[short_en_idx_2d], short_out_0[short_en_idx_2d], long_out_1[long_en_idx_2d], long_out_0[long_en_idx_2d], \
+           short_ep2_0[short_en_idx_2d], long_ep2_0[long_en_idx_2d]  # plot_check 을 위해 en_idx 넣음
+
+
 def get_wave_bias_v6_1(res_df, config, high, low, len_df, short_net_p1_idx_arr, long_net_p1_idx_arr, short_p2_idx_arr, long_p2_idx_arr, short_obj, long_obj):
+
     """
     v6 -> v6_1
     1. p1's tr_set 을 사용하는 p2 (en_ex_pairing_v9_43) 의 올바른 out_box plotting 을 위해 ffill_line 에 p2_idx -> net_p1_idx 사용함.
@@ -346,8 +523,7 @@ def get_wave_bias_v6_1(res_df, config, high, low, len_df, short_net_p1_idx_arr, 
     last_idx = len_df - 1  # nan 발생하면 대소 비교로 hhm 확인이 불가능해짐, np.nan <= np.nan --> false
 
     # ------------ pair & idxs ------------ #
-    short_net_p1_pair = list(
-        zip(short_net_p1_idx, np.append(short_net_p1_idx[1:], last_idx)))  # p1's 1st & 2nd pair 위해서 last_idx 마지막에 붙여준 것
+    short_net_p1_pair = list(zip(short_net_p1_idx, np.append(short_net_p1_idx[1:], last_idx)))  # p1's 1st & 2nd pair 위해서 last_idx 마지막에 붙여준 것
     long_net_p1_pair = list(zip(long_net_p1_idx, np.append(long_net_p1_idx[1:], last_idx)))
 
     short_p2_pair = list(zip(short_p2_idx, np.append(short_p2_idx[1:], last_idx)))
@@ -364,8 +540,7 @@ def get_wave_bias_v6_1(res_df, config, high, low, len_df, short_net_p1_idx_arr, 
     long_out_0_touch_idxs = np.where(low <= long_out_0, len_df_range, last_idx)
 
     # ------------ min touch_idx ------------ #
-    short_tp_1_touch_idx = get_touch_idx_fill(short_tp_1_touch_idxs, short_net_p1_pair, short_net_p1_idx,
-                                              len_df)  # pair means 구간
+    short_tp_1_touch_idx = get_touch_idx_fill(short_tp_1_touch_idxs, short_net_p1_pair, short_net_p1_idx, len_df)  # pair means 구간
     short_tp_0_touch_idx = get_touch_idx_fill(short_tp_0_touch_idxs, short_net_p1_pair, short_net_p1_idx, len_df)
     long_tp_1_touch_idx = get_touch_idx_fill(long_tp_1_touch_idxs, long_net_p1_pair, long_net_p1_idx, len_df)
     long_tp_0_touch_idx = get_touch_idx_fill(long_tp_0_touch_idxs, long_net_p1_pair, long_net_p1_idx, len_df)
@@ -1040,7 +1215,7 @@ def idep_plot_v16_6(res_df, len_df, config, high, low, open_info_df1, paired_res
 
     """
     v16_5 -> v16_6
-        1. signal_out 을 위해, get_pr_v6 도입. (+ config.tp_set.non_tㅔ)
+        1. signal_out 을 위해, get_pr_v6 도입. (+ config.tp_set.non_tp)
     """
 
     get_wave_bias, get_pr, get_res_info, plot_info, frq_dev_plot = funcs
@@ -1461,7 +1636,7 @@ def liquidation(open_side, data_, obj_, lvrg, fee):  # much faster
                        iin != iout])
 
 
-def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, sum_pr, fontsize):
+def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, sum_pr, fontsize, mode='CRYPTO'):
     """
     v4 -> v5
         1. add periodic sum_pr
@@ -1476,7 +1651,7 @@ def frq_dev_plot_v5(gs, gs_idx, len_df, sample_len, exit_idx, bias_arr, acc_pr, 
     plt.xlim(0, len_df)
 
     title_msg = "periodic_pr (acc | sum)\n day : {:.2f} | {:.2f}\n month : {:.2f} | {:.2f}\n year : {:.2f} | {:.2f}"  # \n rev_acc_day : {:.4f}\n month : {:.4f}\n year : {:.4f}"
-    array_zip = np.array(list(zip(get_period_pr_v3(sample_len, acc_pr), get_period_pr_v3(sample_len, sum_pr, pr_type="SUM")))).ravel()
+    array_zip = np.array(list(zip(get_period_pr_v3(sample_len, acc_pr, mode=mode), get_period_pr_v3(sample_len, sum_pr, pr_type="SUM", mode=mode)))).ravel()
 
     plt.title(title_msg.format(*array_zip, fontsize=fontsize))
 
@@ -1515,7 +1690,6 @@ def plot_info_v8_2(gs, gs_idx, len_df, sample_len, tr, hhm, p2_hhm, out_hhm, hlm
     v8 -> v8_2
         1. peridic sum_pr plot 을 위해 get_res_info_nb_v3, title_msg 수정함.
         2. sum_mdd -> prod & sum mdd 둘다 plot 함.
-        3. remove return value
     """
 
     try:
@@ -1527,13 +1701,13 @@ def plot_info_v8_2(gs, gs_idx, len_df, sample_len, tr, hhm, p2_hhm, out_hhm, hlm
             plt.axvline(sample_len, alpha=1., linestyle='--', color='#ffeb3b')
         plt.xlim(0, len_df)
 
-        title_str = "tr : {:.3f}\n tpbox_hhm : {:.3f}\n tpbox_p2exec_hhm : {:.3f}\n outbox_hhm : {:.3f}\n hlm : {:.3f}\n bars_in : {:.3f}\n net_p1_frq : {}\n frq : {}\n dpf : {:.3f}\n wr : {:.3f}\n sr : {:.3f}\n acc_pr : {:.3f}\n sum_pr : {:.3f}\n" + \
+        title_str = "tr : {:.3f}\n tpbox_hhm : {:.3f}\n tpbox_p2exec_hhm : {:.3f}\n outbox_hhm : {:.3f}\n whhm : {:.3f}\n bars_in : {:.3f}\n net_p1_frq : {}\n frq : {}\n dpf : {:.3f}\n wr : {:.3f}\n sr : {:.3f}\n acc_pr : {:.3f}\n sum_pr : {:.3f}\n" + \
                     "min_pr : {:.3f}\n liqd : {:.3f}\n acc_mdd : -{:.3f}\n sum_mdd : -{:.3f} ({:.3f})\n leverage {:.3f}"
         plt.title(title_str.format(tr, hhm, p2_hhm, out_hhm, hlm, bars_in, net_p1_frq, *idep_res_obj, leverage), position=title_position, fontsize=fontsize)
     except Exception as e:
         print("error in plot_info :", e)
 
-    return
+    return gs_idx + 1
 
 
 def plot_info_v8_1(gs, gs_idx, len_df, sample_len, tr, hhll, hhm, p2_hhm, out_hhm, hlm, bars_in, net_p1_frq, pr,
@@ -1660,6 +1834,97 @@ def mdd(pr):
 #     필요한 col index 정리    #
 def get_col_idxs(df, cols):
     return [df.columns.get_loc(col) for col in cols]
+
+
+def get_pr_v7(open_side, h, l, obj, tpout, lvrg, fee, partial_ranges, partial_qty_ratio, non_tp=False, inversion=False):  # --> 여기서 사용하는 ex_p = ex_p
+
+    """
+    v6 -> v7
+        1. partial 을 위한 수정. (np.tile(min_low, (1, len_p)) <= p_tps) # * (np.tile(max_high, (1, len_p)) <= outs)
+    """
+
+    en_p = obj[0]
+    ex_p = obj[1]
+
+    tp, out = np.split(tpout, 2, axis=1)
+    len_p = len(partial_ranges)
+    en_ps, ex_ps, tps, outs, lvrgs, fees = [np.tile(arr_, (1, len_p)) for arr_ in [en_p, ex_p, tp, out, lvrg, fee]]
+
+    # print(partial_ranges)
+    # print("ex_ps (up): ", ex_ps)
+
+    np_obj = np.array(obj).T[0]
+    assert len(np_obj.shape) == 2
+
+    # iin == iout 인 경우 분리
+    en_idx = np_obj[:, 2]
+    ex_idx = np_obj[:, 3]
+    equal_idx = en_idx == ex_idx  # equal_idx 는 어차피 out 임
+
+    # 0. tp part 에 대해서는 ex_ps 를 다르게 특정한다.
+    if not non_tp:
+        min_low = np.full_like(en_p, np.nan)
+        min_low[~equal_idx] = np.array(
+            [np.min(l[int(iin + 1):int(iout + 1)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)  # start from iin + 1 (tp 체결을 entry_idx 부터 보지 않음)
+        max_high = np.full_like(en_p, np.nan)
+        max_high[~equal_idx] = np.array(
+            [np.max(h[int(iin + 1):int(iout + 1)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
+
+        if open_side == "SELL":
+            p_tps = en_ps - (en_ps - tps) * partial_ranges
+            # min_low = np.full_like(en_p, np.nan)
+            # min_low[~equal_idx] = np.array([np.min(l[int(iin + 1):int(iout + 1)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)  # start from iin + 1 (tp 체결을 entry_idx 부터 보지 않음)
+
+            # 보수적 검증은 이곳에서 하는 것이 아니다.
+            tp_idx = (np.tile(min_low, (1, len_p)) <= p_tps)  # * (np.tile(max_high, (1, len_p)) <= outs)
+        else:
+            p_tps = en_ps + (tps - en_ps) * partial_ranges
+            # max_high = np.full_like(en_p, np.nan)
+            # max_high[~equal_idx] = np.array([np.max(h[int(iin + 1):int(iout + 1)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
+
+            # out_line touch 이력이 없고 partial_tp_line touch 이력이 있는 경우 => tp 체결 완료.
+            tp_idx = (np.tile(max_high, (1, len_p)) >= p_tps)  # * (np.tile(min_low, (1, len_p)) >= outs)
+
+        # 1. 위 구간에서 tps 설정으로 인해, signal_out 에 대한 고려가 진행되지 않고 있음.
+        ex_ps = outs.copy()
+        ex_ps[tp_idx] = p_tps[tp_idx]
+
+        # print("ex_ps (2): ", ex_ps)
+        # return
+
+    # 2. get pr, liquidation
+    if open_side == "SELL":
+        if not inversion:
+            pr = ((en_ps / ex_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+
+            max_high = np.full_like(en_p, np.nan)
+            max_high[~equal_idx] = np.array([np.max(h[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)  # start from iin (liquidation 을 entry_idx 봄)
+            liqd = (en_p / max_high - fee - 1) * lvrg + 1
+        else:
+            pr = ((ex_ps / en_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+
+            min_low = np.full_like(en_p, np.nan)
+            min_low[~equal_idx] = np.array([np.min(l[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
+            liqd = (min_low / en_p - fee - 1) * lvrg + 1
+    else:
+        if not inversion:
+            pr = ((ex_ps / en_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+
+            min_low = np.full_like(en_p, np.nan)
+            min_low[~equal_idx] = np.array([np.min(l[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
+            liqd = (min_low / en_p - fee - 1) * lvrg + 1
+        else:
+            pr = ((en_ps / ex_ps * (1 - fees) - 1) * lvrgs * partial_qty_ratio).sum(axis=1) + 1
+
+            max_high = np.full_like(en_p, np.nan)
+            max_high[~equal_idx] = np.array([np.max(h[int(iin):int(iout)]) for _, _, iin, iout in np_obj[~equal_idx, :4]]).reshape(-1, 1)
+            liqd = (en_p / max_high - fee - 1) * lvrg + 1
+
+    pr_2d = pr.reshape(-1, 1)
+    # pr_2d[liqd <= 0] = 0  # liquidation platform 에서는 억지로 0 을 대입시킬 필요가 없어짐.
+    pr_2d[pr_2d < 0] = 0  # pr 음수 오차 수정.
+
+    return pr_2d, np.nanmin(liqd)
 
 
 def get_pr_v6(open_side, h, l, obj, tpout, lvrg, fee, partial_ranges, partial_qty_ratio, non_tp=False, inversion=False):  # --> 여기서 사용하는 ex_p = ex_p
@@ -1827,7 +2092,9 @@ def get_pr_v5(open_side, h, l, obj, tpout, lvrg, fee, partial_ranges, partial_qt
 
 def to_total_pr(len_df, pr, exit_idx):
     total_pr = np.ones(len_df)
-    if type(exit_idx) != int:
+    exit_idx = np.array(exit_idx)
+    # if type(exit_idx) == np.ndarray:
+    if exit_idx.dtype != int:
         exit_idx = exit_idx.astype(int)
     total_pr[exit_idx] = pr
 
@@ -1874,6 +2141,7 @@ def get_pr_nb(open_side, ep, tp, lvrg, fee):
 
 
 def get_period_pr_v3(len_df, pr_, pr_type="PROD", mode='STOCK'):
+
     if mode == 'STOCK':
         days = len_df / 360
     else:

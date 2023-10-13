@@ -13,6 +13,7 @@ Bank/api_keys/
 
 # files
 test_code.py
+*.pkl
 
 
 # ------------ public ------------  #

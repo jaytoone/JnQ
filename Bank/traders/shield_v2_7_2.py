@@ -30,6 +30,7 @@ class Shield(ShieldModule):
         2. add severtime.
         3. add expire & open_exec validation.
         4. modify order_data -> self.over_balance (from available_balance)
+        5. modify max_available_balance : * 0.98
     """
 
     def __init__(self, paper_name, main_name, id_zip, config_type, mode="Bank", shield_close=None):
@@ -359,18 +360,18 @@ class Shield(ShieldModule):
             # a. over_balance 가 저장되어 있다면, 현재 사용하는 balance 가 원하는 것보다 작은 상태임.
             #       i. 최대 허용 가능 balance 인 max_balance 와의 지속적인 비교 진행
             if self.over_balance is not None:
-                if self.over_balance <= max_available_balance * 0.9:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
+                if self.over_balance <= max_available_balance * 0.98:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
                     self.available_balance = self.over_balance  # mode="SUM" 의 경우에도 self.over_balance 에는 initial_asset 만큼만 담길 수 있기 때문에 구분하지 않음.
                     self.over_balance = None
                 else:  # 상태가 어찌되었든 일단은 지속해서 Bank 를 돌리려는 상황. (후조치 한다는 의미, 중단하는게 아니라)
-                    self.available_balance = max_available_balance * 0.9  # max_available_balance 를 넘지 않는 선
+                    self.available_balance = max_available_balance * 0.98  # max_available_balance 를 넘지 않는 선
                 self.sys_log.info('available_balance (temp) : {:.2f}'.format(self.available_balance))
 
             # b. 예기치 못한 오류로 인해 over_balance 상태가 되었을때의 조치
             else:
                 if self.available_balance >= max_available_balance:
                     self.over_balance = self.available_balance  # 복원 가능하도록 현재 상태를 over_balance 에 저장
-                    self.available_balance = max_available_balance * 0.9
+                    self.available_balance = max_available_balance * 0.98
                 self.sys_log.info('available_balance : {:.2f}'.format(self.available_balance))
 
             # c. min_balance check

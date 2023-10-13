@@ -10,7 +10,7 @@ assert paper_name in main_name
 
 #   a. id_zip = [utils_id_list, config_id_list]
 #       i. selection_id = id_list id 와 일치시켜야될 것 (반드시 일치될 필요는 없으나 편의상 enlist_tr 에서 구별되어야하기 때문.)
-id_zip = [[1], [2]]
+id_zip = [[1], [1]]
 
 # 1. shield time.
 # shield_open = "09:00:00"      # "12:00:00"
@@ -19,7 +19,7 @@ id_zip = [[1], [2]]
 
 
 def shield_proc():
-    shield = Shield(paper_name=paper_name, main_name=main_name, id_zip=id_zip, config_type="realtrade", shield_close=None)
+    shield = Shield(pkg_name='Bank_Upbit', paper_name=paper_name, main_name=main_name, id_zip=id_zip, config_type="realtrade", shield_close=None)
     shield.run()
 
 

@@ -102,7 +102,7 @@ class Shield(ShieldModule):
             #   b. log_name for dict_wrapper_save_path & base_cfg_copy_path (+ sys_log file name)
             log_name = str(datetime.now().timestamp()).split(".")[0]
 
-            #   c. dict_wrapper_save_path define
+            #   c. define dict_wrapper_save_path
             self.dict_wrapper_save_path = os.path.join(self.trade_log_path, log_name + ".pkl")
 
             #   d. copy base_cfg.json -> {ticker}.json (log_cfg name)
@@ -359,18 +359,18 @@ class Shield(ShieldModule):
             # a. over_balance 가 저장되어 있다면, 현재 사용하는 balance 가 원하는 것보다 작은 상태임.
             #       i. 최대 허용 가능 balance 인 max_balance 와의 지속적인 비교 진행
             if self.over_balance is not None:
-                if self.over_balance <= max_available_balance * 0.9:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
+                if self.over_balance <= max_available_balance * 0.98:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
                     self.available_balance = self.over_balance  # mode="SUM" 의 경우에도 self.over_balance 에는 initial_asset 만큼만 담길 수 있기 때문에 구분하지 않음.
                     self.over_balance = None
                 else:  # 상태가 어찌되었든 일단은 지속해서 Bank 를 돌리려는 상황. (후조치 한다는 의미, 중단하는게 아니라)
-                    self.available_balance = max_available_balance * 0.9  # max_available_balance 를 넘지 않는 선
+                    self.available_balance = max_available_balance * 0.98  # max_available_balance 를 넘지 않는 선
                 self.sys_log.info('available_balance (temp) : {:.2f}'.format(self.available_balance))
 
-            # b. 예기치 못한 오류로 인해 over_balance 상태가 되었을 때의 조치
+            # b. 예기치 못한 오류로 인해 over_balance 상태가 되었을때의 조치
             else:
                 if self.available_balance >= max_available_balance:
                     self.over_balance = self.available_balance  # 복원 가능하도록 현재 상태를 over_balance 에 저장
-                    self.available_balance = max_available_balance * 0.9
+                    self.available_balance = max_available_balance * 0.98
                 self.sys_log.info('available_balance : {:.2f}'.format(self.available_balance))
 
             # c. min_balance check
@@ -413,6 +413,7 @@ class Shield(ShieldModule):
         self.sys_log.info("income : {:.2f} {}".format(self.income, currency))
         self.sys_log.info("temporary profit : {:.2%} ({:.2%})".format(real_tmp_profit, ideal_tmp_profit))
 
+        self.sys_log.info("accumulated income : {:.2%}".format(self.accumulated_income))
         self.config_list[0].trader_set.acc_income = self.accumulated_income
 
         if mode == "PROD":
@@ -428,8 +429,10 @@ class Shield(ShieldModule):
 
             self.config_list[0].trader_set.acc_profit_sum = self.accumulated_profit
 
-        msg = "accumulated income : {:.2f} {}\naccumulated profit : {:.2%} ({:.2%})\n".format(self.accumulated_income, currency, self.accumulated_profit, self.ideal_accumulated_profit)
-        self.sys_log.info(msg)
+        msg = "income : {:.2f} {}\nprofit : {:.2%} ({:.2%})\n " \
+              "accumulated income : {:.2f} {}\naccumulated profit : {:.2%} ({:.2%})\n"\
+            .format(self.income, currency, real_tmp_profit, ideal_tmp_profit, self.accumulated_income, currency, self.accumulated_profit, self.ideal_accumulated_profit)
+
         try:
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
         except Exception as e:
@@ -570,7 +573,7 @@ class Shield(ShieldModule):
                     except Exception as e:
                         self.sys_log.error(e)
 
-                        #   d. 사용된 user_text -> None 으로 치환한다.
+                    #   d. 사용된 user_text -> None 으로 치환한다.
                     self.user_text = None
 
                 #   3. Messenger off 시, default code = self.config.trader_set.symbol
@@ -613,7 +616,7 @@ class Shield(ShieldModule):
             #       ii. 초 단위 < 2 로 고정. (Binance)
             if not self.config.trader_set.backtrade:
                 try:
-                    if time.time() - end_time_watch >= 20: # and now.second < 2:
+                    if time.time() - end_time_watch >= 20:  # and now.second < 2:
                         self.allow_watch = 1
                         #   ii. for save_data() term.
                         self.save_data()
@@ -634,7 +637,6 @@ class Shield(ShieldModule):
                         # y. set start w_i : loop_limit 으로 인해 이탈 후 복귀시의 start w_i 설정.
                         #       i. 시작 w_i 를 변경하는건, static_watch 만 해당됨. (dynamic 은 불필요함.) -> static 기준이 아니라, duplicate 기준임.
                         #       ii. dynamic update 안하는 경우 = static 과 동일.
-
                         if w_i <= self.prev_w_i:
                             continue
                         else:
@@ -647,7 +649,7 @@ class Shield(ShieldModule):
                         # x. loop 최대 잔류 시간.
                         # if not self.config.trader_set.backtrade:  # 중복됨.
                         if time.time() - start_time > self.config.trader_set.loop_duration:
-                            print("break passed.")
+                            self.sys_log.warning("loop_duration break.")
                             break
 
                     open_side_msg, tp, ep, out, limit_leverage, ep_loc_point2, streamer = watch_data.values()
@@ -1278,7 +1280,7 @@ class Shield(ShieldModule):
                     except Exception as e:
                         self.sys_log.error(e)
 
-                        # 4. check market_close_on
+                # 4. check market_close_on
                 if market_close_on:
                     fee += self.config.trader_set.market_fee
                     msg = "{} market_close_on.".format(code)
@@ -1288,7 +1290,7 @@ class Shield(ShieldModule):
                     except Exception as e:
                         self.sys_log.error(e)
 
-                        #   a. out execution logging
+                    #   a. out execution logging
                     #       i. market_close_on = True, log_out != None (None 도 logging 가능하긴함)
                     if not self.config.trader_set.backtrade:  # real_trade 의 경우, realtime_price's ts -> lastest_index 사용
                         ex_dict[str(res_df.index[self.config.trader_set.latest_index])] = [log_out]  # insert as list type

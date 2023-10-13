@@ -98,7 +98,7 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
 
 if __name__ == '__main__':
 
-    days = 120  # 330 3
+    days = 10  # 330 3
 
     """
     upbit 에서 당일 기준 이전 데이터를 조회할지도 None 은 성립하지 않는다.
@@ -117,11 +117,19 @@ if __name__ == '__main__':
 
     exist_files = os.listdir(save_dir)
 
-    # with open(r'D:\Projects\System_Trading\JnQ\olds\ticker_list\upbit_20230324.pkl', 'rb') as f:
-    #     symbol_list = pickle.load(f)
-    # print(symbol_list)
+    from pyupbit import get_tickers
+    # with open(r'D:\Projects\System_Trading\JnQ\database\ticker_list\upbit_20230718.pkl', 'wb') as f:
+    #     pickle.dump(get_tickers(), f)
+    with open(r'D:\Projects\System_Trading\JnQ\database\ticker_list\upbit_20230718.pkl', 'rb') as f:
+        symbol_list = pickle.load(f)
+
+    # exist_files = os.listdir(os.path.join(concat_path, "2023-03-23"))
+    # exist_symbols = list(map(lambda x: x.replace("2023-03-23 ", "").replace("_1m.ftr", ""), exist_files))
+    # get_tickers
+    # print(len([symbol_ for symbol_ in get_tickers() if 'KRW' in symbol_]))
+    # quit()
     # symbol_list = ['KRW-CBK', 'KRW-CHZ', 'KRW-FCT2', 'KRW-IOST', 'KRW-MBL', 'KRW-SHIB', 'KRW-STPT']
-    symbol_list = ['KRW-XRP']
+    symbol_list = ['KRW-MBL']
 
     for symbol in symbol_list:
         for interval in intervals:
@@ -129,17 +137,22 @@ if __name__ == '__main__':
             #       Todo        #
             #        1. this phase require valid end_date       #
             save_name = "{} {}_{}.ftr".format(end_date, symbol, interval)
-            # if save_name in exist_files:
-            #     print(save_name, 'exist !')
+
+            if save_name in exist_files:
+                print(save_name, 'exist !')
+                continue
+
+            # if symbol in exist_symbols or 'KRW' not in symbol_list:
+            #     print("skip {}".format(symbol))
             #     continue
 
             limit = limit_by_itv(interval)
             try:
                 concated_df, end_date = concat_candlestick(symbol, interval, days, limit=limit,
                                                            end_date=end_date, show_process=True, timesleep=0.11)
-                # save_path = os.path.join(save_dir, save_name)
-                # concated_df.reset_index().to_feather(save_path, compression='lz4')
-                # print(save_path, "saved.\n")
+                save_path = os.path.join(save_dir, save_name)
+                concated_df.reset_index().to_feather(save_path, compression='lz4')
+                print(save_path, "saved.\n")
             except Exception as e:
                 print("error in save to_feather :", e)
                 continue

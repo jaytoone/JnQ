@@ -30,10 +30,14 @@ class Shield(ShieldModule):
         2. update watch result.
         3. modify get_income_info. (assert initial acc_prod = 1.0)
         4. add '_' to replication name.
+        5. add pkg_name ('Bank_Upbit')
+        6. modify re_id format --> "_{}".
+        7. Upbit's max available_balance = * 0.998
     """
 
-    def __init__(self, paper_name, main_name, id_zip, config_type, mode="Bank", shield_close=None):
+    def __init__(self, pkg_name, paper_name, main_name, id_zip, config_type, mode="Bank", shield_close=None):
 
+        self.pkg_name = pkg_name
         self.main_name = main_name
         self.utils_id_list, self.config_id_list = id_zip
         self.shield_close = shield_close
@@ -62,16 +66,16 @@ class Shield(ShieldModule):
             self.pkg_path = os.path.dirname(os.getcwd())  # pkg_path 가 가리켜야할 곳은 "Bank" 임.
             os.chdir(self.pkg_path)  # log dir 저장위치를 고려해서, chdir() 실행 : 보통 JnQ -> Bank 로 전환됨.
         else:
-            self.pkg_path = os.path.join(os.getcwd(), "Bank")  # IDEP 환경에서는 cwd 가 어디일지 몰라, Bank 를 기준함.
+            self.pkg_path = os.path.join(os.getcwd(), pkg_name)  # IDEP 환경에서는 cwd 가 어디일지 몰라, Bank 를 기준함.
             # self.pkg_path =   # IDEP 환경에서는 cwd 가 어디일지 몰라, Bank 를 기준함.
 
         # 2. paper info
         #       a. public
-        public_name = "Bank.papers.public.{}".format(paper_name)
+        public_name = "{}.papers.public.{}".format(pkg_name, paper_name)
         self.public = importlib.import_module(public_name)
 
         #       b. utils
-        utils_name_list = ["Bank.papers.utils.{}_{}".format(paper_name, id_) for id_ in self.utils_id_list]
+        utils_name_list = ["{}.papers.utils.{}_{}".format(pkg_name, paper_name, id_) for id_ in self.utils_id_list]
         self.utils_list = [importlib.import_module(utils_name) for utils_name in utils_name_list]
 
         #       c. configuration
@@ -255,7 +259,7 @@ class Shield(ShieldModule):
             os.makedirs(data_dir_path, exist_ok=True)
 
             try:
-                save_path = os.path.join(data_dir_path, "watch_data_dict_{}.pkl".format(re_id))
+                save_path = os.path.join(data_dir_path, "watch_data_dict{}.pkl".format(re_id))
 
                 with open(save_path, 'wb') as f:
                     pickle.dump(self.watch_data_dict, f)
@@ -266,7 +270,7 @@ class Shield(ShieldModule):
                 self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
             try:
-                save_path = os.path.join(data_dir_path, "open_remain_data_dict_{}.pkl".format(re_id))
+                save_path = os.path.join(data_dir_path, "open_remain_data_dict{}.pkl".format(re_id))
 
                 with open(save_path, 'wb') as f:
                     pickle.dump(self.open_remain_data_dict, f)
@@ -277,7 +281,7 @@ class Shield(ShieldModule):
                 self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
             try:
-                save_path = os.path.join(data_dir_path, "close_remain_data_dict_{}.pkl".format(re_id))
+                save_path = os.path.join(data_dir_path, "close_remain_data_dict{}.pkl".format(re_id))
                 with open(save_path, 'wb') as f:
                     pickle.dump(self.close_remain_data_dict, f)
                     self.sys_log.warning("{} saved\n".format(save_path))
@@ -339,7 +343,7 @@ class Shield(ShieldModule):
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
 
         #       x. make replication.
-        self.save_data(re_id=str(datetime.now().timestamp()).split(".")[0])
+        self.save_data(re_id="_{}".format(str(datetime.now().timestamp()).split(".")[0]))
 
         return watch_code_dict
 
@@ -365,18 +369,18 @@ class Shield(ShieldModule):
             # a. over_balance 가 저장되어 있다면, 현재 사용하는 balance 가 원하는 것보다 작은 상태임.
             #       i. 최대 허용 가능 balance 인 max_balance 와의 지속적인 비교 진행
             if self.over_balance is not None:
-                if self.over_balance <= max_available_balance * 0.9:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
+                if self.over_balance <= max_available_balance * 0.998:  # 정상화 가능한 상태 (over_balanced 된 양을 허용할 수준의 max_balance)
                     self.available_balance = self.over_balance  # mode="SUM" 의 경우에도 self.over_balance 에는 initial_asset 만큼만 담길 수 있기 때문에 구분하지 않음.
                     self.over_balance = None
                 else:  # 상태가 어찌되었든 일단은 지속해서 Bank 를 돌리려는 상황. (후조치 한다는 의미, 중단하는게 아니라)
-                    self.available_balance = max_available_balance * 0.9  # max_available_balance 를 넘지 않는 선
+                    self.available_balance = max_available_balance * 0.998  # max_available_balance 를 넘지 않는 선
                 self.sys_log.info('available_balance (temp) : {:.2f}'.format(self.available_balance))
 
             # b. 예기치 못한 오류로 인해 over_balance 상태가 되었을 때의 조치
             else:
-                if self.available_balance >= max_available_balance:
+                if self.available_balance > max_available_balance * 0.998:
                     self.over_balance = self.available_balance  # 복원 가능하도록 현재 상태를 over_balance 에 저장
-                    self.available_balance = max_available_balance * 0.9
+                    self.available_balance = max_available_balance * 0.998
                 self.sys_log.info('available_balance : {:.2f}'.format(self.available_balance))
 
             # c. min_balance check
@@ -491,7 +495,7 @@ class Shield(ShieldModule):
                     if self.config.trader_set.messenger_on:
                         payload = self.user_text.upper().split(" ")
 
-                        with open(r"D:\Projects\System_Trading\JnQ\Bank\valid_code\ticker_in_futures.pkl", 'rb') as f:
+                        with open(r"D:\Projects\System_Trading\JnQ\{}\valid_code\ticker_in_futures.pkl".format(self.pkg_name), 'rb') as f:
                             valid_code_list = pickle.load(f)
 
                         if len(payload) == 2:

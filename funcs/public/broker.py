@@ -5,6 +5,7 @@ from datetime import datetime
 import warnings
 import logging
 import pickle
+import math
 
 sys_log = logging.getLogger()
 
@@ -12,14 +13,17 @@ sys_log = logging.getLogger()
 warnings.simplefilter("ignore", category=RuntimeWarning)
 np.seterr(invalid="ignore")
 
+
 def save_pkl(input_list, f_path):
   with open(f_path, 'wb') as pickle_file:
     pickle.dump(input_list, pickle_file)
     print(f_path, "saved !")
 
+
 def load_pkl(f_path):
   with open(f_path, 'rb') as pickle_load:
       return pickle.load(pickle_load)
+
 
 def dup_col_value(x, invalid_value, dup_x):
   return dup_x if x == invalid_value else x
@@ -236,8 +240,14 @@ def itv_to_number(interval):
         int_minute = 5
     elif interval in ['15m', '15T']:
         int_minute = 15
+    elif interval in ['20m', '20T']:
+        int_minute = 20
+    elif interval in ['25m', '25T']:
+        int_minute = 25
     elif interval in ['30m', '30T']:
         int_minute = 30
+    elif interval in ['45m', '45T']:
+        int_minute = 45
     elif interval in ['1h', 'H']:
         int_minute = 60
     elif interval in ['4h', '4H']:
@@ -517,7 +527,59 @@ def calc_train_days(interval, use_rows):    # --> for ai
     return days
 
 
+def get_tick_size(price, method="floor"):
+
+    """
+    Upbit.
+        1. 원화마켓 주문 가격 단위
+            a. Args:
+                price (float]): 주문 가격
+                method (str, optional): 주문 가격 계산 방식. Defaults to "floor".
+
+            b. Returns:
+                float: 업비트 원화 마켓 주문 가격 단위로 조정된 가격
+    """
+    if pd.isnull(price):
+        return price
+
+    if method == "floor":
+        func = math.floor
+    elif method == "round":
+        func = round
+    else:
+        func = math.ceil
+
+    if price >= 2000000:
+        tick_size = func(price / 1000) * 1000
+    elif price >= 1000000:
+        tick_size = func(price / 500) * 500
+    elif price >= 500000:
+        tick_size = func(price / 100) * 100
+    elif price >= 100000:
+        tick_size = func(price / 50) * 50
+    elif price >= 10000:
+        tick_size = func(price / 10) * 10
+    elif price >= 1000:
+        tick_size = func(price / 5) * 5
+    elif price >= 100:
+        tick_size = func(price / 1) * 1
+    elif price >= 10:
+        tick_size = func(price / 0.1) / 10
+    elif price >= 1:
+        tick_size = func(price / 0.01) / 100
+    elif price >= 0.1:
+        tick_size = func(price / 0.001) / 1000
+    else:
+        tick_size = func(price / 0.0001) / 10000
+
+    return tick_size
+
+
 def get_hoga_unit(price):
+
+    """
+    Binance?
+    """
 
     if price < 2000:
         return 1
@@ -553,6 +615,22 @@ def calc_with_hoga_unit(price, mode="top"):  # Stock 에서는 price_precision �
             return int((price // hoga_unit) * hoga_unit)
         else:
             return int(((price // hoga_unit) - 1) * hoga_unit)
+
+
+def calc_with_precision(data, data_precision, def_type='floor'):
+
+    if not pd.isna(data):
+        if data_precision > 0:
+            if def_type == 'floor':
+                data = math.floor(data * (10 ** data_precision)) / (10 ** data_precision)
+            elif def_type == 'round':
+                data = float(round(data, data_precision))
+            else:
+                data = math.ceil(data * (10 ** data_precision)) / (10 ** data_precision)
+        else:
+            data = int(data)
+
+    return data
 
 
 def get_precision_by_price(price):

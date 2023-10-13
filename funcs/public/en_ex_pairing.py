@@ -1,5 +1,6 @@
 import time
 from funcs.public.idep import *
+from funcs.public.broker import itv_to_number
 
 
 class OrderSide:  # 추후 위치 옮길 것 - colab 에 binance_file 종속할 수 없어 이곳에 임시적으로 선언함
@@ -4177,6 +4178,86 @@ def check_entry_v7(res_df, config, entry_type, op_idx1, op_idx2, wave1, wave_gap
     #   ep_j, tp_j, out_j 가 return 되어야함 - exit phase 에서 이어가기 위함
 
 
+def check_entry_v6_3(res_df, config, entry_type, op_idx, tr_set_idx, len_df, open_side, np_datas, expiry):
+    """
+    v6_2 -> v6_3
+        1. 보수적 검증 적용 (체결률 100%)
+    """
+
+    open, high, low, close, ep_arr = np_datas
+    ep_base_idx, tp_base_idx, out_base_idx = tr_set_idx
+
+    # selection_id = config.selection_id
+    # allow_ep_in = 0 if config.ep_set.point2.use_point2 else 1
+    entry_done = 0
+    ep = None
+
+    if entry_type == "LIMIT":
+        fee = config.trader_set.limit_fee
+
+        for e_j in range(op_idx + 1, len_df):
+            # ------ index setting for dynamic options ------ #
+            if not config.ep_set.static_ep:
+                ep_base_idx = e_j  # dynamic_ep 를 위한 ep_index var.
+                out_base_idx = e_j  # dynamic_out 를 위한 out_index var. - 조건식이 static_ep 와 같이 있는 이유 모름 => dynamic_lvrg 로 사료됨
+
+            if not config.tp_set.static_tp:
+                tp_base_idx = e_j
+
+            # ------ expire_k & expire_tick ------ # - limit 사용하면 default 로 expire_k 가 존재해야함
+            if expiry(res_df, config, op_idx, e_j, tp_base_idx, [high, low], open_side):
+                break
+
+            # ------ point2 ------ #
+            # if not allow_ep_in:
+            #     allow_ep_in, out_base_idx = ep_loc_point2(res_df, config, e_j, out_base_idx, side=OrderSide.SELL)
+            #     if allow_ep_in:
+            #       if config.ep_set.point2.entry_type == "LIMIT":
+            #         ep_base_idx = e_j
+            #         # print("e_j in point2 :", e_j)
+            #         continue
+
+            # ------ check ep_exec ------ #
+            # if allow_ep_in:
+            # if config.ep_set.point2.use_point2 and config.ep_set.point2.entry_type == 'MARKET':
+            #   entry_done = 1
+            #   ep = c[e_j]
+            #   break
+            # else:
+
+            if open_side == OrderSide.SELL:
+                # if high[e_j] >= ep_arr[ep_base_idx]:
+                if high[e_j] > ep_arr[ep_base_idx]:  # 보수적 검증 (체결률 100%)
+                    entry_done = 1
+                    ep = ep_arr[ep_base_idx]
+                    if open[e_j] >= ep_arr[ep_base_idx]:  # open comp 는 결국, 수익률에 얹어주는 logic (반보수) -> 사용 보류
+                        ep = open[e_j]
+                    break
+            else:
+                # if low[e_j] <= ep_arr[ep_base_idx]:
+                if low[e_j] < ep_arr[ep_base_idx]:
+                    entry_done = 1
+                    ep = ep_arr[ep_base_idx]
+                    if open[e_j] <= ep_arr[ep_base_idx]:
+                        ep = open[e_j]
+                    break
+
+        try:
+            exec_idx = e_j
+
+        except Exception as e:
+            exec_idx = None  # 어차피, 외부에서 entry_done = 0 로 빠지면 continue 되기 때문에 의미 없음.
+            print("error in check_entry e_j loop : {}".format(e))
+
+    else:  # market entry
+        exec_idx = op_idx + 1
+        entry_done = 1
+        ep = close[op_idx]
+        fee = config.trader_set.market_fee
+
+    return exec_idx, entry_done, ep, fee
+
+
 def check_entry_v6_2(res_df, config, entry_type, op_idx, tr_set_idx, len_df, open_side, np_datas, expiry):
 
     """
@@ -4475,7 +4556,95 @@ def check_eik_point2_exec_v3(res_df, config, op_idx, tp_j, len_df, open_side, np
     #   ep_j, tp_j, out_j 가 return 되어야함 - exit phase 에서 이어가기 위함
 
 
+def check_limit_tp_exec_v3(res_df, config, open_i, i, tp_j, len_df, fee, open_side, exit_done, np_datas):
+    """
+    v1 -> v3
+        1. 보수적 검증 적용 (체결률 100%)
+    """
+
+    open, high, low, close, tps = np_datas
+    tp = None
+    selection_id = config.selection_id
+    len_tps = len(tps)
+
+    for tp_i, tp_arr in enumerate(tps):
+
+        #     decay adjustment    #
+        #     tp_j includes dynamic_j - functionalize  #
+        # try:
+        #     if config.tr_set.decay_gap != "None":
+        #         decay_share = (j - open_i) // config.tp_set.decay_term
+        #         decay_remain = (j - open_i) % config.tp_set.decay_term
+        #         if j != open_i and decay_remain == 0:
+        #             if open_side == OrderSide.SELL:
+        #                 tp_arr[tp_j] += res_df['short_tp_gap_{}'.format(selection_id)].iloc[open_i] * config.tr_set.decay_gap * decay_share
+        #             else:
+        #                 tp_arr[tp_j] -= res_df['long_tp_gap_{}'.format(selection_id)].iloc[open_i] * config.tr_set.decay_gap * decay_share
+        # except:
+        #     pass
+
+        if open_side == OrderSide.SELL:
+
+            if low[i] < tp_arr[tp_j]:  # 보수적 검증 (체결률 100%)
+                # if low[i] <= tp_arr[tp_j]:  # and partial_tp_cnt == tp_i:  # we use static tp now
+                # if low[i] <= tp_arr[i] <= h[i]: --> 이건 잘못되었음
+                # partial_tp_cnt += 1 --> partial_tp 보류
+
+                # 1. dynamic tp
+                if tp_arr[i] != tp_arr[i - 1] and not config.tp_set.static_tp:
+                    # tp limit 이 불가한 경우 - open 이 이미, tp 를 넘은 경우
+                    if open[i] < tp_arr[i]:
+                        tp = open[i]
+                    # tp limit 이 가능한 경우 - open 이 아직, tp 를 넘지 않은 경우
+                    else:
+                        tp = tp_arr[i]
+
+                # 2. static tp
+                else:
+                    #   tp limit 이 불가한 경우 - open 이 이미, tp 를 넘은 경우
+                    if open[i] < tp_arr[tp_j]:  # static 해놓고 decay 사용하면 dynamic 이니까
+                        if config.tr_set.decay_gap != "None" and decay_remain == 0:
+                            tp = open[i]  # tp_j -> open_i 를 가리키기 때문에 decay 는 한번만 진행되는게 맞음
+                        else:
+                            tp = tp_arr[tp_j]
+                    else:
+                        tp = tp_arr[tp_j]
+
+                if tp_i == len_tps - 1:
+                    exit_done = 1  # partial 을 고려해 exit_done = 1 상태는 tp_i 가 last_index 로 체결된 경우만 해당
+
+        else:
+            if high[i] > tp_arr[tp_j]:
+                # if high[i] >= tp_arr[tp_j]:
+
+                # 1. dynamic tp
+                if tp_arr[i] != tp_arr[i - 1] and not config.tp_set.static_tp:
+                    if open[i] > tp_arr[i]:
+                        tp = open[i]
+                    else:
+                        tp = tp_arr[i]
+
+                # 2. static tp
+                else:
+                    if open[i] > tp_arr[tp_j]:
+                        if config.tr_set.decay_gap != "None" and decay_remain == 0:
+                            tp = open[i]
+                        else:
+                            tp = tp_arr[tp_j]
+                    else:
+                        tp = tp_arr[tp_j]
+
+                if tp_i == len_tps - 1:
+                    exit_done = 1  # partial 을 고려해 exit_done = 1 상태는 tp_i 가 last_index 로 체결된 경우만 해당
+
+    if exit_done:
+        fee += config.trader_set.limit_fee
+
+    return exit_done, tp, fee
+
+
 def check_limit_tp_exec_v2(res_df, config, open_i, i, tp_j, len_df, fee, open_side, exit_done, np_datas):
+
     """
     _ -> v2
         1. additional fee added.
@@ -4640,8 +4809,64 @@ def check_limit_tp_exec(res_df, config, open_i, i, tp_j, len_df, fee, open_side,
     return exit_done, tp, fee
 
 
-def check_signal_out_v4(res_df, config, open_i, i, len_df, fee, open_side, cross_on, exit_done, np_datas):
+def check_signal_out_v5(res_df, config, open_i, i, len_df, fee, open_side, cross_on, exit_done, np_datas):
+    """
+    v4 -> v5
+        1. add fisher_exit.
+    """
+    _, _, _, close, np_timeidx = np_datas
+    ex_p = None
+    selection_id = config.selection_id
 
+    # 1. timestamp
+    if config.out_set.tf_exit != "None":
+        if np_timeidx[i] % config.out_set.tf_exit == config.out_set.tf_exit - 1 and i != open_i:
+            exit_done = -1
+
+    # 2. fisher
+    if config.out_set.fisher_exit:
+
+        itv_num = itv_to_number(config.loc_set.point1.tf_entry)
+
+        fisher_band = config.out_set.fisher_band
+        fisher_band2 = config.out_set.fisher_band2
+
+        if np_timeidx[i] % itv_num == itv_num - 1:
+
+            fisher_ = res_df['fisher_{}30'.format(config.loc_set.point1.tf_entry)].to_numpy()
+
+            if open_side == OrderSide.SELL:
+                if (fisher_[i - itv_num] > -fisher_band) & (fisher_[i] <= -fisher_band):
+                    exit_done = -1
+                elif (fisher_[i - itv_num] < fisher_band2) & (fisher_[i] >= fisher_band2):
+                    exit_done = -1
+            else:
+                if (fisher_[i - itv_num] < fisher_band) & (fisher_[i] >= fisher_band):
+                    exit_done = -1
+                elif (fisher_[i - itv_num] > fisher_band2) & (fisher_[i] <= fisher_band2):
+                    exit_done = -1
+
+    # 3. cci
+    if config.out_set.cci_exit:
+        cci_ = res_df['cci_T20'].to_numpy()
+
+        if open_side == OrderSide.SELL:
+            if (cci_[i - 1] >= -100) & (cci_[i] < -100):
+                # if (cci_[i - 1] <= -100) & (cci_[i] > -100):
+                exit_done = -1
+        else:
+            if (cci_[i - 1] <= 100) & (cci_[i] > 100):
+                # if (cci_[i - 1] >= 100) & (cci_[i] < 100):
+                exit_done = -1
+
+    if exit_done:
+        ex_p = close[i]
+        fee += config.trader_set.market_fee
+
+    return exit_done, cross_on, ex_p, fee
+
+
+def check_signal_out_v4(res_df, config, open_i, i, len_df, fee, open_side, cross_on, exit_done, np_datas):
     """
     v3 -> v4
         1. remove unnecessary conditions.
@@ -4655,17 +4880,17 @@ def check_signal_out_v4(res_df, config, open_i, i, len_df, fee, open_side, cross
         if np_timeidx[i] % config.out_set.tf_exit == config.out_set.tf_exit - 1 and i != open_i:
             exit_done = -1
 
-    # 2. cci
+    # 3. cci
     if config.out_set.cci_exit:
         cci_ = res_df['cci_T20'].to_numpy()
 
         if open_side == OrderSide.SELL:
             if (cci_[i - 1] >= -100) & (cci_[i] < -100):
-            # if (cci_[i - 1] <= -100) & (cci_[i] > -100):
+                # if (cci_[i - 1] <= -100) & (cci_[i] > -100):
                 exit_done = -1
         else:
             if (cci_[i - 1] <= 100) & (cci_[i] > 100):
-            # if (cci_[i - 1] >= 100) & (cci_[i] < 100):
+                # if (cci_[i - 1] >= 100) & (cci_[i] < 100):
                 exit_done = -1
 
     if exit_done:

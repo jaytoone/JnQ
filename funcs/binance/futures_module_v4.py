@@ -192,11 +192,38 @@ if __name__ == '__main__':
         id=1,
         callback=futures_module.agg_trade_message_handler,
     )
-    futures_module.websocket_client.agg_trade(
-        symbol='ethusdt',
+    # futures_module.websocket_client.kline(
+    #     symbol='ethusdt',
+    #     id=1,
+    #     callback=futures_module.agg_trade_message_handler,
+    # )
+
+    def message_handler(message):
+        print(message)
+
+    my_client = UMFuturesWebsocketClient()
+    my_client.start()
+
+    # my_client.kline(
+    #     symbol="btcusdt",
+    #     id=12,
+    #     interval="1d",
+    #     callback=message_handler,
+    # )
+
+    my_client.continuous_kline(
+        pair="btcusdt",
         id=1,
-        callback=futures_module.agg_trade_message_handler,
+        contractType="perpetual",
+        interval="1m",
+        callback=message_handler,
     )
+
+    # futures_module.websocket_client.agg_trade(
+    #     symbol='ethusdt',
+    #     id=1,
+    #     callback=futures_module.agg_trade_message_handler,
+    # )
 
     try:
         # futures_module.get_limit_leverage()
@@ -204,7 +231,8 @@ if __name__ == '__main__':
             # response = futures_module.get_market_price_v2()
             # print(response)
             try:
-                print(futures_module.market_price)
+                pass
+                # print(futures_module.market_price)
                 # print(futures_module.websocket_client._conns.keys())
                 # print(type(futures_module.market_price['ETHUSDT']))
             except:
@@ -255,7 +283,7 @@ if __name__ == '__main__':
         # response = um_futures_client.agg_trades(t_symbol)
 
         # print(type(response[0]))
-        print(response)
+        # print(response)
         # {'orderId': 8389765589627969208, 'symbol': 'ETHUSDT', 'status': 'NEW', 'clientOrderId': '5sLtSYvidsGdLf6Zyo0c2s', 'price': '1700', 'avgPrice': '0.00000', 'origQty': '0.010',
         # 'executedQty': '0', 'cumQty': '0', 'cumQuote': '0', 'timeInForce': 'GTC', 'type': 'LIMIT', 'reduceOnly': False, 'closePosition': False, 'side': 'BUY', 'positionSide': 'LONG',
         # 'stopPrice': '0', 'workingType': 'CONTRACT_PRICE', 'priceProtect': False, 'origType': 'LIMIT', 'updateTime': 1680420492874}

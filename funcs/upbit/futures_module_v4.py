@@ -266,7 +266,7 @@ if __name__ == '__main__':
     import json
 
     # key_abspath = r"D:\Projects\System_Trading\JnQ\Bank\api_keys\binance_mademerich.pkl"
-    key_abspath = r"D:\Projects\System_Trading\JnQ\Bank\api_keys\upbit_key.pkl"
+    key_abspath = r"D:\Projects\System_Trading\JnQ\Bank_Upbit\api_keys\upbit_key.pkl"
     with open(key_abspath, 'rb') as f:
         api_key, secret_key = pickle.load(f)
 
@@ -278,7 +278,8 @@ if __name__ == '__main__':
 
     # um_futures_client = UMFutures(key=api_key, secret=secret_key)
 
-
+    print(len(get_tickers()))
+    quit()
 
     # start_time = time.time()
     # upbit_module.websocket_client.agg_trade(

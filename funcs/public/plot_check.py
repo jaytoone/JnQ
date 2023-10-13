@@ -18,12 +18,6 @@ def strcol_tonumb(res_df, col_list):
     return step_col_arr
 
 
-def candle_plot_v2(ax, ohlc_np, alpha=1.0, wickwidth=1.0):
-    index = np.arange(len(ohlc_np))
-    candle = np.hstack((np.reshape(index, (-1, 1)), ohlc_np))
-    # mf.candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha, wickwidth=wickwidth)
-    candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha)
-
 
 def nonstep_col_plot_v2(ax, np_col, alpha=1, color='#ffffff', linewidth=2):
     try:
@@ -162,9 +156,9 @@ def eptp_hvline_v10(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exit
     ax1.axhline(en_p, left_point, right_point, linewidth=2, linestyle='-', alpha=1, color='#005eff')  # en_p line axhline
 
     if config.tr_set.check_hlm in [0, 1]:
-        plot_epg_tuple = ("epg1", config.tr_set.ep_gap1)
+        plot_epg_tuple = ("epg1", config.tr_set.ep1_gap)
     else:
-        plot_epg_tuple = ("epg2", config.tr_set.ep_gap2)
+        plot_epg_tuple = ("epg2", config.tr_set.ep2_gap)
     ax1.text(text_x_pos_left, en_p, '{} {}'.format(*plot_epg_tuple), ha='right', va='bottom', fontweight='bold', fontsize=15, color='#005eff')
 
     ax1.axhline(tp_level, left_point, right_point, linewidth=2, linestyle='-', alpha=1, color='#00ff00')  # ep 와 gap 비교 용이하기 위해 ex_xmin -> 0.1 사용
@@ -239,6 +233,12 @@ def eptp_hvline_v10(ax1, ax2, config, iin, iout, pr, en_p, ex_p, entry_idx, exit
     ax1.set_ylim(y_min - y_margin, y_max + y_margin)
 
     """ 2. Axis_2 """
+    #     y. fisher_band
+    # fisher_band = config.out_set.fisher_band
+    # ax2.axhline(fisher_band, color="#ffffff")
+    # ax2.axhline(0, color="#ffffff")
+    # ax2.axhline(-fisher_band, color="#ffffff")
+
     #     x. realtime_ud
     # ax2.axhline(0, color="#ffffff")
 
@@ -523,6 +523,13 @@ def plot_check_v9(res_df, config, param_zip, pr_msg, x_max, x_margin_mult, y_mar
     # print("elapsed time :", time.time() - start_0)
 
     return
+
+
+def candle_plot_v2(ax, ohlc_np, alpha=1.0, wickwidth=1.0):
+    index = np.arange(len(ohlc_np))
+    candle = np.hstack((np.reshape(index, (-1, 1)), ohlc_np))
+    # mf.candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha, wickwidth=wickwidth)
+    candlestick_ohlc(ax, candle, width=0.5, colorup='#26a69a', colordown='#ef5350', alpha=alpha)
 
 
 def candle_plot(ohlc_np, ax, alpha=1.0, wickwidth=1.0):

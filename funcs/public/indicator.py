@@ -1331,6 +1331,18 @@ def candle_score(res_df, ohlc_col=None, updown=None, unsigned=True):
     return get_candle_score(o, h, l, c, updown, unsigned)
 
 
+def candle_rel_ratio(res_df, itv):
+
+    if itv == 'T':
+        candle_range = res_df['high'.format(itv)].to_numpy() - res_df['low'.format(itv)].to_numpy()
+    else:
+        candle_range = res_df['high_{}'.format(itv)].to_numpy() - res_df['low_{}'.format(itv)].to_numpy()
+
+    res_df['rel_ratio_{}'.format(itv)] = candle_range / pd.Series(candle_range).shift(itv_to_number(itv)).to_numpy()
+
+    return res_df
+
+
 def rel_abs_ratio(res_df, itv, norm_period=120):
     if itv == 'T':
         candle_range = res_df['high'.format(itv)].to_numpy() - res_df['low'.format(itv)].to_numpy()
@@ -2021,8 +2033,58 @@ def bb_level(ltf_df, interval, bb_gap_multiple):
     return ltf_df
 
 
-#       Todo - recursive -> not fixed      #
+def fisher_v2(df, period, itv=None):
+
+    """
+    Recursive 인가 ?..
+        input data length 에 대해서 크게 차이 없는데..
+    
+    v1 -> v2
+        1. add itv.
+    """
+
+    if itv is None:
+        itv = pd.infer_freq(df.index)
+
+    # tenkan_sen = (talib.MAX(df.high, tenkan_period).to_numpy() + talib.MIN(df.low, tenkan_period).to_numpy()) / 2
+
+    high_ = df.high.to_numpy()
+    low_ = df.low.to_numpy()
+    hl2 = (high_ + low_) / 2
+
+    high_ = talib.MAX(hl2, period)
+    low_ = talib.MIN(hl2, period)
+
+    # value = pd.Series(index=hl2.index)
+    # fish = pd.Series(index=hl2.index)
+
+    len_df = len(df)
+    value = np.zeros(len_df)
+    fish = np.zeros(len_df)
+
+    for i in range(1, len_df):
+        value[i] = (0.66 * ((hl2[i] - low_[i]) / max(high_[i] - low_[i], .001) - .5) + .67 * nz(value[i - 1]))
+        # print(value[i])
+        value[i] = round_v2(value[i])
+        # print(value[i])
+        # print()
+        fish[i] = .5 * np.log((1 + value[i]) / max(1 - value[i], .001)) + .5 * nz(fish[i - 1])
+
+    # fish[0] = np.nan
+
+    df['fisher_{}{}'.format(itv, period)] = fish
+
+    return df
+
+
+#       Todo - recursive?      #
 def fisher(df, period):
+
+    """
+    Recursive 인가 ?..
+        input data length 에 대해서 크게 차이 없는데..
+    """
+
     hl2 = (df['high'] + df['low']) / 2
     high_ = hl2.rolling(period).max()
     low_ = hl2.rolling(period).min()
