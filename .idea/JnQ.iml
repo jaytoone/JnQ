@@ -3,20 +3,27 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/figure_trade" />
-      <excludeFolder url="file://$MODULE_DIR$/legacy" />
       <excludeFolder url="file://$MODULE_DIR$/made_x" />
       <excludeFolder url="file://$MODULE_DIR$/test_set" />
       <excludeFolder url="file://$MODULE_DIR$/trader_base" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/binance-futures-connector-python-main" />
       <excludeFolder url="file://$MODULE_DIR$/olds" />
+      <excludeFolder url="file://$MODULE_DIR$/IDEP" />
+      <excludeFolder url="file://$MODULE_DIR$/result" />
+      <excludeFolder url="file://$MODULE_DIR$/database" />
+      <excludeFolder url="file://$MODULE_DIR$/signal" />
+      <excludeFolder url="file://$MODULE_DIR$/legacy" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.8 (python38_1)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.8 (python38_1) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="pybithumb" />
     <orderEntry type="module" module-name="JnQ_upbit" />
     <orderEntry type="module" module-name="kiwoom" />
     <orderEntry type="module" module-name="Bank" />
     <orderEntry type="module" module-name="JnQ_32bit" />
+    <orderEntry type="module" module-name="VNP" />
+    <orderEntry type="module" module-name="20230601_create_dataset_for_use_state_recognition" />
+    <orderEntry type="module" module-name="20230613_test_recognize_use_state_jwjang" />
   </component>
 </module>

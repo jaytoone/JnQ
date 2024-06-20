@@ -232,12 +232,21 @@ def itv_binance_to_upbit(itv):
 
 def itv_to_number(interval):
 
+    """
+    v2.0
+        add 10m, 2h
+
+    last confirmed at, 20240604 1008.
+    """
+
     if interval in ['1m', 'T']:
         int_minute = 1
     elif interval in ['3m', '3T']:
         int_minute = 3
     elif interval in ['5m', '5T']:
         int_minute = 5
+    elif interval in ['10m', '10T']:
+        int_minute = 10
     elif interval in ['15m', '15T']:
         int_minute = 15
     elif interval in ['20m', '20T']:
@@ -248,10 +257,14 @@ def itv_to_number(interval):
         int_minute = 30
     elif interval in ['45m', '45T']:
         int_minute = 45
-    elif interval in ['1h', 'H']:
+    elif interval in ['1h', '1H', 'H']:
         int_minute = 60
+    elif interval in ['2h', '2H']:
+        int_minute = 120
     elif interval in ['4h', '4H']:
         int_minute = 240
+    elif interval in ['1d', '1D', 'D']:
+        int_minute = 1440
     else:
         print("unacceptable interval :", interval)
         return None
@@ -453,14 +466,22 @@ def to_lower_tf_v2(ltf_df, htf_df, column, backing_i=1, show_info=False):
 
 def to_htf(df, itv, offset):
 
-    h_res_df = df.resample(itv, offset=offset).agg({
+    """
+    v2.0
+        adj. volume : sum
+
+    last confirmed at, 20240509 2502.
+    """
+
+    df_htf = df.resample(itv, offset=offset).agg({
         'open': 'first',
         'high': 'max',
         'low': 'min',
-        'close': 'last'
+        'close': 'last',
+        'volume': 'sum'
     })
 
-    return h_res_df
+    return df_htf
 
 
 def calc_rows_and_days(itv_list, row_list, rec_row_list, rows_per_request=1440):

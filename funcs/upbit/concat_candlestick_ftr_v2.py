@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 import os
 import pickle
@@ -70,6 +72,11 @@ def concat_candlestick(symbol, interval, days, limit=candle_limit, end_date=None
                                    period=timesleep,
                                    to=datetime.fromtimestamp(endTime / 1000))
 
+            #     i. if count <= 200, timesleep not adj to get_ohlcv()
+            if limit <= 200:
+                # print("limit :", limit)
+                time.sleep(timesleep)
+
             # c. validation
             #       i. 더이상 추출할 데이터가 없는 경우 break.
             if df is None:
@@ -105,7 +112,7 @@ if __name__ == '__main__':
     """
 
     end_date = None  # None 2023-07-04 # "2023-01-06" "2021-04-12" "2021-03-23"
-    intervals = ['1m']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
+    intervals = ['D']  # ['1m', '3m', '5m', '15m', '30m', '1h', '4h'] - old
 
     concat_path = r'D:\Projects\System_Trading\JnQ\database\upbit'
 
@@ -150,6 +157,7 @@ if __name__ == '__main__':
             try:
                 concated_df, end_date = concat_candlestick(symbol, interval, days, limit=limit,
                                                            end_date=end_date, show_process=True, timesleep=0.11)
+                quit()
                 save_path = os.path.join(save_dir, save_name)
                 concated_df.reset_index().to_feather(save_path, compression='lz4')
                 print(save_path, "saved.\n")

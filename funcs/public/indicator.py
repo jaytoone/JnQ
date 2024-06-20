@@ -4,8 +4,8 @@ from funcs.public.broker import to_lower_tf_v2, to_lower_tf_v4, intmin, ffill, i
 import talib
 
 from scipy.signal import savgol_filter
-from statsmodels.nonparametric.smoothers_lowess import lowess
-from scipy.ndimage import gaussian_filter1d
+# from statsmodels.nonparametric.smoothers_lowess import lowess
+# from scipy.ndimage import gaussian_filter1d
 
 
 # Todo,  nz() deprecated for vectorization, use fillna()
@@ -820,6 +820,62 @@ def wave_range_dc_envel_v1(t_df, wave_period):
     co_bool = high >= dc_upper_
 
     return wave_publics(t_df, cu_bool, co_bool, ohlc_list, wave_period)
+
+
+def wave_range_fisher_v2(t_df, wave_period, band_width=1.5, itv=None):
+
+
+    """
+    v1 --> v2
+        1. use cross band for co / cu
+    """
+
+    t_df = fisher_v2(t_df, wave_period, itv=itv)
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    fisher_ = t_df['fisher_{}{}'.format(itv, wave_period)].to_numpy()
+    b1_fisher_ = t_df['fisher_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
+    # b2_fisher_ = t_df['fisher_{}{}'.format(itv, wave_period)].shift(2).to_numpy()
+
+    baseline = 0
+    upper_band = baseline + band_width
+    lower_band = baseline - band_width
+
+    data_cols = ['open', 'high', 'low', 'close']
+    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+    # open_, high, low, close = ohlc_list
+
+    cu_bool = (b1_fisher_ > upper_band) & (upper_band > fisher_)
+    co_bool = (b1_fisher_ < lower_band) & (lower_band < fisher_)
+
+    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=itv)
+
+
+def wave_range_fisher_v1(t_df, wave_period, band_width=1.5, itv=None):
+
+    t_df = fisher_v2(t_df, wave_period, itv=itv)
+
+    if itv is None:
+        itv = pd.infer_freq(t_df.index)
+
+    fisher_ = t_df['fisher_{}{}'.format(itv, wave_period)].to_numpy()
+    b1_fisher_ = t_df['fisher_{}{}'.format(itv, wave_period)].shift(1).to_numpy()
+    b2_fisher_ = t_df['fisher_{}{}'.format(itv, wave_period)].shift(2).to_numpy()
+
+    baseline = 0
+    upper_band = baseline + band_width
+    lower_band = baseline - band_width
+
+    data_cols = ['open', 'high', 'low', 'close']
+    ohlc_list = [t_df[col_].to_numpy() for col_ in data_cols]
+    # open_, high, low, close = ohlc_list
+
+    cu_bool = (b2_fisher_ < b1_fisher_) & (b1_fisher_ > fisher_) & (b1_fisher_ > upper_band)
+    co_bool = (b2_fisher_ > b1_fisher_) & (b1_fisher_ < fisher_) & (b1_fisher_ < lower_band)
+
+    return wave_publics_v3(t_df, cu_bool, co_bool, ohlc_list, wave_period, itv=itv)
 
 
 def wave_range_cci_v4_1(t_df, wave_period, band_width=100, itv=None):

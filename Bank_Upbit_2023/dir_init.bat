@@ -1,0 +1,12 @@
+md api_keys
+md logs
+md logs\sys_log
+md logs\trade_log
+md logs\df_log
+md main
+md papers\config
+md papers\public
+md papers\utils
+md traders
+md tickers
+md data

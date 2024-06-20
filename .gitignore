@@ -1,22 +1,26 @@
-# ------------ custom ------------  #
-# git 목적
-# version 관리 / portable / 
-
-
-# directory
-IDEP/
-database/
+# Directory
 Bank/logs/
+Bank/data/
+Bank_Upbit_2023/api_keys/
+Bank_Upbit_2023/logs/
+Bank_Upbit_2023/data/
+Bank_paperVersion_20240620/api_keys/
+Bank_paperVersion_20240620/logs/
+Bank_paperVersion_20240620/data/
+
+anal/
+data/
+keys/
+legacy/
+libs/
+
+
+# Files
 !Bank/logs/sys_log/base_cfg.json
-Bank/api_keys/
-
-
-# files
 test_code.py
 *.pkl
 
 
-# ------------ public ------------  #
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
