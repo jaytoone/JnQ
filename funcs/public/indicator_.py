@@ -8,7 +8,82 @@ this file exists for moving updateing indicator.py (version & algorithms)
 """
 
 
-def get_DC_perentage(df, period, interval):
+def get_BB(df, 
+           period, 
+           multiple, 
+           interval,
+           level=2):
+
+    upper, \
+    base, \
+    lower = talib.BBANDS(df.close, 
+                          timeperiod=period, 
+                          nbdevup=multiple,
+                          nbdevdn=multiple, 
+                          matype=0)
+
+    upper_name = 'BB_{}{}_upper'.format(interval, period)
+    lower_name = 'BB_{}{}_lower'.format(interval, period)
+    base_name = 'BB_{}{}_base'.format(interval, period)
+
+    # drop existing cols.
+    try:
+        df.drop([upper_name, lower_name, base_name], inplace=True, axis=1)
+    except:
+        pass
+
+    df['BB_{}{}_upper'.format(interval, period)] = upper
+    df['BB_{}{}_lower'.format(interval, period)] = lower
+    df['BB_{}{}_base'.format(interval, period)] = base
+
+    if level != 1:
+        BB_gap = upper - base
+        
+        df['BB_{}{}_upper2'.format(interval, period)] = upper + BB_gap
+        df['BB_{}{}_lower2'.format(interval, period)] = lower - BB_gap
+
+    return df
+
+
+def get_MA(df, 
+           period, 
+           interval):    
+
+    close = df['close'].to_numpy()
+
+    df['MA_{}{}'.format(interval, period)] = talib.MA(close, timeperiod=period)
+
+    return df
+
+
+
+
+def get_CCI(df, 
+            period, 
+            interval,
+            smooth=None):
+
+    """
+    v2.1
+        replace to interval.
+
+    last confirmed at, 20240621 1700.
+    """
+
+    high, low, close = [df[col_].to_numpy() for col_ in ['high', 'low', 'close']]
+
+    if smooth is None:
+        df['CCI_{}{}'.format(interval, period)] = talib.CCI(high, low, close, timeperiod=period)
+    else:
+        df['CCI_{}{}'.format(interval, period)] = talib.MA(talib.CCI(high, low, close, timeperiod=period), timeperiod=smooth)
+
+    return df
+    
+
+
+def get_DC_perentage(df, 
+                     period, 
+                     interval):
 
     """
     v1.0
@@ -28,7 +103,9 @@ def get_DC_perentage(df, period, interval):
 
 
 
-def get_DC(df, period, interval):
+def get_DC(df, 
+           period, 
+           interval):
 
     """
     v1.0
@@ -72,7 +149,8 @@ def get_id_cols(df_chunk):
     return df_chunk
 
 
-def get_II(df, period=21):
+def get_II(df, 
+           period=21):
 
     """
     v1.0

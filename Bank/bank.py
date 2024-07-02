@@ -13,11 +13,6 @@ from funcs.public.indicator import *
 from funcs.public.broker import *
 
 
-# Library for Bank.
-# from funcs.binance.futures_module_v4 import FuturesModule
-# from funcs.binance.futures_concat_candlestick_ftr_v2 import concat_candlestick
-# from funcs.binance.futures_concat_candlestick_ftr_v2 import concat_candlestick_v2
-
 
 import pandas as pd
 import numpy as np
@@ -1362,10 +1357,21 @@ def get_leverage_limit(UMFutures, symbol, price_entry, price_stop_loss, fee_entr
     v2.0
         divide into server & user
             compare which one is minimal.
+        leverage_limit is calculated by amount / target_loss	
+        	quantity = target_loss / loss
+        	amount = quantity * price_entry
+        	
+        	leverage_limit  = amount / target_loss
+                ex) amount_required = 150 USDT, target_loss = 15 USDT, leverage_limit = 10.
+        	leverage_limit  = ((target_loss / loss) * price_entry) / target_loss
+        	leverage_limit  = ((1 / loss) * price_entry)
+        	
+        	leverage_limit  = price_entry / loss
+        	loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
     v3.0
         modify to vivid input & output.
 
-    last confirmed at, 20240613 1329.
+    last confirmed at, 20240625 1401.
     """    
 
     # leverage_limit (server)

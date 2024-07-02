@@ -1,9 +1,14 @@
 # Directory
 Bank/logs/
 Bank/data/
+
+Bank_functional_20240702/logs/
+Bank_functional_20240702/data/
+
 Bank_Upbit_2023/api_keys/
 Bank_Upbit_2023/logs/
 Bank_Upbit_2023/data/
+
 Bank_paperVersion_20240620/api_keys/
 Bank_paperVersion_20240620/logs/
 Bank_paperVersion_20240620/data/
@@ -16,7 +21,9 @@ libs/
 
 
 # Files
+.ipynb
 !Bank/logs/sys_log/base_cfg.json
+lab/wave_cci_Stock_spread_copyfor_signiv5.ipynb
 test_code.py
 *.pkl
 

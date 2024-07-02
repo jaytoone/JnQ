@@ -1,0 +1,7 @@
+publish JnQ - Bank_v2.0_20240621
+1. rearrange and update Bank codes.
+2. clear directory relative path.
+3. divide Bank version.
+4. move binance_futures module path into funcs.
+5. add 'anal' dir for Bank_v2.0
+	now consider RRratio x winRatio x frequency
