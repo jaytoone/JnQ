@@ -1,7 +1,4 @@
-modify JnQ - Bank_v2.1_20240702
-1. apply vivid mode
-	make input & output more transparent to see.
-2. adjust table_account
-	more managible for divided account.
-3. the begining of BankPortfolio..
-4. .ipynb moved into individual develop directories.
+JnQ - TheBank_v2.1_20240706
+
+1. modify .gitignore
+2. run TheBank DBMS_realTrade.

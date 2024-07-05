@@ -1,4 +1,4 @@
-import os, sys
+import sys
 
 path_project = "../"
 path_funcs = "../funcs"
@@ -9,7 +9,6 @@ sys.path.append(path_funcs)
 from bank_loop import * 
 
 
-
 """
 v1.0
     replace to bank.concat_candlestick. 
@@ -18,21 +17,24 @@ v2.0
     remove function assign phase.
         use relative path.
             considering dynamic path_dir_pkg.
+            
+    v2.1
+        apply postgresql.
 
-last confirmed at, 20240702 1301.
+last confirmed at, 20240705 2239.
 """
 
 
 bank = Bank(path_config="./config.json", 
             path_api="../keys/binance_mademerich.pkl", # 'r' preserve away 't, a' other vague letters.
             path_dir_df_res =  "./data/df_res",
-            path_table_account = "./data/table/table_account.xlsx",            
-            path_table_condition =  "./data/table/table_condition.xlsx",
-            path_table_trade =  "./data/table/table_trade.xlsx",
-            path_table_log =  "./data/table/table_log.xlsx",
-            path_save_log="./logs/{}.log".format(datetime.now().strftime('%Y%m%d%H%M%S')),
+            path_save_log="./logs/{}.log".format(datetime.now().strftime('%Y%m%d%H%M%S')),            
+            table_account_name = 'table_account_test',
+            table_condition_name = 'table_condition_test',
+            table_trade_name = 'table_trade_test',
+            table_log_name = 'table_log_test',
             chat_id="5320962614",
-            token="7156517117:AAF_Qsz3pPTHSHWY-ZKb8LSKP6RyHSMTupo",
+            token="6206784409:AAE-xpIQELzgBfzbcFxhQE2Cjb6lZt6zn4s",
             receive_limit_ms=1000*3600)
 
 

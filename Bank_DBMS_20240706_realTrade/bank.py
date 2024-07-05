@@ -22,6 +22,8 @@ import math
 import time
 from datetime import datetime
 
+from sqlalchemy import create_engine, text
+
 import pickle
 import logging
 
@@ -57,7 +59,10 @@ class Bank(UMFutures):
     v4.3
         modify to load_table.
         
-    last confirmed at, 20240702 1223
+        v4.3.1
+            apply postgresql.
+        
+    last confirmed at, 20240705 2230.
     """
 
     def __init__(self, **kwargs):
@@ -78,18 +83,25 @@ class Bank(UMFutures):
             self.config = EasyDict(json.load(f))
 
         
-        # load_table
-            # pathes are using set_tables too.
-        self.path_table_account = kwargs['path_table_account']
-        self.path_table_condition = kwargs['path_table_condition']
-        self.path_table_trade = kwargs['path_table_trade']
-        self.path_table_log = kwargs['path_table_log']
+        # load_table 
+        db_user = self.config.database.user
+        db_password = self.config.database.password
+        db_host = self.config.database.host
+        db_port = self.config.database.port
+        db_name = self.config.database.name
         
-        self.table_account = self.load_table(self.path_table_account, 'excel')
-        self.table_condition = self.load_table(self.path_table_condition, 'excel')
-        # self.table_trade = self.load_table(self.path_table_trade, 'pickle')
-        self.table_trade = self.load_table(self.path_table_trade, 'excel')
-        self.table_log = self.load_table(self.path_table_log, 'excel')
+        connection_string = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+        self.engine = create_engine(connection_string, connect_args={'connect_timeout': 5})
+
+        self.table_account_name = kwargs['table_account_name']
+        self.table_condition_name = kwargs['table_condition_name']
+        self.table_trade_name = kwargs['table_trade_name']
+        self.table_log_name = kwargs['table_log_name']
+        
+        self.table_account = self.fetch_table(self.table_account_name)
+        self.table_condition = self.fetch_table(self.table_condition_name)
+        self.table_trade = self.fetch_table(self.table_trade_name)
+        self.table_log = self.fetch_table(self.table_log_name)
 
         
         self.path_dir_df_res = kwargs['path_dir_df_res']
@@ -98,22 +110,15 @@ class Bank(UMFutures):
         # add messegner
         self.chat_id = kwargs['chat_id']
         self.token = kwargs['token'] # "7156517117:AAF_Qsz3pPTHSHWY-ZKb8LSKP6RyHSMTupo"        
-        self.msg_bot = None
+        self.msg_bot = None # default.
         self.get_messenger_bot()
-        # self.push_msg(self, "messenger connection established.")
 
         
-        # inital set.
-            # balance
-        # self.balance_available = self.config.trader_set.initial_asset
-        # self.balance_over = None
-        # self.balance_min = 5.0  # USDT, not used in Stock.
-
-            # income
+        # income
         self.income = 0.0
         self.income_accumulated = self.config.trader_set.income_accumulated
         
-            # profit
+        # profit
         self.profit = 0.0
         self.profit_accumulated = self.config.trader_set.profit_accumulated
         
@@ -232,69 +237,60 @@ class Bank(UMFutures):
         except Exception as e:
             self.sys_log.error(e)
 
-    def load_table(self, file_path, file_type='excel'):
-        
-        """
-        Load a table from the specified file path. If it fails, try to load from a backup file.
-    
-        Parameters:
-        - file_path: str, path to the primary file.
-        - file_type: str, type of the file ('excel' or 'pickle').
-    
-        Returns:
-        - Loaded table as a DataFrame.
-        """
-        try:
-            if file_type == 'excel':
-                return pd.read_excel(file_path)
-            elif file_type == 'pickle':
-                return pd.read_pickle(file_path)
-        except:
-            if file_type == 'excel':
-                return pd.read_excel(file_path.replace(".xlsx", "_bk.xlsx"))
-            elif file_type == 'pickle':
-                return pd.read_pickle(file_path.replace(".pkl", "_bk.pkl"))
+    def fetch_table(self, table_name, limit=None):
 
-    def set_tables(self, mode='ALL'):
+        """
+        v1.1
+            using engine, much faster.
+    
+        last confirmed at, 20240705 2208.
+        """
+    
+        # if you use self.engine, you can show table in original dtypes.
+            # %timeit -n1 -r1000 fetch_table(self.engine, 'table_log', limit=None) 
+                # 1.9 ms ± 93.7 µs per loop (mean ± std. dev. of 1000 runs, 1 loop each)
+        try:
+            with self.engine.connect() as conn:
+                if limit is None:
+                    query = text(f"SELECT * FROM {table_name};")
+                else:
+                    query = text(f"SELECT * FROM {table_name} LIMIT {limit};")
+                
+                result = conn.execute(query)
+                rows = result.fetchall()
+                df = pd.DataFrame(rows, columns=result.keys())
+                return df
+    
+        except Exception as e:
+            self.sys_log.error(f"error fetching data from {table_name}: {e}")
+            return pd.DataFrame()
+
+    def replace_table(self, df, table_name):
         
         """
-        v1.0
-            we need this func. only once (program start, loading saved data.)
-            replace csv to excel : preserving dtypes.
-        v2.0
-            path_table_trade replace to feather.
-        v2.1
-            divide save target.
-            save as pickle
-                table_trade
-                    feather doesn't support 'something'.
-        v2.3
-            save as excel
-                table condition, log
-                    for user interfacing.
-            v2.3.1
-                add table_account.
+        v1.1
+            using engine, much faster.
+        v1.2
+            using temp_table, stay as consistent state.
     
-        last confirmed at, 20240701 1257.
-        """
-    
-        if mode in ['ALL', 'ACCOUNT']:
-            self.table_account.to_excel(self.path_table_account, index=False)
-            self.table_account.to_excel(self.path_table_account.replace(".xlsx", "_bk.xlsx"), index=False)
-    
-        if mode in ['ALL', 'CONDITION']:
-            self.table_condition.to_excel(self.path_table_condition, index=False)
-            self.table_condition.to_excel(self.path_table_condition.replace(".xlsx", "_bk.xlsx"), index=False)
-    
-        if mode in ['ALL', 'TRADE']:
-            # self.table_trade.reset_index(drop=True).to_pickle(self.path_table_trade)
-            # self.table_trade.reset_index(drop=True).to_pickle(self.path_table_trade.replace(".pkl", "_bk.pkl"))
-            self.table_trade.reset_index(drop=True).to_excel(self.path_table_trade, index=False)
-            self.table_trade.reset_index(drop=True).to_excel(self.path_table_trade.replace(".xlsx", "_bk.xlsx"), index=False)
-    
-        if mode in ['ALL', 'LOG']:
-            self.table_log.to_excel(self.path_table_log, index=False)
-            self.table_log.to_excel(self.path_table_log.replace(".xlsx", "_bk.xlsx"), index=False)
+        last confirmed at, 20240706 0626.
+        """   
+        
+                
+        try:
+            with self.engine.begin() as connection:            
+                temp_table_name = f"{table_name}_temp"
+                # Write to temporary table            
+                
+                df.to_sql(temp_table_name, connection, if_exists='replace', index=False)
+                
+                # Replace the original table
+                connection.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE;"))
+                connection.execute(text(f"ALTER TABLE {temp_table_name} RENAME TO {table_name};"))
+            
+            self.sys_log.info(f"{table_name} has been replaced.")
+        except Exception as e:
+            self.sys_log.error(f"error while replacing data in {table_name}: {e}")
             
     def set_leverage(self,
                     symbol,
@@ -373,7 +369,6 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
-        
 
         
 
@@ -1033,39 +1028,6 @@ def get_price_realtime(self, symbol):
     return price_realtime
 
 
-
-
-def check_order_expiration_onbarclose(self,):  # for point2
-
-    """
-    v4.0
-        Class mode
-    
-    last confirmed at, 20240418 2459.
-    """
-
-    selection_id = self.config.selection_id
-
-    if self.config.tr_set.expire_tick != "None":
-        if datetime.timestamp(self.df_res.index[-1]) - datetime.timestamp(self.df_res.index[self.config.trader_set.latest_index]) \
-                >= self.config.tr_set.expire_tick * 60:
-            self.expired = 1
-
-    if self.config.tr_set.expire_k1 != "None":  # Todo - onbarclose 에서는, self.df_res 으로 open_index 의 self.price_take_profit 정보를 사용
-        if self.side_open == OrderSide.SELL:
-            low = self.df_res['low'].to_numpy()
-            short_tp_ = self.df_res['short_tp_{}'.format(selection_id)].to_numpy()  # id 에 따라 dynamic 변수라 이곳에서 numpy 화 진행
-            short_tp_gap_ = self.df_res['short_tp_gap_{}'.format(selection_id)].to_numpy()
-            if low[self.config.trader_set.complete_index] <= short_tp_[self.config.trader_set.complete_index] + short_tp_gap_[self.config.trader_set.complete_index] * self.config.tr_set.expire_k1:
-                self.expired = 1
-        else:
-            high = self.df_res['high'].to_numpy()
-            long_tp_ = self.df_res['long_tp_{}'.format(selection_id)].to_numpy()  # iloc 이 빠를까, to_numpy() 가 빠를까  # 3.94 ms --> 5.34 ms (iloc)
-            long_tp_gap_ = self.df_res['long_tp_gap_{}'.format(selection_id)].to_numpy()
-            if high[self.config.trader_set.complete_index] >= long_tp_[self.config.trader_set.complete_index] - long_tp_gap_[self.config.trader_set.complete_index] * self.config.tr_set.expire_k1:
-                self.expired = 1
-                
-
 def check_expiration(side_position,
                     price_realtime, 
                     price_expiration):
@@ -1132,143 +1094,6 @@ def check_stop_loss(self,
 
     return order_market_on
                     
-
-                    
-
-
-
-def check_stop_loss_onbarclose(self,):
-
-    """
-    v1 --> v2.0
-        1. add liquidation platform.
-        2. add self.log_out
-        3. add non_out
-    """
-
-    self.log_out = None
-
-    high = self.df_res['high'].to_numpy()[self.config.trader_set.complete_index]
-    low = self.df_res['low'].to_numpy()[self.config.trader_set.complete_index]
-    close = self.df_res['close'].to_numpy()[self.config.trader_set.complete_index]
-
-    # ------ 1. liquidation default check ------ #
-    if self.side_open == OrderSide.SELL:
-        const_str = "high >= self.price_liquidation"
-        if eval(const_str):
-            self.order_market_on = True
-            self.log_out = self.price_liquidation
-            self.sys_log.info("{} : {} {}".format(const_str, high, self.price_liquidation))
-    else:
-        const_str = "low <= self.price_liquidation"
-        if eval(const_str):
-            self.order_market_on = True
-            self.log_out = self.price_liquidation
-            self.sys_log.info("{} : {} {}".format(const_str, low, self.price_liquidation))
-
-    if not self.config.out_set.non_out:
-
-        # ------ 2. hl_out ------ #
-        if self.config.out_set.hl_out:
-            if self.side_open == OrderSide.SELL:
-                const_str = "high >= self.price_stop_loss"
-                if eval(const_str):
-                    self.order_market_on = True
-                    self.log_out = self.price_stop_loss
-                    self.sys_log.info("{} : {} {}".format(const_str, high, self.price_stop_loss))
-            else:
-                const_str = "low <= self.price_stop_loss"
-                if eval(const_str):
-                    self.order_market_on = True
-                    self.log_out = self.price_stop_loss
-                    self.sys_log.info("{} : {} {}".format(const_str, low, self.price_stop_loss))
-
-        # ------ 3. close_out ------ #
-        else:
-            if self.side_open == OrderSide.SELL:
-                if close >= self.price_stop_loss:
-                    self.order_market_on = True
-                    self.log_out = close
-                    self.sys_log.info("{} : {} {}".format("close >= self.price_stop_loss", self.log_out, self.price_stop_loss))
-            else:
-                if close <= self.price_stop_loss:
-                    self.order_market_on = True
-                    self.log_out = close
-                    self.sys_log.info("{} : {} {}".format("close <= self.price_stop_loss", self.log_out, self.price_stop_loss))
-
-
-
-def check_stop_loss_by_signal(self, ):
-
-    """
-    v3 --> v4.0
-        1. add fisher_exit.
-        2. add self.np_timeidx
-    """
-
-    self.log_out = None
-
-    close = self.df_res['close'].to_numpy()[self.config.trader_set.complete_index]
-
-    # 1. timestamp
-    # if self.config.out_set.tf_exit != "None":
-    #     if self.np_timeidx[i] % self.config.out_set.tf_exit == self.config.out_set.tf_exit - 1 and i != open_i:
-    #         self.order_market_on = True
-
-    # 2. fisher
-    # if self.config.out_set.fisher_exit:
-
-    #     itv_num = itv_to_number(self.table_condition_row.tf_entry)
-
-    #     if self.np_timeidx[self.config.trader_set.complete_index] % itv_num == itv_num - 1:
-
-    #         fisher_ = self.df_res['fisher_{}30'.format(self.table_condition_row.tf_entry)].to_numpy()
-    #         fisher_band = self.config.out_set.fisher_band
-    #         fisher_band2 = self.config.out_set.fisher_band2
-
-    #         if self.side_open == OrderSide.SELL:
-    #             if (fisher_[self.config.trader_set.complete_index - itv_num] > -fisher_band) & (fisher_[self.config.trader_set.complete_index] <= -fisher_band):
-    #                 self.order_market_on = True
-    #             elif (fisher_[self.config.trader_set.complete_index - itv_num] < fisher_band2) & (fisher_[self.config.trader_set.complete_index] >= fisher_band2):
-    #                 self.order_market_on = True
-    #         else:
-    #             if (fisher_[self.config.trader_set.complete_index - itv_num] < fisher_band) & (fisher_[self.config.trader_set.complete_index] >= fisher_band):
-    #                 self.order_market_on = True
-    #             elif (fisher_[self.config.trader_set.complete_index - itv_num] > fisher_band2) & (fisher_[self.config.trader_set.complete_index] <= fisher_band2):
-    #                 self.order_market_on = True
-
-    # 3. rsi_exit
-    if self.config.out_set.rsi_exit:
-        rsi_ = self.df_res['rsi_%s' % self.config.loc_set.point.exp_itv].to_numpy()
-        osc_band = self.config.loc_set.point.osc_band
-
-        if self.side_open == OrderSide.SELL:
-            if (rsi_[self.config.trader_set.complete_index - 1] >= 50 - osc_band) & (rsi_[self.config.trader_set.complete_index] < 50 - osc_band):
-                self.order_market_on = True
-        else:
-            if (rsi_[self.config.trader_set.complete_index - 1] <= 50 + osc_band) & (rsi_[self.config.trader_set.complete_index] > 50 + osc_band):
-                self.order_market_on = True
-
-    # 4. cci_exit
-    #           a. deprecated.
-    # if self.config.out_set.cci_exit:
-    #     wave_itv1 = self.config.tr_set.wave_itv1
-    #     wave_period1 = self.config.tr_set.wave_period1
-    #
-    #     if self.side_open == OrderSide.SELL:
-    #         wave_co_ = self.df_res['wave_co_{}{}'.format(wave_itv1, wave_period1)].to_numpy()[self.config.trader_set.complete_index]
-    #         if wave_co_:
-    #             self.order_market_on = True
-    #     else:
-    #         wave_cu_ = self.df_res['wave_cu_{}{}'.format(wave_itv1, wave_period1)].to_numpy()[self.config.trader_set.complete_index]
-    #         if wave_cu_:
-    #             self.order_market_on = True
-
-    # if self.order_market_on:
-    #     self.log_out = close
-    #     self.sys_log.info("signal self.price_stop_loss : {}".format(self.log_out))
-
-    # return self.order_market_on, self.log_out
 
 
 def get_price_replacement(self, order_info_old, idx):

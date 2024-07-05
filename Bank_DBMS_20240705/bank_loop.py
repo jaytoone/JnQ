@@ -10,8 +10,10 @@ def loop_messenger(self,):
         init
             consider dtypes in payload (float & str)
                 default type = str.
+    v1.0.1
+        apply dbms
         
-    last confirmed at, 20240530 0808.
+    last confirmed at, 20240705 2330.
     """
     
     if self.user_text is not None:
@@ -68,9 +70,9 @@ def loop_messenger(self,):
                     self.sys_log.debug("------------------------------------------------")
                     start_time = time.time()
                     
-                    self.set_tables(mode='CONDITION')
+                    self.replace_table(self.table_condition, self.table_condition_name)
                     
-                    self.sys_log.debug("InitTableCondition : elasped time, set_tables  : %.4fs" % (time.time() - start_time)) 
+                    self.sys_log.debug("InitTableCondition : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")  
                     
                     user_text_upper_case = 'WATCH'
@@ -86,7 +88,7 @@ def loop_messenger(self,):
 
         # reset user_text.
         self.user_text = None
-
+        
 
 def loop_table_condition(self, drop=False):
 
@@ -115,9 +117,11 @@ def loop_table_condition(self, drop=False):
         
         v1.5.1
             apply functional idep.py.
-            add target_loss, account
+            add target_loss, account            
+        v1.5.2
+            apply dbms
         
-    last confirmed at, 20240702 1721.
+    last confirmed at, 20240705 2331.
     """
 
     start_time_loop = time.time()
@@ -214,10 +218,10 @@ def loop_table_condition(self, drop=False):
             self.sys_log.debug("cross_under[self.config.trader_set.complete_index] : {}".format(cross_under[self.config.trader_set.complete_index]))
     
             if self.position == 'LONG':
-                if cross_over[self.config.trader_set.complete_index]: # debugging.
+                # if cross_over[self.config.trader_set.complete_index]: # debugging.
                     self.side_open = 'BUY'
             else:
-                if cross_under[self.config.trader_set.complete_index]: # debugging.
+                # if cross_under[self.config.trader_set.complete_index]: # debugging.
                     self.side_open = 'SELL' 
                     
         self.sys_log.debug("LoopTableCondition : elasped time, set point : %.4fs" % (time.time() - start_time)) 
@@ -275,8 +279,8 @@ def loop_table_condition(self, drop=False):
                     self.sys_log.debug("self.zone_value.split(';') : {}".format(self.zone_value.split(';')))
                     
                     # debugging.
-                    if RRratio_adj_fee_category[self.config.trader_set.complete_index] not in self.zone_value.split(';'):
-                        self.side_open = np.nan                        
+                    # if RRratio_adj_fee_category[self.config.trader_set.complete_index] not in self.zone_value.split(';'):
+                    #     self.side_open = np.nan                        
                 else:
                     self.side_open = np.nan  
                     
@@ -324,9 +328,9 @@ def loop_table_condition(self, drop=False):
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()   
         
-        self.set_tables(mode='CONDITION')
+        self.replace_table(self.table_condition, self.table_condition_name)
         
-        self.sys_log.debug("LoopTableCondition : elasped time, set_tables  : %.4fs" % (time.time() - start_time)) 
+        self.sys_log.debug("LoopTableCondition : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")
 
             
@@ -570,12 +574,246 @@ def init_table_trade(self, ):
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()
     
-    self.set_tables(mode='ACCOUNT')
-    self.set_tables(mode='TRADE')
+    self.replace_table(self.table_account, self.table_account_name)
+    self.replace_table(self.table_trade, self.table_trade_name)
     
-    self.sys_log.debug("InitTableTrade : elasped time, set_tables  : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("InitTableTrade : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
     self.sys_log.debug("------------------------------------------------")  
+
+
+def init_table_trade(self, ):
+
+    """
+    v1.0
+        rm OrderSide, PositionSide.
+    v2.0
+        move get_balance to the top.
+        modify to vivid input & output.
         
+        v2.1
+            vivid mode.
+            add account & margin.
+         v2.2
+             apply dbms.
+    
+    last confirmed at, 20240705 2333.
+    """
+           
+    
+    self.order_motion = 0  # for consuming time without trading.
+
+    # we don't use get_price anymore...
+        # cause priceBox values are gotten already from LoopTableCondition. 
+    # # get prices for order.
+    # self.sys_log.debug("------------------------------------------------")
+    # start_time = time.time()
+    # self.price_entry, \
+    # self.price_stop_loss, \
+    # self.price_take_profit = self.get_price(self, 
+    #                                       self.side_open, 
+    #                                       self.df_res)
+    # self.sys_log.debug("InitTableTrade : elasped time, get_price : %.4fs" % (time.time() - start_time)) 
+    # self.sys_log.debug("------------------------------------------------")
+    
+    
+    # get
+        # self.side_close
+        # self.side_position
+        # self.price_entry open execution, 
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()    
+    
+    self.price_open = self.df_res['open'].to_numpy()[-1]  # price_open uses latest_index.
+    if self.side_open == 'BUY':
+        self.side_close = 'SELL'
+        self.side_position = 'LONG'
+        if self.config.pos_set.long_fake:
+            self.order_motion = 1
+        self.price_entry = min(self.price_open, self.price_entry)
+    else:
+        self.side_close = 'BUY'
+        self.side_position = 'SHORT'
+        if self.config.pos_set.short_fake:
+            self.order_motion = 1
+        self.price_entry = max(self.price_open, self.price_entry)
+        
+    self.sys_log.debug("InitTableTrade : elasped time, side_close, side_position, price_entry open execution : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+        
+
+    # get price_liquidation
+        # get_price_liquidation requires leverage.
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()   
+
+    # we are using target_loss_pct now, so liquidation has no more meaning.
+        # target_loss_pct max is 100.
+    self.price_liquidation = self.price_stop_loss
+    
+    self.sys_log.debug("InitTableTrade : elasped time, get_price_liquidation : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+    
+    # get price_expiration
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()  
+    
+    self.price_expiration = self.price_take_profit # temporarily fix to price_take_profit.
+    
+    self.sys_log.debug("InitTableTrade : elasped time, get_price_expiration : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+    
+    # adj. precision_price & quantity
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()     
+    
+    self.precision_price, \
+    self.precision_quantity = get_precision(self, 
+                                            self.symbol)
+    self.price_take_profit, \
+    self.price_entry, \
+    self.price_stop_loss, \
+    self.price_liquidation, \
+    self.price_expiration = [self.calc_with_precision(price_, self.precision_price) for price_ in [self.price_take_profit, 
+                                                                                                    self.price_entry, 
+                                                                                                    self.price_stop_loss,
+                                                                                                    self.price_liquidation,
+                                                                                                    self.price_expiration]]  # add price_expiration.
+    
+    self.sys_log.debug("InitTableTrade : elasped time, adj. precision_price : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+            
+    # get leverage
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()
+    
+    self.loss, \
+    self.leverage_limit_user, \
+    self.leverage_limit_server, \
+    self.leverage = get_leverage_limit(self, 
+                                       self.symbol, 
+                                       self.price_entry, 
+                                       self.price_stop_loss, 
+                                       self.config.trader_set.fee_market,
+                                       self.config.trader_set.fee_market)
+    # self.get_leverage(self)
+    
+    self.sys_log.debug("InitTableTrade : elasped time, get_leverage : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+            
+    # set leverage
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()  
+    
+    if not self.config.trader_set.backtrade:
+        # [ RealTrade ]
+        self.set_leverage(self.symbol,
+                          self.leverage)      
+        
+    self.sys_log.debug("InitTableTrade : elasped time, set_leverage : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+    
+    # get quantity_open   
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()  
+    
+    if self.target_loss:
+        self.quantity_open = self.target_loss / self.loss
+    else:
+        self.quantity_open = 15 / self.price_entry
+    self.quantity_open = self.calc_with_precision(self.quantity_open, self.precision_quantity)
+    
+    # Calculate entry and exit amounts
+        # amount_entry cannot be larger than the target_loss.
+    self.amount_entry = self.price_entry * self.quantity_open
+    self.margin = self.amount_entry / self.leverage
+    
+    self.sys_log.debug("InitTableTrade : elasped time, get margin : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+            
+    self.sys_log.info("price_take_profit : {}".format(self.price_take_profit))
+    self.sys_log.info("price_entry : {}".format(self.price_entry))
+    self.sys_log.info("price_stop_loss : {}".format(self.price_stop_loss))
+    self.sys_log.info("price_liquidation : {}".format(self.price_liquidation))
+    self.sys_log.info("price_expiration : {}".format(self.price_expiration))
+    self.sys_log.info("quantity_open : {}".format(self.quantity_open))
+    self.sys_log.info("amount_entry : {}".format(self.amount_entry))
+    self.sys_log.info("leverage : {}".format(self.leverage))
+    self.sys_log.info("margin : {}".format(self.margin))
+
+    
+    # get balance
+        # Stock 특성상, balance_min = self.price_entry 로 설정함.
+        # open_data_dict.pop 은 watch_dict 의 일회성 / 영구성과 무관하다.    
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()
+    
+    margin_consistency = get_margin_consistency(self, 
+                                                self.margin,
+                                                self.account,
+                                                mode="PROD")
+    
+    self.sys_log.debug("InitTableTrade : elasped time, get_margin_consistency : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+
+    
+    if margin_consistency:    
+    
+        self.sys_log.debug("------------------------------------------------")
+        start_time = time.time()  
+        
+        table_trade_new_row = pd.DataFrame(data = np.array([np.nan] * len(self.table_trade.columns)).reshape(-1, 1).T, columns=self.table_trade.columns, dtype=object)
+    
+        # # save df_res.
+        self.path_df_res_open = "{}/{}.ftr".format(self.path_dir_df_res, self.code)
+        # self.df_res.reset_index(drop=True).to_feather(self.path_df_res , compression='lz4')
+    
+        # init table_trade.
+        table_trade_new_row.symbol = self.symbol 
+        table_trade_new_row.code = self.code 
+        table_trade_new_row.path_df_res_open = self.path_df_res_open 
+        table_trade_new_row.order_motion = self.order_motion 
+        table_trade_new_row.side_open = self.side_open 
+        table_trade_new_row.side_close = self.side_close 
+        table_trade_new_row.side_position = self.side_position 
+        table_trade_new_row.precision_price = self.precision_price 
+        table_trade_new_row.precision_quantity = self.precision_quantity 
+        table_trade_new_row.price_take_profit = self.price_take_profit 
+        table_trade_new_row.price_entry = self.price_entry 
+        table_trade_new_row.price_stop_loss = self.price_stop_loss 
+        table_trade_new_row.price_liquidation = self.price_liquidation 
+        table_trade_new_row.price_expiration = self.price_expiration 
+        table_trade_new_row.quantity_open = self.quantity_open 
+        table_trade_new_row.amount_entry = self.amount_entry # added.
+        table_trade_new_row.leverage = self.leverage 
+        table_trade_new_row.margin = self.margin             # added.
+        table_trade_new_row.account = self.account           # added. 
+    
+        # self.sys_log.info("table_trade_new_row : \n{}".format(table_trade_new_row.iloc[0]))
+    
+        # append row.
+        self.table_trade = pd.concat([self.table_trade, table_trade_new_row]).reset_index(drop=True)            
+        
+        self.sys_log.debug("InitTableTrade : elasped time, append row : %.4fs" % (time.time() - start_time)) 
+        self.sys_log.debug("------------------------------------------------")
+        
+        self.push_msg("{} row insert into TableTrade.".format(self.code))        
+        
+        
+    # preventing losing table_account info.
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()
+    
+    self.replace_table(self.table_account, self.table_account_name)
+    self.replace_table(self.table_trade, self.table_trade_name)
+    
+    self.sys_log.debug("InitTableTrade : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")  
 
 
 
@@ -612,8 +850,10 @@ def loop_table_trade(self, ):
         v1.1.2
             vivid mode after v1.1.1
                 decide to use without self. (if self. is needless)
+        v1.1.3
+            apply dbms.
     
-    last confirmed at, 20240702 1220.
+    last confirmed at, 20240705 2332.
     """ 
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().
@@ -720,9 +960,9 @@ def loop_table_trade(self, ):
                     # logging : transfer rows to Table - log.        
                     self.table_log = pd.concat([self.table_log, self.table_trade.loc[[idx]]]) # list input persist dataframe oubalance_availableut.
                     self.table_log.reset_index(drop=True, inplace=True) # for indexing row by 'loc'    
-                    self.set_tables(mode='LOG')
+                    self.replace_table(self.table_log, self.table_log_name)
                     
-                    self.sys_log.debug("LoopTableTrade : elasped time, set_tables (LOG)  : %.4fs" % (time.time() - start_time)) 
+                    self.sys_log.debug("LoopTableTrade : elasped time, replace_table (LOG)  : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")  
                     # display(self.table_trade)
 
@@ -934,10 +1174,10 @@ def loop_table_trade(self, ):
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()
         
-        self.set_tables(mode='ACCOUNT')
-        self.set_tables(mode='TRADE')
+        self.replace_table(self.table_account, self.table_account_name)
+        self.replace_table(self.table_trade, self.table_trade_name)
         
-        self.sys_log.debug("LoopTableTrade : elasped time, set_tables  : %.4fs" % (time.time() - start_time)) 
+        self.sys_log.debug("LoopTableTrade : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")  
 
         
