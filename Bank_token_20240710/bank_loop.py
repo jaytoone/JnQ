@@ -178,8 +178,7 @@ def loop_table_condition(self, drop=False, debug=False):
         # get df_res
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()
-
-        self.token_bucket.wait_for_token_consume(1)        
+  
         self.df_res = get_df_new(self, 
                                interval=self.interval, 
                                days=self.interval_value, 
@@ -445,9 +444,7 @@ def init_table_trade(self, ):
     # adj. precision_price & quantity
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()    
-    
-    self.token_bucket.wait_for_token_consume(1)   
-    
+        
     self.precision_price, \
     self.precision_quantity = get_precision(self, 
                                             self.symbol)
@@ -468,9 +465,7 @@ def init_table_trade(self, ):
     # get leverage
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()
-    
-    self.token_bucket.wait_for_token_consume(1)   
-    
+        
     self.loss, \
     self.leverage_limit_user, \
     self.leverage_limit_server, \
@@ -491,9 +486,7 @@ def init_table_trade(self, ):
     start_time = time.time()  
     
     if not self.config.trader_set.backtrade:
-        
-        self.token_bucket.wait_for_token_consume(1)   
-        
+                        
         self.set_leverage(self.symbol,
                           self.leverage)      
         
@@ -536,8 +529,6 @@ def init_table_trade(self, ):
         # open_data_dict.pop 은 watch_dict 의 일회성 / 영구성과 무관하다.    
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()
-
-    self.token_bucket.wait_for_token_consume(1)   
     
     margin_consistency = get_margin_consistency(self, 
                                                 self.margin,
@@ -688,7 +679,6 @@ def loop_table_trade(self, ):
 
             if self.symbol not in self.price_market.keys(): # only once.
                 
-                self.token_bucket.wait_for_token_consume(3)
                 self.websocket_client.agg_trade(symbol=self.symbol, 
                                                 id=1, 
                                                 callback=self.agg_trade_message_handler)
@@ -703,8 +693,7 @@ def loop_table_trade(self, ):
         # if not pd.isnull(self.orderId): # this means, status is not None. (order in settled)
 
             # get_order_info. (update order_info)
-                # get_order_info should have valid symbol & orderId.        
-            self.token_bucket.wait_for_token_consume(1)            
+                # get_order_info should have valid symbol & orderId.              
             self.order_info = get_order_info(self, 
                                        self.symbol,
                                        self.orderId)
@@ -779,7 +768,6 @@ def loop_table_trade(self, ):
                 # check expiration for order_open.
                     # set price_reatlime
                         # for, open expiry & check_stop_loss
-                self.token_bucket.wait_for_token_consume(1)   
                 self.price_realtime = get_price_realtime(self, 
                                                         self.symbol)
                 self.sys_log.debug("self.price_realtime : {}".format(self.price_realtime))
@@ -796,9 +784,7 @@ def loop_table_trade(self, ):
                                                         self.price_realtime, 
                                                         self.price_expiration)
                             
-                        if self.expired:
-                            
-                            self.token_bucket.wait_for_token_consume(1)   
+                        if self.expired:                                                         
                             quantity_unexecuted = get_quantity_unexecuted(self, 
                                                                         self.symbol,
                                                                         self.orderId)  
@@ -861,9 +847,7 @@ def loop_table_trade(self, ):
                     side_order = row.side_close
                     price = row.price_take_profit
                     quantity = self.order_info['executedQty'] # OPEN's qty.
-
             
-                self.token_bucket.wait_for_token_consume(1)   
                 self.order_result, \
                 self.error_code = order_limit(self, 
                                             self.symbol,
@@ -903,12 +887,11 @@ def loop_table_trade(self, ):
                     
                     self.sys_log.debug("------------------------------------------------")
                     start_time = time.time()
-                    
-                    self.token_bucket.wait_for_token_consume(2)                    
+                                   
                     quantity_unexecuted = get_quantity_unexecuted(self, 
                                                                 self.symbol,
-                                                                self.orderId)                    
-
+                                                                self.orderId)          
+                    
                     self.order_result, \
                     self.error_code = order_market(self, 
                                                  self.symbol,

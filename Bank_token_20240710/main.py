@@ -30,7 +30,7 @@ bank = Bank(path_config="./config.json",
             path_api="../keys/binance_mademerich.pkl", # 'r' preserve away 't, a' other vague letters.
             path_dir_df_res =  "./data/df_res",
             path_save_log="./logs/{}.log".format(datetime.now().strftime('%Y%m%d%H%M%S')),
-            api_rate_limit=2390, # per minute. (set margin -10)
+            api_rate_limit = 2300, # per minute. (set margin -10)
             table_account_name = 'table_account',
             table_condition_name = 'table_condition',
             table_trade_name = 'table_trade',
@@ -59,6 +59,7 @@ if __name__=="__main__":
         loop_table_condition(bank) # debugging.
         loop_table_trade(bank)
         
+        bank.sys_log.debug(f"tokens : {bank.token_bucket.tokens}")
         # clear_output(wait=True) # if run in ipynb.
 
 

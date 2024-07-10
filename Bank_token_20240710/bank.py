@@ -47,25 +47,21 @@ pd.set_option('display.max_columns', 100)
 
 
 
-
 class TokenBucket:
-    def __init__(self, rate, capacity):
-        self.rate = rate  # Token generation rate per second
+    def __init__(self, capacity):
         self.capacity = capacity  # Maximum number of tokens the bucket can hold
         self.tokens = capacity
         self.lock = threading.Lock()
         self.last_refill_time = time.time()
-
+        
     def refill(self):
         now = time.time()
-        elapsed = now - self.last_refill_time
-        # print(f"elapsed : {elapsed}")
-        
-        self.last_refill_time = now
-        new_tokens = elapsed * self.rate
-        # print(f"new_tokens : {new_tokens}")
-        
-        self.tokens = min(self.capacity, self.tokens + new_tokens)
+        # Calculate the number of minutes that have passed since the last refill
+        minutes_passed = (now - self.last_refill_time) // 60
+        if minutes_passed >= 1:
+            self.tokens = self.capacity
+            self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
+
 
     def consume(self, tokens):
         with self.lock:
@@ -101,8 +97,11 @@ class Bank(UMFutures):
             apply postgresql.
         v4.3.2
             add TokenBucket.
+            
+            v4.3.2.1
+                replace to TokenBucket periodic mode.
         
-    last confirmed at, 20240710 0947.
+    last confirmed at, 20240710 1953.
     """
 
     def __init__(self, **kwargs):
@@ -115,7 +114,7 @@ class Bank(UMFutures):
         self.price_market = {}
 
         api_rate_limit = kwargs['api_rate_limit']
-        self.token_bucket = TokenBucket(rate=api_rate_limit / 60, capacity=api_rate_limit)
+        self.token_bucket = TokenBucket(capacity=api_rate_limit)
 
         
         self.path_save_log = kwargs['path_save_log']
@@ -375,17 +374,22 @@ class Bank(UMFutures):
                 # os.remove(temp_csv)
             
     def set_leverage(self,
-                    symbol,
-                    leverage):
+                 symbol,
+                 leverage):
 
         """
         v2.0
             vivid mode.
+            
+            v2.1
+                add token.
 
-        last confirmed at, 20240702 1758.
+        last confirmed at, 20240710 2433.
         """
 
         try:
+            self.token_bucket.wait_for_token_consume(1)
+            
             server_time = self.time()['serverTime']
             self.change_leverage(symbol=symbol, 
                                 leverage=leverage, 
@@ -397,6 +401,7 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info('leverage changed to {}'.format(leverage))
+
             
     def set_position_mode(self, 
                         dualSidePosition='true'):
@@ -409,6 +414,8 @@ class Bank(UMFutures):
         """
 
         try:
+            self.token_bucket.wait_for_token_consume(1)
+            
             server_time = self.time()['serverTime']
             self.change_position_mode(dualSidePosition=dualSidePosition,
                                     recvWindow=2000,
@@ -437,6 +444,8 @@ class Bank(UMFutures):
 
         # margin type => "cross or isolated"
         try:
+            self.token_bucket.wait_for_token_consume(1)
+            
             server_time = self.time()['serverTime']
             self.change_margin_type(symbol=symbol, 
                                     marginType=marginType, 
@@ -451,8 +460,7 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
-
-        
+  
 
 def get_tickers(self, ):
     
@@ -513,8 +521,12 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         replace to bank.concat_candlestick
     v4.0
         integrate concat_candlestick logic.
+        modify return if df_list.
+        
+        v4.1
+            add token info.
 
-    last confirmed at, 20240701 1309.
+    last confirmed at, 20240710 2415.
     """
 
     limit_kline = 1500
@@ -534,7 +546,9 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         df_list = []
 
         for time_start, time_end in zip(time_arr_start, time_arr_end):
-            try:
+            try:                
+                self.token_bucket.wait_for_token_consume(1)
+                
                 response = self.klines(
                     symbol=self.symbol,
                     interval=interval,
@@ -570,9 +584,10 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                 if timesleep:
                     time.sleep(timesleep)
 
-        sum_df = pd.concat(df_list)
+        if df_list:
+            sum_df = pd.concat(df_list)
 
-        return sum_df[~sum_df.index.duplicated(keep='last')]
+            return sum_df[~sum_df.index.duplicated(keep='last')]
 
 
 
@@ -825,7 +840,9 @@ def get_balance_available(self,
     last confirmed at, 2240630 2214.
     """
     
-    try:      
+    try:        
+        self.token_bucket.wait_for_token_consume(1)      
+        
         server_time = self.time()['serverTime']
         response = self.balance(recvWindow=6000, timestamp=server_time)
     except Exception as e:
@@ -905,18 +922,22 @@ def get_margin_consistency(self,
 
 
 
-
 def get_precision(self, 
                   symbol):
 
     """
     v2.0
         modify to vivid mode.
+        
+        v2.1
+            add token.
 
     last confirmed at, 20240614 1403.
     """
     
     try:
+        self.token_bucket.wait_for_token_consume(1)   
+        
         response = self.exchange_info()
     except Exception as e:
         msg = "error in get_precision : {}".format(e)
@@ -930,7 +951,7 @@ def get_precision(self,
 
         return precision_price, precision_quantity
         
-
+        
 
 
 def get_leverage_limit(self, 
@@ -961,10 +982,14 @@ def get_leverage_limit(self,
             v3.1
                 modify leverage_limit_user logic.
                     more comprehensive.
+            v3.2
+                add token.
 
     last confirmed at, 20240702 1027.
     """    
 
+    self.token_bucket.wait_for_token_consume(1)
+    
     # leverage_limit (server)
     server_time = self.time()['serverTime']
     response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)
@@ -977,7 +1002,6 @@ def get_leverage_limit(self,
     leverage_limit = min(leverage_limit_user, leverage_limit_server)
 
     return loss, leverage_limit_user, leverage_limit_server, leverage_limit
-    
 
 
 
@@ -996,72 +1020,6 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
         price_liquidation = price_entry * (1 + fee_limit + fee_market - 1 / leverage)
 
     return price_liquidation
-
-
-
-
-def set_leverage(self,):
-
-    try:
-        server_time = self.time()['serverTime']
-        self.change_leverage(symbol=self.symbol, leverage=self.leverage, recvWindow=6000, timestamp=server_time)
-    except Exception as e:
-        msg = "error in change_initial_leverage : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        self.sys_log.info('self.leverage changed to {}'.format(self.leverage))
-
-
-
-
-def set_position_mode(self, ):
-
-    """
-    v1.0
-        pass error -4059 -4046
-
-    last confirmed at, 20240504 1948.
-    """
-
-    try:
-        server_time = self.time()['serverTime']
-        self.change_position_mode(dualSidePosition="true", recvWindow=2000, timestamp=server_time)
-    except Exception as e:
-        if '-4059' in str(e): # 'No need to change position side.'
-            return
-        msg = "error in set_position_mode : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        self.sys_log.info("dualSidePosition is true.")
-
-
-def set_margin_type(self, margin_type='CROSSED'):
-
-    """
-    v1.0
-        pass error -4046
-
-    last confirmed at, 20240504 1948.
-    """
-
-    # margin type => "cross or isolated"
-    try:
-        server_time = self.time()['serverTime']
-        if margin_type == 'CROSSED':
-            self.change_margin_type(symbol=self.symbol, marginType=FuturesMarginType.CROSSED, recvWindow=6000, timestamp=server_time)
-        else:
-            self.change_margin_type(symbol=self.symbol, marginType=FuturesMarginType.ISOLATED, recvWindow=6000, timestamp=server_time)
-            
-    except Exception as e:
-        if '-4046' in str(e): # 'No need to change margin type.'
-            return
-        msg = "error in set_margin_type : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        self.sys_log.info("margin type is {} now.".format(margin_type))
 
 
 def get_order_info(self, 
@@ -1104,7 +1062,9 @@ def get_order_info(self,
     last confirmed at, 20240701 2259.
     """
     
-    try:
+    try:        
+        self.token_bucket.wait_for_token_consume(1)
+        
         server_time = self.time()['serverTime']
         order_info = self.query_order(symbol=symbol, 
                                       orderId=orderId, 
@@ -1277,7 +1237,9 @@ def order_cancel(self,
     last confirmed at, 20240701 2330.
     """
     
-    try:
+    try:        
+        self.token_bucket.wait_for_token_consume(1)
+        
         server_time = self.time()['serverTime']
         _ = self.cancel_order(symbol=symbol, 
                               orderId=orderId, 
@@ -1353,7 +1315,9 @@ def order_limit(self,
     order_result = None
     error_code = 0
     
-    try:
+    try:        
+        self.token_bucket.wait_for_token_consume(1)
+            
         server_time = self.time()['serverTime']
         order_result = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
@@ -1416,7 +1380,9 @@ def order_market(self,
         error_code = 0
         
         # while 1:
-        try:
+        try:            
+            self.token_bucket.wait_for_token_consume(1)
+            
             server_time = self.time()['serverTime']
             order_result = self.new_order(symbol=symbol,
                                         side=side_order,

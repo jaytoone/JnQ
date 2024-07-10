@@ -1,4 +1,5 @@
-JnQ - TheBank_v2.1_20240706
+JnQ - TheBank_v2.2_20240710 2446
 
-1. modify .gitignore
-2. run TheBank DBMS_realTrade.
+1. commit before add token to internal functions in Bank.
+	for counting token consumption more precisely. 
+		each function includes self.token_bucket.wait_for_token_consume(1), if API used.
