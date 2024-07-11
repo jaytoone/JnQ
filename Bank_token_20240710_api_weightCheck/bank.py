@@ -52,33 +52,33 @@ class TokenBucket:
         self.capacity = capacity  # Maximum number of tokens the bucket can hold
         self.tokens = capacity
         self.lock = threading.Lock()
-        self.last_refill_time = time.time()
         self.sys_log = sys_log
+        # self.last_refill_time = time.time()
         
-    def refill(self):
-        now = time.time()
-        # Calculate the number of minutes that have passed since the last refill
-        minutes_passed = (now - self.last_refill_time) // 60
-        if minutes_passed >= 1:
-            self.tokens = self.capacity
-            self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
+    # def refill(self):
+    #     now = time.time()
+    #     # Calculate the number of minutes that have passed since the last refill
+    #     minutes_passed = (now - self.last_refill_time) // 60
+    #     if minutes_passed >= 1:
+    #         self.tokens = self.capacity
+    #         self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
 
 
-    def consume(self, tokens):
-        with self.lock:
+    def consume(self, tokens_used, tokens):
+        with self.lock:                
+            self.tokens = self.capacity - tokens_used
             self.sys_log.debug(f"tokens : {self.tokens}")
             
-            self.refill()
-            if self.tokens >= tokens:
-                self.tokens -= tokens
+            if self.tokens >= tokens: # enough to use.
                 return True
             return False
 
-    def wait_for_token_consume(self, tokens):
+    def wait_for_token_consume(self, tokens_used, tokens=10):
         wait_time = 1
-        while not self.consume(tokens):
+        while not self.consume(tokens_used, tokens): # set maximium weight that can be consumed.
             time.sleep(wait_time)
             wait_time = min(wait_time * 2, 60)  # Max wait time of 60 seconds
+
 
 
 class Bank(UMFutures):
@@ -376,29 +376,22 @@ class Bank(UMFutures):
             # finally:
                 # # Remove temporary file
                 # os.remove(temp_csv)
-            
+                
+                
     def set_leverage(self,
-                 symbol,
-                 leverage):
+                    symbol,
+                    leverage):
 
-        """
-        v2.0
-            vivid mode.
-            
-            v2.1
-                add token.
-
-        last confirmed at, 20240710 2433.
-        """
-
-        try:
-            self.token_bucket.wait_for_token_consume(1)
-            
-            server_time = self.time()['serverTime']
-            self.change_leverage(symbol=symbol, 
+        try:        
+            server_time = self.time()['data']['serverTime']
+            response = self.change_leverage(symbol=symbol, 
                                 leverage=leverage, 
                                 recvWindow=6000, 
-                                timestamp=server_time)
+                                timestamp=server_time)        
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+            
         except Exception as e:
             msg = "error in change_initial_leverage : {}".format(e)
             self.sys_log.error(msg)
@@ -406,24 +399,19 @@ class Bank(UMFutures):
         else:
             self.sys_log.info('leverage changed to {}'.format(leverage))
 
-            
+
     def set_position_mode(self, 
-                        dualSidePosition='true'):
-
-        """
-        v1.0
-            pass error -4059 -4046
-
-        last confirmed at, 20240702 1801.
-        """
+                            dualSidePosition='true'):    
 
         try:
-            self.token_bucket.wait_for_token_consume(1)
-            
-            server_time = self.time()['serverTime']
-            self.change_position_mode(dualSidePosition=dualSidePosition,
+            server_time = self.time()['data']['serverTime']
+            response = self.change_position_mode(dualSidePosition=dualSidePosition,
                                     recvWindow=2000,
                                     timestamp=server_time)
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+            
         except Exception as e:
             if '-4059' in str(e): # 'No need to change position side.'
                 return
@@ -433,28 +421,21 @@ class Bank(UMFutures):
         else:
             self.sys_log.info("dualSidePosition is true.")
             
+            
     def set_margin_type(self, 
                     symbol,
                     marginType='CROSSED'): # CROSSED / ISOLATED
 
-        """
-        v1.0s
-            pass error -4046
-        v2.0
-            vivid mode.
-
-        last confirmed at, 20240702 1805.
-        """
-
         # margin type => "cross or isolated"
-        try:
-            self.token_bucket.wait_for_token_consume(1)
-            
-            server_time = self.time()['serverTime']
-            self.change_margin_type(symbol=symbol, 
+        try:            
+            server_time = self.time()['data']['serverTime']
+            response = self.change_margin_type(symbol=symbol, 
                                     marginType=marginType, 
                                     recvWindow=6000, 
                                     timestamp=server_time)
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
                 
         except Exception as e:
             if '-4046' in str(e): # 'No need to change margin type.'
@@ -514,24 +495,6 @@ def get_df_new_by_streamer(self, ):
 
 
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
-    
-    """
-    v2.0
-        add self.config.trader_set.get_df_new_timeout
-        add df_res = None to all return phase.
-    v3.0
-        replace concat_candlestick to v2.0
-    v3.1
-        replace to bank.concat_candlestick
-    v4.0
-        integrate concat_candlestick logic.
-        modify return if df_list.
-        
-        v4.1
-            add token info.
-
-    last confirmed at, 20240710 2415.
-    """
 
     limit_kline = 1500
     assert limit <= limit_kline, f"assert limit < limit_kline ({limit_kline})"
@@ -551,8 +514,6 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
         for time_start, time_end in zip(time_arr_start, time_arr_end):
             try:                
-                self.token_bucket.wait_for_token_consume(1)
-                
                 response = self.klines(
                     symbol=self.symbol,
                     interval=interval,
@@ -560,6 +521,11 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                     endTime=int(time_end),
                     limit=limit
                 )
+                
+                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+                self.token_bucket.wait_for_token_consume(tokens_used) 
+
+                response = response['data'] # replace response.
 
                 if not response:
                     if df_list: # if df_list lose middle df, occur error.
@@ -592,8 +558,6 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
             sum_df = pd.concat(df_list)
 
             return sum_df[~sum_df.index.duplicated(keep='last')]
-
-
 
 
 def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
@@ -836,28 +800,23 @@ def get_price_entry(self,
 
 def get_balance_available(self, 
                           asset_type='USDT'):
-
-    """
-    v1.1
-        return output.
-
-    last confirmed at, 2240630 2214.
-    """
     
-    try:        
-        self.token_bucket.wait_for_token_consume(1)      
-        
-        server_time = self.time()['serverTime']
+    try:      
+        server_time = self.time()['data']['serverTime']
         response = self.balance(recvWindow=6000, timestamp=server_time)
+
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
     except Exception as e:
         msg = "error in get_balance() : {}".format(e)
         self.sys_log.error(msg)
         self.push_msg(msg)
     else:
-        available_asset = float([res['availableBalance'] for res in response if res['asset'] == asset_type][0])
+        available_asset = float([res['availableBalance'] for res in response['data'] if res['asset'] == asset_type][0])
         balance_available = self.calc_with_precision(available_asset, 2) # default for Binance
 
         return balance_available
+        
         
         
 
@@ -928,21 +887,13 @@ def get_margin_consistency(self,
 
 def get_precision(self, 
                   symbol):
-
-    """
-    v2.0
-        modify to vivid mode.
-        
-        v2.1
-            add token.
-
-    last confirmed at, 20240614 1403.
-    """
     
-    try:
-        self.token_bucket.wait_for_token_consume(1)   
-        
+    try:        
         response = self.exchange_info()
+        
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+        
     except Exception as e:
         msg = "error in get_precision : {}".format(e)
         self.sys_log.error(msg)
@@ -951,12 +902,11 @@ def get_precision(self,
         # time.sleep(self.config.trader_set.api_term)
     else:
         precision_price, precision_quantity = [[data['pricePrecision'], data['quantityPrecision']] 
-                                                         for data in response['symbols'] if data['symbol'] == symbol][0]
+                                                         for data in response['data']['symbols'] if data['symbol'] == symbol][0]
 
         return precision_price, precision_quantity
         
         
-
 
 def get_leverage_limit(self, 
                        symbol, 
@@ -964,40 +914,16 @@ def get_leverage_limit(self,
                        price_stop_loss,
                        fee_entry, 
                        fee_exit):
-
-    """
-    v2.0
-        divide into server & user
-            compare which one is minimal.
-        leverage_limit is calculated by amount / target_loss	
-        	quantity = target_loss / loss
-        	amount = quantity * price_entry
-        	
-        	leverage_limit  = amount / target_loss
-                ex) amount_required = 150 USDT, target_loss = 15 USDT, leverage_limit = 10.
-        	leverage_limit  = ((target_loss / loss) * price_entry) / target_loss
-        	leverage_limit  = ((1 / loss) * price_entry)
-        	
-        	leverage_limit  = price_entry / loss
-        	loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
-    v3.0
-        modify to vivid input & output.
-        
-            v3.1
-                modify leverage_limit_user logic.
-                    more comprehensive.
-            v3.2
-                add token.
-
-    last confirmed at, 20240702 1027.
-    """    
-
-    self.token_bucket.wait_for_token_consume(1)
     
     # leverage_limit (server)
-    server_time = self.time()['serverTime']
+    server_time = self.time()['data']['serverTime']
     response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)
-    leverage_limit_server = response[0]['brackets'][0]['initialLeverage']    
+    
+    tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+    self.token_bucket.wait_for_token_consume(tokens_used) 
+
+    
+    leverage_limit_server = response['data'][0]['brackets'][0]['initialLeverage']    
     
     loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
     loss_pct = loss / price_entry * 100
@@ -1029,76 +955,32 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
 def get_order_info(self, 
                    symbol,
                    orderId):
-
-    """
-    v1.0 
-        order_res format.
-            {'orderId': 12877344699,
-              'symbol': 'THETAUSDT',
-              'status': 'NEW',
-              'clientOrderId': 't1eOIqWG2m72oxaMKLZHKE',
-              'price': '1.9500',
-              'avgPrice': '0.00',
-              'origQty': '10.0',
-              'executedQty': '0.0',
-              'cumQty': '0.0',
-              'cumQuote': '0.00000',
-              'timeInForce': 'GTC',
-              'type': 'LIMIT',
-              'reduceOnly': False,
-              'closePosition': False,
-              'side': 'BUY',
-              'positionSide': 'LONG',
-              'stopPrice': '0.0000',
-              'workingType': 'CONTRACT_PRICE',
-              'priceProtect': False,
-              'origType': 'LIMIT',
-              'priceMatch': 'NONE',
-              'selfTradePreventionMode': 'NONE',
-              'goodTillDate': 0,
-              'updateTime': 1713354764631},
-    v2.0 
-        vivid mode.
-        
-        v2.1
-            apply token.
-
-    last confirmed at, 20240701 2259.
-    """
-    
-    try:        
-        self.token_bucket.wait_for_token_consume(1)
-        
-        server_time = self.time()['serverTime']
-        order_info = self.query_order(symbol=symbol, 
+ 
+    try:                
+        server_time = self.time()['data']['serverTime']
+        response = self.query_order(symbol=symbol, 
                                       orderId=orderId, 
                                       recvWindow=2000, 
                                       timestamp=server_time)
-        return order_info
+        
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+        
+        return response['data']
         
     except Exception as e:
         msg = f"error in get_order_info : {e}, tokens : {self.token_bucket.tokens}"
         self.sys_log.error(msg)
         self.push_msg(msg)
         
-        
 
 def get_price_realtime(self, symbol):
     
     """
-    v3.0
-        get price_market by self.price_market
-        add non-error solution.
-    v3.1
-        remove loop & agg_trade
-    v3.2
-        restore agg_trade
-    v3.3
-        vivid mode.
-    
-    last confirmed at, 20240701 1042.
+    access to self.price_market by symbol.
+        we don't need token for it.        
     """
-    
+        
     try:
         price_realtime =  self.price_market[symbol]
     except Exception as e:
@@ -1140,30 +1022,11 @@ def check_expiration(side_position,
     return expired
 
 
-
-
-
-
 def check_stop_loss(self,
                     side_open,
                     price_realtime,
                     price_liquidation,
                     price_stop_loss):
-
-    """
-    v3.0
-        1. get price_realtime from outer_scope
-        2. inversion not considered yet. (Todo)
-        3. add self.log_out
-        4. add non_out.
-    v4.0
-        init order_market_on = None from outer scope.
-    v4.1
-        vivid mode.
-            remove eval, considering security & debug future problem.
-        
-    last confirmed at, 20240701 2300.
-    """
 
     order_market_on = False
             
@@ -1179,7 +1042,6 @@ def check_stop_loss(self,
     self.sys_log.info("order_market_on : {}".format(order_market_on))
 
     return order_market_on
-                    
 
 
 def get_price_replacement(self, order_info_old, idx):
@@ -1227,27 +1089,18 @@ def get_price_replacement(self, order_info_old, idx):
     self.table_trade.at[idx, 'price_take_profit'] = self.price_take_profit
 
 
-
-
 def order_cancel(self, 
                 symbol,
-                orderId):
-
-    """
-    v1.0
-        add table_order logic.
-    v2.0
-
-    last confirmed at, 20240701 2330.
-    """
-    
-    try:        
-        self.token_bucket.wait_for_token_consume(1)
-        
-        server_time = self.time()['serverTime']
-        _ = self.cancel_order(symbol=symbol, 
+                orderId):    
+    try:     
+        server_time = self.time()['data']['serverTime']
+        response = self.cancel_order(symbol=symbol, 
                               orderId=orderId, 
                               timestamp=server_time)
+        
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+        
     except Exception as e:        
         msg = "error in order_cancel : {}".format(e)
         self.sys_log.error(msg)
@@ -1257,17 +1110,14 @@ def order_cancel(self,
 
 
 
+
 def get_quantity_unexecuted(self, 
                             symbol,
                             orderId):
 
-    """
-    v2.0
-        apply updated get_precision
-    v3.0
-        vivid mode.
-
-    last confirmed at, 20240701 2325.
+    """    
+    use order_cancel + get_precision.
+    
     """
 
     order_cancel(self, 
@@ -1293,37 +1143,20 @@ def get_quantity_unexecuted(self,
     return quantity_unexecuted
 
 
-
 def order_limit(self, 
                 symbol,
                 side_order, 
                 side_position, 
                 price, 
                 quantity):
-
-    """
-    v2.0
-        1. symbol included.
-        2. rename to retry_count & -1111 error update.
-    v3.0
-        Class mode
-            remove order_data
-    v4.0
-        vivid mode.
-            remove orderType... we don't need this in order_'limit'.
-            
-    last confirmed at, 20240701 2338.
-    """
-    
+        
     # init.  
     order_result = None
     error_code = 0
     
     try:        
-        self.token_bucket.wait_for_token_consume(1)
-            
-        server_time = self.time()['serverTime']
-        order_result = self.new_order(timeInForce=TimeInForce.GTC,
+        server_time = self.time()['data']['serverTime']
+        response = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
                                         side=side_order,
                                         positionSide=side_position,
@@ -1332,6 +1165,10 @@ def order_limit(self,
                                         price=str(price),
                                         timestamp=server_time)
         
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+
+        order_result = response['data']        
         self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
         
     except Exception as e:
@@ -1351,27 +1188,11 @@ def order_limit(self,
 
 
 
-
-
 def order_market(self, 
                  symbol,
                  side_order,
                  side_position,
                  quantity):
-
-    """
-    v2.0
-        update retry_count        
-    v3.0
-        remove order_res_list.
-        remove error solution phase.   
-    v3.1
-        replace get_quantity_unexecuted()
-    v4.0
-        vivid mode.
-        
-    last confirmed at, 20240701 2353.
-    """
 
     while 1:
 
@@ -1384,17 +1205,19 @@ def order_market(self,
         error_code = 0
         
         # while 1:
-        try:            
-            self.token_bucket.wait_for_token_consume(1)
-            
-            server_time = self.time()['serverTime']
-            order_result = self.new_order(symbol=symbol,
+        try:
+            server_time = self.time()['data']['serverTime']
+            response = self.new_order(symbol=symbol,
                                         side=side_order,
                                         positionSide=side_position,
                                         type=OrderType.MARKET,
                                         quantity=str(quantity),
                                         timestamp=server_time)
             
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+
+            order_result = response['data']            
             self.sys_log.info("order_market succeed. : {}".format(order_result))
             
         except Exception as e:
@@ -1438,7 +1261,7 @@ def order_market(self,
             else:
                 self.sys_log.info("order_market failed.")
                 continue
-            
+
 
 def get_income_info(self, 
                     table_log,
@@ -1448,24 +1271,7 @@ def get_income_info(self,
                     income_accumulated,
                     profit_accumulated,
                     mode="PROD", 
-                    currency="USDT"):
-
-    """
-    v2.0
-        Class mode
-            get income from table_log.
-        add reject manual trade intervention.
-    v3.0
-        select cumQuote by order_way.
-        modify using last row : PARTIALLY_FILLED & FILLED exist both, use FILLED only.
-    v4.0
-        vivid input / output
-        
-        v4.1
-            push_msg included to Bank.
-
-    last confimred at, 20240702 1353.    
-    """
+                    currency="USDT"):    
 
     table_log = table_log.astype({'cumQuote' : 'float'})
     table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
