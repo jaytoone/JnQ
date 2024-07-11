@@ -46,60 +46,77 @@ pd.set_option('display.max_columns', 100)
 
 
 
-
 class TokenBucket:
+
+    """
+    v0.1
+        follow up server's api used-weight (tokens_used).
+
+    last confirmed at, 20240711 1044.    
+    """
+    
     def __init__(self, sys_log, capacity):
         self.capacity = capacity  # Maximum number of tokens the bucket can hold
         self.tokens = capacity
         self.lock = threading.Lock()
         self.sys_log = sys_log
-        # self.last_refill_time = time.time()
+        # self.get_used_weight = get_used_weight # this func. require another api_wegiht...
+        self.last_refill_time = time.time()
         
-    # def refill(self):
-    #     now = time.time()
-    #     # Calculate the number of minutes that have passed since the last refill
-    #     minutes_passed = (now - self.last_refill_time) // 60
-    #     if minutes_passed >= 1:
-    #         self.tokens = self.capacity
-    #         self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
+    def refill(self):
+        now = time.time()
+        # Calculate the number of minutes that have passed since the last refill
+        minutes_passed = (now - self.last_refill_time) // 60
+        if minutes_passed >= 1:
+            self.tokens = self.capacity
+            self.tokens_used = 0
+            self.last_refill_time = now # - (now % 60)  # Reset to the start of the current minute
 
 
     def consume(self, tokens_used, tokens):
-        with self.lock:                
-            self.tokens = self.capacity - tokens_used
+        with self.lock: 
+            self.tokens_used = tokens_used            
+            self.refill()
+            
+            self.tokens = self.capacity - self.tokens_used
             self.sys_log.debug(f"tokens : {self.tokens}")
+            # self.sys_log.debug(f"tokens_used : {self.tokens_used}")
             
             if self.tokens >= tokens: # enough to use.
                 return True
             return False
 
     def wait_for_token_consume(self, tokens_used, tokens=10):
+        
         wait_time = 1
         while not self.consume(tokens_used, tokens): # set maximium weight that can be consumed.
             time.sleep(wait_time)
-            wait_time = min(wait_time * 2, 60)  # Max wait time of 60 seconds
+            # wait_time = min(wait_time * 2, 60)  # Max wait time of 60 seconds # convert to static.
 
 
 class Bank(UMFutures):
     def __init__(self, **kwargs):
         
         api_key, secret_key = self.load_key(kwargs['path_api'])        
-        UMFutures.__init__(self, key=api_key, secret=secret_key, show_header=kwargs['show_header'])
+        UMFutures.__init__(self, key=api_key, secret=secret_key, show_header=True)
 
         self.websocket_client = UMFuturesWebsocketClient()
         self.websocket_client.start()
         self.price_market = {}
-
-        api_rate_limit = kwargs['api_rate_limit']
-        self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
-
+        
         
         self.path_save_log = kwargs['path_save_log']
         self.set_logger()
         
         self.path_config = kwargs['path_config']
         with open(self.path_config, 'r') as f:
-            self.config = EasyDict(json.load(f))
+            self.config = EasyDict(json.load(f))            
+            
+
+        api_rate_limit = kwargs['api_rate_limit']
+        self.token_bucket = TokenBucket(sys_log=self.sys_log, 
+                                        capacity=api_rate_limit
+                                        )
 
         
         # load_table 
@@ -376,6 +393,7 @@ class Bank(UMFutures):
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
             
+       
             
 def get_tickers(self, ):
     

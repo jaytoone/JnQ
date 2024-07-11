@@ -5,3 +5,6 @@ Bank_token_20240710_api_weightCheck
 		transfer it to TokenBucket existing, now we wait for it.
 	2. all version info in ipynb and .py removed.
 		now only save with recent valid version.
+	3. Bank use show_header.
+
+	test - intergation has been done.

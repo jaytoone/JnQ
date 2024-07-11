@@ -6,10 +6,6 @@ from idep import *
 def loop_messenger(self,):
 
     """
-    v1.0
-        init
-            consider dtypes in payload (float & str)
-                default type = str.
     v1.0.1
         apply dbms
         
@@ -91,6 +87,14 @@ def loop_messenger(self,):
         
         
 def loop_table_condition(self, drop=False, debug=False):
+    
+    """                
+    v1.5.3
+        apply TokenBucket.
+        remove loop_duration.
+        
+    last confirmed at, 20240710 1016.
+    """
 
     start_time_loop = time.time()
     for idx, row in self.table_condition.iterrows(): # idx can be used, cause table_condition's index are not reset.
@@ -126,10 +130,10 @@ def loop_table_condition(self, drop=False, debug=False):
             self.sys_log.debug("------------------------------------------------")            
             start_time = time.time()
             
-            # timestamp_anchor = 1718236800 # 2024-06-13 9:00:00
-            # timestamp_remain = (timestamp_current - timestamp_anchor) % (interval_number * 60)
-            # timestamp_current -= timestamp_remain
-            # self.table_condition.at[idx, 'timestampLastUsed'] =  timestamp_current
+            timestamp_anchor = 1718236800 # 2024-06-13 9:00:00
+            timestamp_remain = (timestamp_current - timestamp_anchor) % (interval_number * 60)
+            timestamp_current -= timestamp_remain
+            self.table_condition.at[idx, 'timestampLastUsed'] =  timestamp_current
                 
             self.sys_log.debug("LoopTableCondition : elasped time, check timestampLastUsed : {:.2f}s".format(time.time() - start_time))
             self.sys_log.debug("------------------------------------------------")
@@ -318,23 +322,8 @@ def loop_table_condition(self, drop=False, debug=False):
 def init_table_trade(self, ):
 
     """
-    v1.0
-        rm OrderSide, PositionSide.
-    v2.0
-        move get_balance to the top.
-        modify to vivid input & output.
-        
-        v2.1
-            vivid mode.
-            add account & margin.
-        v2.2
-            apply dbms.
-             
-            v2.2.1
-                divide send / save. 
-                api_count + 3
-        v2.3
-            apply TokenBucket.
+    v2.3
+        apply TokenBucket.
     
     last confirmed at, 20240710 1019.
     """
@@ -556,45 +545,9 @@ def init_table_trade(self, ):
 def loop_table_trade(self, ):
 
     """
-    v1.0
-        values come from rows should be static.
-        prevent order_market dup.
-        rm self.table_trade.at[idx, 'status'] = self.order_result['status'] in order phase.
-            considering status_prev. cannot be here, causing no diffenece before / after order_info update.
-            self.table_trade.at[idx, 'statusChangeTime'] can be replaced with order_result's updateTime
-        use loc istead of iloc for concat table_log (stay comprehension with .at)
-        secure orderId dtype
-    v1.1
-        add, if self.table_trade.at[idx, 'remove_row'] != 1: # if not trade is done,
-            if self.table_trade.at[idx, 'order_way'] == 'CLOSE':
-                if self.order_market_on:    
-        replace to feather ver (orderId type to int64)   
-        add side_open to check_stop_loss upper phase.
-        reorder statusChangeTime & OPEN CLOSE
-        modify statusChangeTime format
-        add remove_row = 1, self.error_code is not None.
-        add side_position on get_income_info().
-        modify remove from websocket_client
-            remove symbol from price_market
-        modify get_price_realtime phase. (consider price_realtime error).
-        
-        add preventing losing orderId by set set_table in this function.
-        
-        v1.1.1
-            modify to vivid input / output
-            add \n to row : {}.
-        v1.1.2
-            vivid mode after v1.1.1
-                decide to use without self. (if self. is needless)
-        v1.1.3
-            apply dbms.
+    v1.1.4
+        apply TokenBucket.
 
-            v1.1.3.1
-                divide send / server.
-                api_count + 8. (dynamic)
-        v1.1.4
-            apply TokenBucket.
-    
     last confirmed at, 20240710 1020.
     """ 
     
