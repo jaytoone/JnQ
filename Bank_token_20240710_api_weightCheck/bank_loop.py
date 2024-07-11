@@ -89,48 +89,8 @@ def loop_messenger(self,):
         # reset user_text.
         self.user_text = None
         
+        
 def loop_table_condition(self, drop=False, debug=False):
-
-    """
-    v1.0
-        modify to data_table mode.
-        update with one trade in a minute.
-        add push_msg for initTableTrade.
-        modify code name to code_{} using datetime.
-        remove realtime_term for this loop
-            term already exist in get_new_df
-    v1.2
-        add drop param.
-    v1.3
-        use messenger mode.
-            add user_data. (symbol & price ...)
-        add condition
-    v1.4
-        modify to TableCondition_v0.3 verison.
-        modify drop to False. 
-        remove elapsed time +,
-    v1.5
-        add column 'timestampLastUsed' in tableCondition.
-            apply remaining minutes to zero.
-        add interval_value (days)
-        
-        v1.5.1
-            apply functional idep.py.
-            add target_loss, account            
-        v1.5.2
-            apply dbms
-            
-            v1.5.2.1
-                divide send / save. 
-                add debug mode.
-                api_count + 1    
-                
-        v1.5.3
-            apply TokenBucket.
-            remove loop_duration.
-        
-    last confirmed at, 20240710 1016.
-    """
 
     start_time_loop = time.time()
     for idx, row in self.table_condition.iterrows(): # idx can be used, cause table_condition's index are not reset.
@@ -166,10 +126,10 @@ def loop_table_condition(self, drop=False, debug=False):
             self.sys_log.debug("------------------------------------------------")            
             start_time = time.time()
             
-            timestamp_anchor = 1718236800 # 2024-06-13 9:00:00
-            timestamp_remain = (timestamp_current - timestamp_anchor) % (interval_number * 60)
-            timestamp_current -= timestamp_remain
-            self.table_condition.at[idx, 'timestampLastUsed'] =  timestamp_current
+            # timestamp_anchor = 1718236800 # 2024-06-13 9:00:00
+            # timestamp_remain = (timestamp_current - timestamp_anchor) % (interval_number * 60)
+            # timestamp_current -= timestamp_remain
+            # self.table_condition.at[idx, 'timestampLastUsed'] =  timestamp_current
                 
             self.sys_log.debug("LoopTableCondition : elasped time, check timestampLastUsed : {:.2f}s".format(time.time() - start_time))
             self.sys_log.debug("------------------------------------------------")

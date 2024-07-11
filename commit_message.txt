@@ -3,3 +3,5 @@ JnQ - TheBank_v2.2.1
 Bank_token_20240710_api_weightCheck
 	1. allowing BinanceAPI header. now we count used-weight (API)
 		transfer it to TokenBucket existing, now we wait for it.
+	2. all version info in ipynb and .py removed.
+		now only save with recent valid version.

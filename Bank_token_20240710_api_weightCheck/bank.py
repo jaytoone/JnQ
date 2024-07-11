@@ -80,41 +80,18 @@ class TokenBucket:
             wait_time = min(wait_time * 2, 60)  # Max wait time of 60 seconds
 
 
-
 class Bank(UMFutures):
-
-    """
-    v4.1    
-        allow server_time.
-        remove read_and_write_config
-
-        modify set_logger(), rm console handler
-    v4.2  
-        modify to rotateHandler.
-        append echo & get_messenger_bot in Class Bank.
-            caused by echo 'context missing' error.
-    v4.3
-        modify to load_table.
-        
-        v4.3.1
-            apply postgresql.
-        v4.3.2
-            add TokenBucket.
-            
-            v4.3.2.1
-                replace to TokenBucket periodic mode.
-        
-    last confirmed at, 20240710 1953.
-    """
-
     def __init__(self, **kwargs):
         
         api_key, secret_key = self.load_key(kwargs['path_api'])        
-        UMFutures.__init__(self, key=api_key, secret=secret_key, show_header=False)
+        UMFutures.__init__(self, key=api_key, secret=secret_key, show_header=kwargs['show_header'])
 
         self.websocket_client = UMFuturesWebsocketClient()
         self.websocket_client.start()
         self.price_market = {}
+
+        api_rate_limit = kwargs['api_rate_limit']
+        self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
 
         
         self.path_save_log = kwargs['path_save_log']
@@ -123,10 +100,6 @@ class Bank(UMFutures):
         self.path_config = kwargs['path_config']
         with open(self.path_config, 'r') as f:
             self.config = EasyDict(json.load(f))
-                       
-
-        api_rate_limit = kwargs['api_rate_limit']
-        self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
 
         
         # load_table 
@@ -210,23 +183,18 @@ class Bank(UMFutures):
 
 
     def agg_trade_message_handler(self, message):
+        
         """
-        1. websocket streaming method 를 이용한 get_price_realtime method.
-            a. try --> received data = None 일 경우를 대비한다.
+        websocket streaming method 를 이용한 get_price_realtime method.
+            try --> received data = None 일 경우를 대비한다.
         """
+        
         try:
             self.price_market[message['s']] = float(message['p'])
         except Exception as e:
             pass
 
     def set_logger(self,):
-
-        """
-        v1.0
-            add RotatingFileHandler
-
-        last confirmed at, 20240520 0610.
-        """
         
         simple_formatter = logging.Formatter("[%(name)s] %(message)s")
         complex_formatter = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] - %(message)s")
@@ -251,15 +219,6 @@ class Bank(UMFutures):
         self.user_text = update.message.text
 
     def get_messenger_bot(self, ):
-
-        """
-        v2.0
-            use token from self directly.
-        v3.0
-            remove self.msg_bot exist condition.
-    
-        last confirmed at, 20240528 1257.
-        """
             
         # init
         self.msg_bot = telegram.Bot(token=self.token)    
@@ -278,13 +237,6 @@ class Bank(UMFutures):
         self.sys_log.debug("msg_bot {} assigned.".format(self.token))
     
     def push_msg(self, msg):    
-    
-        """
-        v1.0
-            this function has some time dely.
-    
-        last confirmed at, 20240517 1413.
-        """
         
         try:
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
@@ -292,13 +244,6 @@ class Bank(UMFutures):
             self.sys_log.error(e)
 
     def fetch_table(self, table_name, limit=None):
-
-        """
-        v1.1
-            using engine, much faster.
-    
-        last confirmed at, 20240705 2208.
-        """
     
         # if you use self.engine, you can show table in original dtypes.
             # %timeit -n1 -r1000 fetch_table(self.engine, 'table_log', limit=None) 
@@ -320,18 +265,6 @@ class Bank(UMFutures):
             return pd.DataFrame()
 
     def replace_table(self, df, table_name, send=False):
-    
-        """
-        v1.1
-            using engine, much faster.
-        v1.2
-            using temp_table, stay as consistent state.
-            
-            v1.2.1
-                modify to psycopg2, considering latency.
-
-        last confirmed at, 20240706 1014.
-        """  
         
         temp_csv = f'{table_name}.csv'
         df.to_csv(temp_csv, index=False, header=False)
@@ -376,11 +309,10 @@ class Bank(UMFutures):
             # finally:
                 # # Remove temporary file
                 # os.remove(temp_csv)
-                
-                
+            
     def set_leverage(self,
-                    symbol,
-                    leverage):
+                 symbol,
+                 leverage):
 
         try:        
             server_time = self.time()['data']['serverTime']
@@ -399,9 +331,8 @@ class Bank(UMFutures):
         else:
             self.sys_log.info('leverage changed to {}'.format(leverage))
 
-
     def set_position_mode(self, 
-                            dualSidePosition='true'):    
+                        dualSidePosition='true'):    
 
         try:
             server_time = self.time()['data']['serverTime']
@@ -421,10 +352,9 @@ class Bank(UMFutures):
         else:
             self.sys_log.info("dualSidePosition is true.")
             
-            
     def set_margin_type(self, 
-                    symbol,
-                    marginType='CROSSED'): # CROSSED / ISOLATED
+                        symbol,
+                        marginType='CROSSED'): # CROSSED / ISOLATED
 
         # margin type => "cross or isolated"
         try:            
@@ -445,13 +375,12 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
-  
-
+            
+            
 def get_tickers(self, ):
     
     self.tickers_available = [info['symbol'] for info in self.exchange_info()['symbols']]
-                    
-
+      
     
 def get_streamer(self):
     
@@ -561,25 +490,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
 
 def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
-    
-    """
-    v2.0
-        Class mode.
-    		use self, as parameter.
-            modulize self.short_open_res1 *= phase.
-            include np.timeidx
-    v3.0
-        turn off adj_wave_point. (messenger version)
-        modify 'IDEP' to 'IDEP'
         
-        v3.1
-            modify to TableCondition_v0.3
-        v3.2
-            vivid mode.
-    
-    last confirmed at, 20240702 1342.
-    """
-    
     self.len_df = len(self.df_res)
     self.np_timeidx = np.array([intmin_np(date_) for date_ in self.df_res.index.to_numpy()])     
     close = self.df_res['close'].to_numpy()
@@ -592,17 +503,7 @@ def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
         adj_price_unit(self,)
 
 
-
-
-
 def set_price_box(self, ):
-
-    """
-    v2.0
-        use table_condition & messenger.
-
-    last confirmed at, 20240529 0929.
-    """  
     
     self.df_res['short_tp_1_{}'.format(self.config.selection_id)] = self.price_take_profit
     self.df_res['short_tp_0_{}'.format(self.config.selection_id)] = self.price_stop_loss
@@ -669,14 +570,7 @@ def set_price_box(self, ):
 
 
 
-def set_price(self, close):    
-    
-    """
-    v2.0
-        use table_condition & messenger.
-
-    last confirmed at, 20240528 1422.
-    """        
+def set_price(self, close):        
     
     # price_take_profit 
         # i. 기준 : balance_available_1, gap : balance_available_box
@@ -728,15 +622,6 @@ def set_price(self, close):
 
 def get_reward_risk_ratio(self, unit_RRratio_adj_fee=np.arange(0, 2, 0.1)):
 
-    """
-    v2.0
-        modify to RRratio.
-            apply updated formula.
-        no more position_tp / ep1 / out _{}
-
-    last confirmed at, 20240610 1552.
-    """
-
     fee_entry = self.config.trader_set.fee_market # can be replaced later.
     fee_exit = self.config.trader_set.fee_market
     
@@ -780,13 +665,6 @@ def get_price_entry(self,
                     df_res,
                     side_open,
                     price_entry):
-
-    """
-    v1.0
-        validate if price_entry has been replaced with price_open.
-
-    last confirmed at, 20240710 0850.
-    """
     
     price_open = df_res['open'].to_numpy()[-1]  # price_open uses latest_index.
 
@@ -826,17 +704,6 @@ def get_margin_consistency(self,
                          # balance_account,
                          # balance_min, 
                          mode="PROD"):
-
-    """
-    v1.0
-        derived after get_balance_info v2.0
-        modify to vivid mode.
-            compare margin & TableAccount.
-            Class mode remain, cause we are using core (public) object.
-                like sys_log, tables, etc...
-
-    last confirmed at, 20240701 0829.
-    """
 
     # init.
     consistency = True
@@ -1045,13 +912,6 @@ def check_stop_loss(self,
 
 
 def get_price_replacement(self, order_info_old, idx):
-
-    """
-    v2.0
-        modify to vivid in-out
-
-    last confirmed at, 20240617 1507.
-    """
 
     self.price_replacement = 0
 
