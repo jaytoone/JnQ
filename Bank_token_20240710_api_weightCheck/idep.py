@@ -200,12 +200,18 @@ def get_price_arr(side_open,
 
 
 def get_leverage_limit_by_symbol(self, ):
+
+    """
+    v0.2
+        API header on.
+    """
     
-    server_time = self.time()['serverTime']
-    data  = self.leverage_brackets(
+    server_time = self.time()['data']['serverTime']
+    response  = self.leverage_brackets(
                          recvWindow=6000, 
                          timestamp=server_time)
-    
+
+    data = response['data']
     max_leverage = {}  # Dictionary to store max initialLeverage for each symbol    
     
     # Iterate over each symbol's data
@@ -225,8 +231,6 @@ def get_leverage_limit_by_symbol(self, ):
         max_leverage[symbol] = max_initial_leverage
     
     return max_leverage
-    
-
 
 
 def get_table_trade_result(bank, point_index_short, point_index_long, priceBox_indicator, priceBox_value, interval):
@@ -553,9 +557,6 @@ def get_minimum_assets(trade_data):
     assets_over_time = current_assets.cumsum()
     assets_min_required = assets_over_time.min()
     max_drawdown = (assets_over_time - np.maximum.accumulate(assets_over_time)).min()
-    
-    plt.step(range(len(assets_over_time)), assets_over_time)
-    plt.show()
 
     return events, assets_over_time, assets_min_required, max_drawdown
 
@@ -604,7 +605,7 @@ def get_periodic_profit(table_trade_result_agg, profit, mode='SIMPLE'):
 
     return profit_daily, profit_monthly, profit_yearly
     
-
+    
 def get_output_row(table_trade_result_agg, 
                 symbol_extracted, 
                 symbol_extracted_len, 
@@ -623,26 +624,17 @@ def get_output_row(table_trade_result_agg,
                 mode_profit='SIMPLE',
                 show_figure=False,
                 save_figure=False):
+    
     """
-    v1.1
-        add target_loss_pct
-    v1.2
-        simplified by gpt.
-        modify get_amount_agg algorithm which uses index_entry & exit instead timemap.
-        
-        v1.2.1
-            add divide bar on title.
-    v1.3
-        modify get_amount_agg to get_minimum_assets.
-        
-        v1.3.1
-            add mode_position.
-
-    last confirmed at, 20240708 2251.
+    v1.3.2
+        add early exit by frequencyTotal.        
     """
     
     # Calculate win ratio
-    frequencyTotal = len(table_trade_result_agg)    
+    frequencyTotal = len(table_trade_result_agg)     
+    if frequencyTotal <= threshold_frequencyTotal:
+        return None  # Early exit if frequencyTotal is not greater than threshold_frequencyTotal
+
     winRatio = len(table_trade_result_agg[table_trade_result_agg.status == 'TP']) / frequencyTotal
     
     # Calculate cumulative and final profit percentage
@@ -833,7 +825,11 @@ def get_output_row(table_trade_result_agg,
 
         
     if show_figure:
-    
+        
+        if mode_profit == 'SIMPLE':
+            plt.step(range(len(assets_over_time)), assets_over_time)
+            plt.show()    
+            
         fig = plt.figure(figsize=(10, 5))
     
         # Create a GridSpec layout with 2 columns
@@ -871,7 +867,6 @@ def get_output_row(table_trade_result_agg,
         plt.close('all')
 
     return row
-
 
 
 

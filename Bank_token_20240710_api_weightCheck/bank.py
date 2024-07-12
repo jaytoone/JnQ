@@ -328,8 +328,20 @@ class Bank(UMFutures):
                 # os.remove(temp_csv)
             
     def set_leverage(self,
-                 symbol,
-                 leverage):
+                     symbol,
+                     leverage):
+        
+        """
+        v2.0
+            vivid mode.
+            
+            v2.1
+                add token.
+            v2.2
+                show_header=True.
+    
+        last confirmed at, 20240712 1041.
+        """
 
         try:        
             server_time = self.time()['data']['serverTime']
@@ -351,6 +363,15 @@ class Bank(UMFutures):
     def set_position_mode(self, 
                         dualSidePosition='true'):    
 
+        """
+        v1.0
+            pass error -4059 -4046
+        v2.0
+            show_header=True. (token)
+
+        last confirmed at, 20240712 1038.
+        """
+        
         try:
             server_time = self.time()['data']['serverTime']
             response = self.change_position_mode(dualSidePosition=dualSidePosition,
@@ -368,11 +389,23 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("dualSidePosition is true.")
-            
+                        
     def set_margin_type(self, 
                         symbol,
                         marginType='CROSSED'): # CROSSED / ISOLATED
 
+        """
+        v1.0
+            pass error -4046
+        v2.0
+            vivid mode.
+            
+            v2.1
+                show_header=True.
+
+        last confirmed at, 20240712 1036.
+        """
+        
         # margin type => "cross or isolated"
         try:            
             server_time = self.time()['data']['serverTime']
@@ -392,6 +425,7 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
+            
             
        
             
@@ -440,8 +474,25 @@ def get_df_new_by_streamer(self, ):
     # else:
     #     return df_res
 
-
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
+
+    """
+    v2.0
+        add self.config.trader_set.get_df_new_timeout
+        add df_res = None to all return phase.
+    v3.0
+        replace concat_candlestick to v2.0
+    v3.1
+        replace to bank.concat_candlestick
+    v4.0
+        integrate concat_candlestick logic.
+        modify return if df_list.
+        
+        v4.1
+            add token info.
+
+    last confirmed at, 20240712 1024.
+    """
 
     limit_kline = 1500
     assert limit <= limit_kline, f"assert limit < limit_kline ({limit_kline})"
@@ -697,6 +748,13 @@ def get_price_entry(self,
 def get_balance_available(self, 
                           asset_type='USDT'):
     
+    """
+    v1.2
+        Bank show_header=True.
+
+    last confirmed at, 240712 1025.
+    """
+    
     try:      
         server_time = self.time()['data']['serverTime']
         response = self.balance(recvWindow=6000, timestamp=server_time)
@@ -714,7 +772,6 @@ def get_balance_available(self,
         return balance_available
         
         
-        
 
 def get_margin_consistency(self, 
                          margin,
@@ -722,6 +779,17 @@ def get_margin_consistency(self,
                          # balance_account,
                          # balance_min, 
                          mode="PROD"):
+
+    """
+    v1.0
+        derived after get_balance_info v2.0
+        modify to vivid mode.
+            compare margin & TableAccount.
+            Class mode remain, cause we are using core (public) object.
+                like sys_log, tables, etc...
+
+    last confirmed at, 20240701 0829.
+    """
 
     # init.
     consistency = True
@@ -772,6 +840,17 @@ def get_margin_consistency(self,
 
 def get_precision(self, 
                   symbol):
+    """
+    v2.0
+        modify to vivid mode.
+        
+        v2.1
+            add token.
+        v2.2
+            show_header=True.
+
+    last confirmed at, 2024712 1026.
+    """
     
     try:        
         response = self.exchange_info()
@@ -799,6 +878,35 @@ def get_leverage_limit(self,
                        price_stop_loss,
                        fee_entry, 
                        fee_exit):
+
+    """
+    v2.0
+        divide into server & user
+            compare which one is minimal.
+        leverage_limit is calculated by amount / target_loss	
+        	quantity = target_loss / loss
+        	amount = quantity * price_entry
+        	
+        	leverage_limit  = amount / target_loss
+                ex) amount_required = 150 USDT, target_loss = 15 USDT, leverage_limit = 10.
+        	leverage_limit  = ((target_loss / loss) * price_entry) / target_loss
+        	leverage_limit  = ((1 / loss) * price_entry)
+        	
+        	leverage_limit  = price_entry / loss
+        	loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
+    v3.0
+        modify to vivid input & output.
+        
+            v3.1
+                modify leverage_limit_user logic.
+                    more comprehensive.
+            v3.2
+                add token.
+            v3.3
+                show_header=True.
+
+    last confirmed at, 20240712 1027.
+    """
     
     # leverage_limit (server)
     server_time = self.time()['data']['serverTime']
@@ -817,6 +925,7 @@ def get_leverage_limit(self,
     leverage_limit = min(leverage_limit_user, leverage_limit_server)
 
     return loss, leverage_limit_user, leverage_limit_server, leverage_limit
+
 
 
 
@@ -840,6 +949,44 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
 def get_order_info(self, 
                    symbol,
                    orderId):
+    
+    """
+    v1.0 
+        order_res format.
+            {'orderId': 12877344699,
+              'symbol': 'THETAUSDT',
+              'status': 'NEW',
+              'clientOrderId': 't1eOIqWG2m72oxaMKLZHKE',
+              'price': '1.9500',
+              'avgPrice': '0.00',
+              'origQty': '10.0',
+              'executedQty': '0.0',
+              'cumQty': '0.0',
+              'cumQuote': '0.00000',
+              'timeInForce': 'GTC',
+              'type': 'LIMIT',
+              'reduceOnly': False,
+              'closePosition': False,
+              'side': 'BUY',
+              'positionSide': 'LONG',
+              'stopPrice': '0.0000',
+              'workingType': 'CONTRACT_PRICE',
+              'priceProtect': False,
+              'origType': 'LIMIT',
+              'priceMatch': 'NONE',
+              'selfTradePreventionMode': 'NONE',
+              'goodTillDate': 0,
+              'updateTime': 1713354764631},
+    v2.0 
+        vivid mode.
+        
+        v2.1
+            apply token.
+        v2.2
+            show_header=True.
+
+    last confirmed at, 20240712 1027.
+    """
  
     try:                
         server_time = self.time()['data']['serverTime']
@@ -969,7 +1116,17 @@ def get_price_replacement(self, order_info_old, idx):
 
 def order_cancel(self, 
                 symbol,
-                orderId):    
+                orderId): 
+
+    """
+    v1.0
+        add table_order logic.
+    v2.1
+        show_header=True.
+
+    last confirmed at, 20240712 1028.
+    """
+    
     try:     
         server_time = self.time()['data']['serverTime']
         response = self.cancel_order(symbol=symbol, 
@@ -1027,6 +1184,22 @@ def order_limit(self,
                 side_position, 
                 price, 
                 quantity):
+    
+    """
+    v2.0
+        1. symbol included.
+        2. rename to retry_count & -1111 error update.
+    v3.0
+        Class mode
+            remove order_data
+    v4.0
+        vivid mode.
+            remove orderType... we don't need this in order_'limit'.        
+        v4.1
+            show_header=True.
+            
+    last confirmed at, 20240712 1029.
+    """
         
     # init.  
     order_result = None
@@ -1072,6 +1245,24 @@ def order_market(self,
                  side_position,
                  quantity):
 
+    """
+    v2.0
+        update retry_count        
+    v3.0
+        remove order_res_list.
+        remove error solution phase.
+        
+        v3.1
+            replace get_quantity_unexecuted()
+    v4.0
+        vivid mode.
+
+        v4.1
+            show_header=True.
+        
+    last confirmed at, 20240712 1030.
+    """
+    
     while 1:
 
         # quantity_unexecuted = get_quantity_unexecuted(self, 
@@ -1149,7 +1340,24 @@ def get_income_info(self,
                     income_accumulated,
                     profit_accumulated,
                     mode="PROD", 
-                    currency="USDT"):    
+                    currency="USDT"):
+
+    """
+    v2.0
+        Class mode
+            get income from table_log.
+        add reject manual trade intervention.
+    v3.0
+        select cumQuote by order_way.
+        modify using last row : PARTIALLY_FILLED & FILLED exist both, use FILLED only.
+    v4.0
+        vivid input / output
+        
+        v4.1
+            push_msg included to Bank.
+
+    last confimred at, 20240702 1353.    
+    """
 
     table_log = table_log.astype({'cumQuote' : 'float'})
     table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
@@ -1227,7 +1435,6 @@ def get_income_info(self,
     self.push_msg(msg)
 
     return income, income_accumulated, profit, profit_accumulated
-
 
 
     

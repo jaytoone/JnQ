@@ -87,13 +87,13 @@ def loop_messenger(self,):
         
         
 def loop_table_condition(self, drop=False, debug=False):
-    
-    """                
-    v1.5.3
-        apply TokenBucket.
-        remove loop_duration.
-        
-    last confirmed at, 20240710 1016.
+   
+    """
+    v1.5.4
+        remove loop duration
+        move token info to internal function.
+
+    last confirmed at, 20240712 1016.    
     """
 
     start_time_loop = time.time()
@@ -322,10 +322,10 @@ def loop_table_condition(self, drop=False, debug=False):
 def init_table_trade(self, ):
 
     """
-    v2.3
-        apply TokenBucket.
+    v2.3.1
+        move TokenBucket to function internal.
     
-    last confirmed at, 20240710 1019.
+    last confirmed at, 20240712 1018.
     """
            
     
@@ -545,10 +545,11 @@ def init_table_trade(self, ):
 def loop_table_trade(self, ):
 
     """
-    v1.1.4
-        apply TokenBucket.
+    v1.1.5
+        move TokenBucket function interal.
+            Bank show_header=True.
 
-    last confirmed at, 20240710 1020.
+    last confirmed at, 20240712 1019.
     """ 
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().
