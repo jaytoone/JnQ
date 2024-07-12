@@ -1,0 +1,17 @@
+브랜치 이름 작성 방법
+브랜치 이름을 작성할 때는 의미 있고 일관성 있는 이름을 사용하는 것이 중요합니다. 일반적으로 다음과 같은 규칙을 따릅니다:
+
+기능 개발 브랜치: 새로운 기능을 개발할 때 사용합니다.
+예: feature/login, feature/user-authentication
+
+버그 수정 브랜치: 버그를 수정할 때 사용합니다.
+예: bugfix/null-pointer-exception, bugfix/login-error
+
+개선 브랜치: 기존 기능을 개선할 때 사용합니다.
+예: improvement/ui-enhancement, improvement/performance
+
+릴리즈 브랜치: 릴리즈 준비를 할 때 사용합니다.
+예: release/1.0.0, release/2.1.0
+
+핫픽스 브랜치: 긴급하게 버그를 수정할 때 사용합니다.
+예: hotfix/critical-bug, hotfix/security-patch

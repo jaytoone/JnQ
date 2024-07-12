@@ -90,7 +90,7 @@ def loop_messenger(self,):
         self.user_text = None
         
 
-def loop_table_condition(self, drop=False):
+def loop_table_condition(self, drop=False, debug=False):
 
     """
     v1.0
@@ -120,8 +120,12 @@ def loop_table_condition(self, drop=False):
             add target_loss, account            
         v1.5.2
             apply dbms
+            
+            v1.5.2.1
+                divide send / save. 
+                add debug mode.
         
-    last confirmed at, 20240705 2331.
+    last confirmed at, 20240706 1038.
     """
 
     start_time_loop = time.time()
@@ -218,10 +222,10 @@ def loop_table_condition(self, drop=False):
             self.sys_log.debug("cross_under[self.config.trader_set.complete_index] : {}".format(cross_under[self.config.trader_set.complete_index]))
     
             if self.position == 'LONG':
-                if cross_over[self.config.trader_set.complete_index]: # debugging.
+                if cross_over[self.config.trader_set.complete_index] and not debug: # debugging.
                     self.side_open = 'BUY'
             else:
-                if cross_under[self.config.trader_set.complete_index]: # debugging.
+                if cross_under[self.config.trader_set.complete_index] and not debug: # debugging.
                     self.side_open = 'SELL' 
                     
         self.sys_log.debug("LoopTableCondition : elasped time, set point : %.4fs" % (time.time() - start_time)) 
@@ -279,7 +283,7 @@ def loop_table_condition(self, drop=False):
                     self.sys_log.debug("self.zone_value.split(';') : {}".format(self.zone_value.split(';')))
                     
                     # debugging.
-                    if RRratio_adj_fee_category[self.config.trader_set.complete_index] not in self.zone_value.split(';'):
+                    if RRratio_adj_fee_category[self.config.trader_set.complete_index] not in self.zone_value.split(';') and not debug:
                         self.side_open = np.nan                        
                 else:
                     self.side_open = np.nan  
@@ -322,18 +326,7 @@ def loop_table_condition(self, drop=False):
                     self.sys_log.debug("LoopTableCondition : elasped time, drop rows  : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")  
 
-            
-        # saving table takes some time, so we do not persist this phase more front.
-            # check timestampLastUsed
-        self.sys_log.debug("------------------------------------------------")
-        start_time = time.time()   
-        
-        self.replace_table(self.table_condition, self.table_condition_name)
-        
-        self.sys_log.debug("LoopTableCondition : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
-        self.sys_log.debug("------------------------------------------------")
-
-            
+                
         # save df_res.
             # to use not-updated df_res in LoopTableTrade's REPLACEMENT phase.
             # check df_res integrity.
@@ -346,8 +339,29 @@ def loop_table_condition(self, drop=False):
         self.sys_log.debug("LoopTableCondition : elasped time, save df_res : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")
 
+        
+        # saving table takes some time, so we do not persist this phase more front.
+            # check timestampLastUsed
+        self.sys_log.debug("------------------------------------------------")
+        start_time = time.time()   
+        
+        self.replace_table(self.table_condition, self.table_condition_name)
+        
+        self.sys_log.debug("LoopTableCondition : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
+        self.sys_log.debug("------------------------------------------------")
+        
 
 
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()   
+    
+    self.replace_table(self.table_condition, self.table_condition_name, send=True)
+    
+    self.sys_log.debug("LoopTableCondition : elasped time, replace_table (send=True)  : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")
+    
+    
+    
 def init_table_trade(self, ):
 
     """
@@ -362,8 +376,11 @@ def init_table_trade(self, ):
             add account & margin.
          v2.2
              apply dbms.
+             
+            v2.2.1
+                divide send / save. 
     
-    last confirmed at, 20240705 2333.
+    last confirmed at, 20240706 1019.
     """
            
     
@@ -576,12 +593,11 @@ def init_table_trade(self, ):
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()
     
-    self.replace_table(self.table_account, self.table_account_name)
-    self.replace_table(self.table_trade, self.table_trade_name)
+    self.replace_table(self.table_account, self.table_account_name, send=True)
+    self.replace_table(self.table_trade, self.table_trade_name, send=True)
     
-    self.sys_log.debug("InitTableTrade : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("InitTableTrade : elasped time, replace_table (send=True)  : %.4fs" % (time.time() - start_time)) 
     self.sys_log.debug("------------------------------------------------")  
-
 
 
 def loop_table_trade(self, ):
@@ -619,8 +635,11 @@ def loop_table_trade(self, ):
                 decide to use without self. (if self. is needless)
         v1.1.3
             apply dbms.
+
+            v1.1.3.1
+                divide send / server.
     
-    last confirmed at, 20240705 2332.
+    last confirmed at, 20240706 1019.
     """ 
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().
@@ -705,7 +724,7 @@ def loop_table_trade(self, ):
                     self.table_trade.at[idx, 'statusChangeTime'] = datetime.now().strftime('%Y%m%d%H%M%S%f')
                     self.push_msg("{} status has been changed. {} {}".format(self.code, row.order_way, self.order_info['status']))
                     
-                    self.sys_log.debug("LoopTableTrade : elasped time, set statusChangeTime  : %.4fs" % (time.time() - start_time)) 
+                    self.sys_log.debug("LoopTableTrade : elasped time, set statusChangeTime : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")      
                     # display(self.table_trade)
                     
@@ -717,7 +736,7 @@ def loop_table_trade(self, ):
                         
                         self.table_trade.at[idx, 'remove_row'] = 1
                         
-                        self.sys_log.debug("LoopTableTrade : elasped time, set remove_row  : %.4fs" % (time.time() - start_time)) 
+                        self.sys_log.debug("LoopTableTrade : elasped time, set remove_row : %.4fs" % (time.time() - start_time)) 
                         self.sys_log.debug("------------------------------------------------")
                         # display(self.table_trade)
                     
@@ -729,7 +748,7 @@ def loop_table_trade(self, ):
                     self.table_log.reset_index(drop=True, inplace=True) # for indexing row by 'loc'    
                     self.replace_table(self.table_log, self.table_log_name)
                     
-                    self.sys_log.debug("LoopTableTrade : elasped time, replace_table (LOG)  : %.4fs" % (time.time() - start_time)) 
+                    self.sys_log.debug("LoopTableTrade : elasped time, replace_table : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")  
                     # display(self.table_trade)
 
@@ -780,7 +799,7 @@ def loop_table_trade(self, ):
                             self.push_msg("{} has been expired.".format(self.code))
                             self.user_text = 'watch'  # allowing message.
                             
-                        self.sys_log.debug("LoopTableTrade : elasped time, check expiration for order_open  : %.4fs" % (time.time() - start_time)) 
+                        self.sys_log.debug("LoopTableTrade : elasped time, check expiration for order_open : %.4fs" % (time.time() - start_time)) 
                         self.sys_log.debug("------------------------------------------------")
         
                     
@@ -797,7 +816,7 @@ def loop_table_trade(self, ):
                                                             self.price_liquidation,
                                                             self.price_stop_loss)
                         
-                        self.sys_log.debug("LoopTableTrade : elasped time, check_stop_loss  : %.4fs" % (time.time() - start_time)) 
+                        self.sys_log.debug("LoopTableTrade : elasped time, check_stop_loss : %.4fs" % (time.time() - start_time)) 
                         self.sys_log.debug("------------------------------------------------")
             
         
@@ -859,7 +878,7 @@ def loop_table_trade(self, ):
                     if self.table_trade.at[idx, 'order_way'] == 'OPEN': # if open fail, deposit withdrew margin.
                         self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += row.margin
                     
-                self.sys_log.debug("LoopTableTrade : elasped time, order_limit  : %.4fs" % (time.time() - start_time)) 
+                self.sys_log.debug("LoopTableTrade : elasped time, order_limit : %.4fs" % (time.time() - start_time)) 
                 self.sys_log.debug("------------------------------------------------")
 
         
@@ -888,7 +907,7 @@ def loop_table_trade(self, ):
                     # normal state : self.error_code = 0
                     if not self.error_code:
                         self.table_trade.at[idx, 'orderId'] = self.order_result['orderId'] # this is key for updating order_info (change to CLOSE orderId)                                
-                    self.sys_log.debug("LoopTableTrade : elasped time, order_market  : %.4fs" % (time.time() - start_time)) 
+                    self.sys_log.debug("LoopTableTrade : elasped time, order_market : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")
 
         
@@ -910,7 +929,7 @@ def loop_table_trade(self, ):
                 if self.symbol in self.price_market.keys():
                     self.price_market.pop(self.symbol)
 
-            self.sys_log.debug("LoopTableTrade : elasped time, drop rows  : %.4fs" % (time.time() - start_time)) 
+            self.sys_log.debug("LoopTableTrade : elasped time, drop rows : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")  
 
             # except open canceld,            
@@ -932,7 +951,7 @@ def loop_table_trade(self, ):
             
             self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += self.income
             
-            self.sys_log.debug("LoopTableTrade : elasped time, get_income_info  : %.4fs" % (time.time() - start_time)) 
+            self.sys_log.debug("LoopTableTrade : elasped time, get_income_info : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")  
             # display(self.table_trade)
 
@@ -944,11 +963,21 @@ def loop_table_trade(self, ):
         self.replace_table(self.table_account, self.table_account_name)
         self.replace_table(self.table_trade, self.table_trade_name)
         
-        self.sys_log.debug("LoopTableTrade : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
+        self.sys_log.debug("LoopTableTrade : elasped time, replace_table : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")  
 
         
-        # preventing API flood.
-        time.sleep(0.1)
-        
+        # # preventing API flood.
+        # time.sleep(0.1)
+
+    # use send=True instead time.sleep for API flood.
+    self.sys_log.debug("------------------------------------------------")
+    start_time = time.time()
+    
+    self.replace_table(self.table_account, self.table_account_name, send=True)
+    self.replace_table(self.table_trade, self.table_trade_name, send=True)
+    self.replace_table(self.table_log, self.table_log_name, send=True)
+    
+    self.sys_log.debug("LoopTableTrade : elasped time, replace_table (send=True) : %.4fs" % (time.time() - start_time)) 
+    self.sys_log.debug("------------------------------------------------")  
         

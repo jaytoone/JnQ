@@ -5,13 +5,24 @@
 
 anal/
 data/
+funcs/
 keys/
 legacy/
+
+# I don't know what's in below dir...
+Bank_Upbit_2023/
+Bank_paperVersion_20240620
 
 
 # Files
 *.pkl
+*.csv
+*.ipynb
+*.json
 
+# temporary except below files.
+**/main.py
+**/idep.py
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
