@@ -26,6 +26,7 @@ from datetime import datetime
 from sqlalchemy import create_engine, text
 import psycopg2
 from psycopg2 import sql
+from psycopg2.pool import SimpleConnectionPool
 
 import pickle
 import logging
@@ -90,8 +91,10 @@ class Bank(UMFutures):
     """
     v0.1
         follow up server's api used-weight (tokens_used).
+    v0.2
+        using pool for sql.
 
-    last confirmed at, 20240711 1044.    
+    last confirmed at, 20240713 1229.    
     """
     
     def __init__(self, **kwargs):
@@ -115,24 +118,22 @@ class Bank(UMFutures):
         api_rate_limit = kwargs['api_rate_limit']
         self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
 
-        
+      
         # load_table 
         db_user = self.config.database.user
         db_password = self.config.database.password
         db_host = self.config.database.host
         db_port = self.config.database.port
-        db_name = self.config.database.name
+        db_name = self.config.database.name        
+
+        self.pool = SimpleConnectionPool(1,   # min thread
+                                         10,  # max thread
+                                         dbname=db_name, 
+                                         user=db_user, 
+                                         password=db_password,
+                                         host=db_host, 
+                                         port=db_port)
         
-        connection_string = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
-        self.engine = create_engine(connection_string, connect_args={'connect_timeout': 5})
-        
-        self.conn = psycopg2.connect(
-            dbname=self.config.database.name,
-            user=self.config.database.user, 
-            password=self.config.database.password, 
-            host=self.config.database.host
-        )
-        self.cur = self.conn.cursor()
 
         self.table_account_name = kwargs['table_account_name']
         self.table_condition_name = kwargs['table_condition_name']
@@ -281,32 +282,31 @@ class Bank(UMFutures):
             self.sys_log.error(e)
 
     def fetch_table(self, table_name, limit=None):
-        
+    
         """
         v1.1
             using engine, much faster.
-    
-        last confirmed at, 20240705 2208.
+        v1.2
+            replace engine with psycopg2.
+
+        last confirmed at, 20240713 2343.
         """
-    
-        # if you use self.engine, you can show table in original dtypes.
-            # %timeit -n1 -r1000 fetch_table(self.engine, 'table_log', limit=None) 
-                # 1.9 ms ± 93.7 µs per loop (mean ± std. dev. of 1000 runs, 1 loop each)
+        
+        conn = self.pool.getconn()
         try:
-            with self.engine.connect() as conn:
-                if limit is None:
-                    query = text(f"SELECT * FROM {table_name};")
-                else:
-                    query = text(f"SELECT * FROM {table_name} LIMIT {limit};")
-                
-                result = conn.execute(query)
-                rows = result.fetchall()
-                df = pd.DataFrame(rows, columns=result.keys())
-                return df
-    
+            with conn.cursor() as cur:
+                query = f"SELECT * FROM {table_name}"
+                if limit:
+                    query += f" LIMIT {limit}"
+                cur.execute(query)
+                result = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                return pd.DataFrame(result, columns=columns)
         except Exception as e:
             self.sys_log.error(f"error fetching data from {table_name}: {e}")
             return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)
 
     def replace_table(self, df, table_name, send=False):
         
@@ -318,54 +318,58 @@ class Bank(UMFutures):
             
             v1.2.1
                 modify to psycopg2, considering latency.
+            v1.2.2
+                apply pool.
 
-        last confirmed at, 20240706 1014.
+        last confirmed at, 20240713 2420.
         """  
         
         temp_csv = f'{table_name}.csv'
         df.to_csv(temp_csv, index=False, header=False)
 
         if send:
-            try:            
-                # Fetch column names and data types from the existing table            
-                self.cur.execute(sql.SQL("""
-                    SELECT column_name, data_type
-                    FROM information_schema.columns
-                    WHERE table_name = %s
-                    ORDER BY ordinal_position
-                """), [table_name])
-                
-                # Retrieve the results
-                columns = self.cur.fetchall()
-                
-                # Replace the table
-                self.cur.execute(f"DROP TABLE IF EXISTS {table_name}")            
-                
-                create_table_query = sql.SQL("CREATE TABLE {} ({});").format(
-                    sql.Identifier(table_name),
-                    sql.SQL(', ').join(
-                        sql.SQL("{} {}").format(
-                            sql.Identifier(column[0]),
-                            sql.SQL(column[1])
-                        ) for column in columns
+            conn = self.pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    # Fetch column names and data types from the existing table            
+                    cur.execute(sql.SQL("""
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_name = %s
+                        ORDER BY ordinal_position
+                    """), [table_name])
+                    
+                    # Retrieve the results
+                    columns = cur.fetchall()
+                    
+                    # Replace the table
+                    cur.execute(f"DROP TABLE IF EXISTS {table_name}")            
+                    
+                    create_table_query = sql.SQL("CREATE TABLE {} ({});").format(
+                        sql.Identifier(table_name),
+                        sql.SQL(', ').join(
+                            sql.SQL("{} {}").format(
+                                sql.Identifier(column[0]),
+                                sql.SQL(column[1])
+                            ) for column in columns
+                        )
                     )
-                )
-                self.cur.execute(create_table_query)
-        
-                # Use COPY command to load data
-                with open(temp_csv, 'r') as f:
-                    self.cur.copy_expert(f"COPY {table_name} FROM STDIN WITH CSV", f)
-        
-                # Commit changes
-                self.conn.commit()
-            except Exception as e:
-                if self.conn:
-                    self.conn.rollback()
-                print(f"error occurred in replace_table : {e}")
-            # finally:
-                # # Remove temporary file
-                # os.remove(temp_csv)
+                    cur.execute(create_table_query)
             
+                    # Use COPY command to load data
+                    with open(temp_csv, 'r') as f:
+                        cur.copy_expert(f"COPY {table_name} FROM STDIN WITH CSV", f)
+            
+                    # Commit changes
+                    conn.commit()
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                print(f"Error occurred in replace_table: {e}")
+            finally:
+                # Release the connection back to the pool
+                self.pool.putconn(conn) 
+                
     def set_leverage(self,
                  symbol,
                  leverage):
@@ -464,7 +468,7 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
-            
+             
             
        
             
