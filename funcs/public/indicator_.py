@@ -7,6 +7,50 @@ import talib
 this file exists for moving updateing indicator.py (version & algorithms)
 """
 
+def round(x):
+    x = float(x)
+    if x > 0.99:
+        return 0.999
+    else:
+        if x < -0.99:
+            return -0.999
+        else:
+            return x
+
+def nz(x, y=0):
+    # print(x)
+    if np.isnan(x):
+        return y
+    else:
+        return x
+            
+            
+         
+def get_fisher(df, 
+              period, 
+              interval):
+    
+    high_ = df.high.to_numpy()
+    low_ = df.low.to_numpy()
+    hl2 = (high_ + low_) / 2
+
+    high_ = talib.MAX(hl2, period)
+    low_ = talib.MIN(hl2, period)
+
+    len_df = len(df)
+    value = np.zeros(len_df)
+    fish = np.zeros(len_df)
+
+    for i in range(1, len_df):
+        value[i] = (0.66 * ((hl2[i] - low_[i]) / max(high_[i] - low_[i], .001) - .5) + .67 * nz(value[i - 1]))
+        value[i] = round(value[i])
+        fish[i] = .5 * np.log((1 + value[i]) / max(1 - value[i], .001)) + .5 * nz(fish[i - 1])
+
+    df['fisher_{}{}'.format(interval, period)] = fish
+
+    return df
+
+
 
 def get_BB(df, 
            period, 
@@ -149,14 +193,19 @@ def get_id_cols(df_chunk):
     return df_chunk
 
 
+
 def get_II(df, 
-           period=21):
+           period,
+           interval):
 
     """
     v1.0
         add assertion type(df.index) == pd.core.indexes.datetimes.DatetimeIndex
+    v2.0
+        add interval as input.
+        return II_{}{}.
 
-    last confirmed at, 20240606 0732.
+    last confirmed at, 2024712 2257.
     """
 
     assert type(df.index) == pd.core.indexes.datetimes.DatetimeIndex
@@ -186,6 +235,7 @@ def get_II(df,
     # %timeit -n1 -r100 df_res_id['iiSource'] = df_res_id.iiiValue.rolling(21).sum() / df_res_id.idVolume.rolling(21).sum() * 100
     
     df_res_id['iiiValue'] = (2 * df_res_id_arr[:, idx_col_close] - df_res_id_arr[:, idx_col_idRangeH] - df_res_id_arr[:, idx_col_idRangeL]) / (df_res_id_arr[:, idx_col_idRangeH] - df_res_id_arr[:, idx_col_idRangeL]) * df_res_id_arr[:, idx_col_idVolume]
-    df_res_id['iiSource'] = df_res_id.iiiValue.rolling(period).sum().to_numpy() / df_res_id.idVolume.rolling(period).sum().to_numpy() * 100
+    # df_res_id['iiSource'] = df_res_id.iiiValue.rolling(period).sum().to_numpy() / df_res_id.idVolume.rolling(period).sum().to_numpy() * 100
+    df_res_id[f'II_{interval}{period}'] = df_res_id.iiiValue.rolling(period).sum().to_numpy() / df_res_id.idVolume.rolling(period).sum().to_numpy() * 100
 
     return df_res_id

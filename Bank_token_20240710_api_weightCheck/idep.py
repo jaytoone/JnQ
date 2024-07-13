@@ -12,7 +12,6 @@ import re
 import gc
 
 
-
 def get_point_index(df, 
                     mode,
                     indicator,  
@@ -26,21 +25,38 @@ def get_point_index(df,
     v2.1
         integrate input, output.
         add return_bool for Bank.
+    v2.2
+        add fisher.
+        apply II
 
-    last confirmed at, 20240627 1957.
+    last confirmed at, 20240712 2247.
     """
 
     cross_over = []
     cross_under = []
     
-    indicator_value = np.nan
-    
-    if mode == 'CROSS':
-        if indicator == 'II':
-            df = get_II(df, period=point_value)
+    if mode == 'CROSS':        
+        if indicator == 'fisher':
+            df = get_fisher(df, period=point_value, interval=interval)
             
-            indicator_value = df.iiSource.to_numpy()
-            indicator_value_back_1 = df.iiSource.shift(1).to_numpy()
+            indicator_name = "fisher_{}{}".format(interval, point_value)
+            
+            indicator_value = df[indicator_name].to_numpy()
+            indicator_value_back_1 = df[indicator_name].shift(1).to_numpy()
+            
+            base_value = 1.5
+              
+            cross_over = np.where((indicator_value > -base_value) & (-base_value > indicator_value_back_1), 1, 0)
+            cross_under = np.where((indicator_value < base_value) & (base_value < indicator_value_back_1), 1, 0)    
+            
+        elif indicator == 'II':
+            df = get_II(df, period=point_value, interval=interval)
+            
+            indicator_name = "II_{}{}".format(interval, point_value)
+            
+            indicator_value = df[indicator_name].to_numpy()
+            indicator_value_back_1 = df[indicator_name].shift(1).to_numpy()
+            
             base_value = 0
               
             cross_over = np.where((indicator_value > base_value) & (base_value > indicator_value_back_1), 1, 0)
@@ -66,12 +82,13 @@ def get_point_index(df,
 
         
         elif indicator == 'CCI':  
-            df = get_CCI(df, period=point_value, interval=interval) 
+            df = get_CCI(df, period=point_value, interval=interval)
 
             indicator_name = "CCI_{}{}".format(interval, point_value)
             
             indicator_value = df[indicator_name].to_numpy()
             indicator_value_back_1 = df[indicator_name].shift(1).to_numpy()
+            
             base_value = 0
               
             cross_over = np.where((indicator_value > base_value) & (base_value > indicator_value_back_1), 1, 0)
@@ -98,7 +115,6 @@ def get_point_index(df,
         point_index_short = np.argwhere(cross_under).ravel()    
         
         return df, point_index_long, point_index_short
-
 
 def add_zone(df, 
              indicator,
@@ -142,6 +158,8 @@ def get_priceBox(df,
     """
     
     # public.
+    priceBox_upper = np.array([])
+    priceBox_lower = np.array([])
     close = df.close.to_numpy()
 
     if indicator == 'DC':    
@@ -200,12 +218,18 @@ def get_price_arr(side_open,
 
 
 def get_leverage_limit_by_symbol(self, ):
+
+    """
+    v0.2
+        API header on.
+    """
     
-    server_time = self.time()['serverTime']
-    data  = self.leverage_brackets(
+    server_time = self.time()['data']['serverTime']
+    response  = self.leverage_brackets(
                          recvWindow=6000, 
                          timestamp=server_time)
-    
+
+    data = response['data']
     max_leverage = {}  # Dictionary to store max initialLeverage for each symbol    
     
     # Iterate over each symbol's data
@@ -225,11 +249,14 @@ def get_leverage_limit_by_symbol(self, ):
         max_leverage[symbol] = max_initial_leverage
     
     return max_leverage
-    
 
 
-
-def get_table_trade_result(bank, point_index_short, point_index_long, priceBox_indicator, priceBox_value, interval):
+def get_trade_result(bank, 
+                     point_index_short, 
+                     point_index_long, 
+                     priceBox_indicator, 
+                     priceBox_value, 
+                     interval):
    
     """
     v1.1
@@ -251,11 +278,11 @@ def get_table_trade_result(bank, point_index_short, point_index_long, priceBox_i
         v1.4.2
             add get_priceBox (v2.1)
             modify logical miss for TP / SL in LONG.
-            modify zip to list(zip) for price_validation.
-
-        this funciton only allow 'bank', modify it...
+            modify zip to list(zip) for price_validation.  
+        v1.4.3
+            modify to functional.
     
-    last confirmed at, 20240708 1053.
+    last confirmed at, 20240712 2310.
     """
 
     data_len = len(bank.df_res)
@@ -265,24 +292,32 @@ def get_table_trade_result(bank, point_index_short, point_index_long, priceBox_i
     data_list = []
 
     for side_open in ['BUY', 'SELL']:  # Iterate through both 'SELL' and 'BUY' sides
+        
+        priceBox_upper, \
+        priceBox_lower, \
+        close = get_priceBox(bank.df_res,
+                             priceBox_indicator,
+                             priceBox_value,
+                             interval,
+                             side_open)
+        
 
+        price_take_profit_arr, \
+        price_entry_arr, \
+        price_stop_loss_arr, \
+        index_valid_bool = get_price_arr(side_open,
+                                         priceBox_upper,
+                                         priceBox_lower,
+                                         close,
+                                         point_index_short,
+                                         point_index_long)
+
+        
         if side_open == 'SELL':
             point_index = point_index_short
         else:
             point_index = point_index_long
-
-        priceBox_upper, priceBox_lower, close = get_priceBox(bank.df_res,
-                                                             priceBox_indicator,
-                                                             priceBox_value,
-                                                             interval,
-                                                             side_open)
-
-        price_take_profit_arr, price_entry_arr, price_stop_loss_arr, index_valid_bool = get_price_arr(side_open,
-                                                                                                     priceBox_upper,
-                                                                                                     priceBox_lower,
-                                                                                                     close,
-                                                                                                     point_index_short,
-                                                                                                     point_index_long)
+            
 
         trade_arr_valid = np.array(list(zip(point_index, price_take_profit_arr, price_entry_arr, price_stop_loss_arr)), 
                                    dtype=[('0', int), ('1', float), ('2', float), ('3', float)])[index_valid_bool]
@@ -329,9 +364,6 @@ def get_table_trade_result(bank, point_index_short, point_index_long, priceBox_i
     table_trade_result['timestamp_exit'] = timestamp[table_trade_result.idx_exit]
 
     return table_trade_result
-
-
-
 
 
 def set_quantity(table_trade_result,                  
@@ -457,8 +489,6 @@ def set_quantity(table_trade_result,
     return table_trade_result
 
 
-
-
 def add_datatype(table_trade_result, train_ratio=0.7):
     
     """
@@ -518,7 +548,6 @@ def convert_to_position_single(df):
 
 
 
-
 def get_minimum_assets(trade_data):
     
     """
@@ -531,7 +560,7 @@ def get_minimum_assets(trade_data):
             vectorization. (lower latency)
             reorder output.
         
-    last confirmed at, 20240708 1655.
+    last confirmed at, 20240704 1658.
     """    
     
     # Normalize timestamps
@@ -554,11 +583,10 @@ def get_minimum_assets(trade_data):
     assets_min_required = assets_over_time.min()
     max_drawdown = (assets_over_time - np.maximum.accumulate(assets_over_time)).min()
     
-    plt.step(range(len(assets_over_time)), assets_over_time)
-    plt.show()
+    # plt.step(range(len(assets_over_time)), assets_over_time)
+    # plt.show()
 
     return events, assets_over_time, assets_min_required, max_drawdown
-
 
 
 

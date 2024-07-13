@@ -20,9 +20,9 @@ bank = Bank(path_config="./config.json",
             table_trade_name = 'table_trade',
             table_log_name = 'table_log',
             chat_id="5320962614",
-            # token="7156517117:AAF_Qsz3pPTHSHWY-ZKb8LSKP6RyHSMTupo", # TheBank
+            token="7156517117:AAF_Qsz3pPTHSHWY-ZKb8LSKP6RyHSMTupo", # TheBank
             # token="6961110608:AAEH4_vSxmRxJ2OnGQCk0NocfmH-iujHyNs", # BotBinance (for .ipynb)
-            token="6206784409:AAE-xpIQELzgBfzbcFxhQE2Cjb6lZt6zn4s", # BinanceMessenger (Tester)
+            # token="6206784409:AAGbiGMNPBFn1SzJo_dqekGmFHTJfp0llVM", # BinanceMessenger (Tester)
             receive_limit_ms=1000*3600)
 
 
@@ -32,7 +32,6 @@ if __name__=="__main__":
         loop_table_condition(bank) # debugging.
         loop_table_trade(bank)
         
-        # bank.sys_log.debug(f"tokens : {bank.token_bucket.tokens}")
         # clear_output(wait=True) # if run in ipynb.
 
 

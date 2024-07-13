@@ -85,15 +85,51 @@ def loop_messenger(self,):
         # reset user_text.
         self.user_text = None
         
-        
+ 
 def loop_table_condition(self, drop=False, debug=False):
-    
-    """                
-    v1.5.3
-        apply TokenBucket.
-        remove loop_duration.
+   
+    """
+    v1.0
+        modify to data_table mode.
+        update with one trade in a minute.
+        add push_msg for initTableTrade.
+        modify code name to code_{} using datetime.
+        remove realtime_term for this loop
+            term already exist in get_new_df
+    v1.2
+        add drop param.
+    v1.3
+        use messenger mode.
+            add user_data. (symbol & price ...)
+        add condition
+    v1.4
+        modify to TableCondition_v0.3 verison.
+        modify drop to False. 
+        remove elapsed time +,
+    v1.5
+        add column 'timestampLastUsed' in tableCondition.
+            apply remaining minutes to zero.
+        add interval_value (days)
         
-    last confirmed at, 20240710 1016.
+        v1.5.1
+            apply functional idep.py.
+            add target_loss, account            
+        v1.5.2
+            apply dbms
+            
+            v1.5.2.1
+                divide send / save. 
+                add debug mode.
+                api_count + 1    
+                
+        v1.5.3
+            apply TokenBucket.
+            remove loop_duration.
+        v1.5.4
+            remove loop duration
+            move token info to internal function.
+
+    last confirmed at, 20240712 1016.  
     """
 
     start_time_loop = time.time()
@@ -317,15 +353,33 @@ def loop_table_condition(self, drop=False, debug=False):
     
     self.sys_log.debug("LoopTableCondition : elasped time, replace_table (send=True)  : %.4fs" % (time.time() - start_time)) 
     self.sys_log.debug("------------------------------------------------")
-    
+     
     
 def init_table_trade(self, ):
 
     """
-    v2.3
-        apply TokenBucket.
+    v1.0
+        rm OrderSide, PositionSide.
+    v2.0
+        move get_balance to the top.
+        modify to vivid input & output.
+        
+        v2.1
+            vivid mode.
+            add account & margin.
+        v2.2
+            apply dbms.
+             
+            v2.2.1
+                divide send / save. 
+                api_count + 3
+        v2.3
+            apply TokenBucket.
+            
+            v2.3.1
+                move TokenBucket to function internal.
     
-    last confirmed at, 20240710 1019.
+    last confirmed at, 20240712 1018.
     """
            
     
@@ -359,7 +413,8 @@ def init_table_trade(self, ):
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()   
     
-    self.price_entry = get_price_entry(self.df_res,
+    self.price_entry = get_price_entry(self, 
+                                       self.df_res,
                                        self.side_open,
                                        self.price_entry)
     
@@ -545,10 +600,49 @@ def init_table_trade(self, ):
 def loop_table_trade(self, ):
 
     """
-    v1.1.4
-        apply TokenBucket.
+    v1.0
+        values come from rows should be static.
+        prevent order_market dup.
+        rm self.table_trade.at[idx, 'status'] = self.order_result['status'] in order phase.
+            considering status_prev. cannot be here, causing no diffenece before / after order_info update.
+            self.table_trade.at[idx, 'statusChangeTime'] can be replaced with order_result's updateTime
+        use loc istead of iloc for concat table_log (stay comprehension with .at)
+        secure orderId dtype
+    v1.1
+        add, if self.table_trade.at[idx, 'remove_row'] != 1: # if not trade is done,
+            if self.table_trade.at[idx, 'order_way'] == 'CLOSE':
+                if self.order_market_on:    
+        replace to feather ver (orderId type to int64)   
+        add side_open to check_stop_loss upper phase.
+        reorder statusChangeTime & OPEN CLOSE
+        modify statusChangeTime format
+        add remove_row = 1, self.error_code is not None.
+        add side_position on get_income_info().
+        modify remove from websocket_client
+            remove symbol from price_market
+        modify get_price_realtime phase. (consider price_realtime error).
+        
+        add preventing losing orderId by set set_table in this function.
+        
+        v1.1.1
+            modify to vivid input / output
+            add \n to row : {}.
+        v1.1.2
+            vivid mode after v1.1.1
+                decide to use without self. (if self. is needless)
+        v1.1.3
+            apply dbms.
 
-    last confirmed at, 20240710 1020.
+            v1.1.3.1
+                divide send / server.
+                api_count + 8. (dynamic)
+        v1.1.4
+            apply TokenBucket.
+        v1.1.5
+            move TokenBucket function interal.
+                Bank show_header=True.
+
+    last confirmed at, 20240712 1019.
     """ 
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().

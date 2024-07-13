@@ -45,16 +45,7 @@ pd.set_option('mode.chained_assignment',  None)
 pd.set_option('display.max_columns', 100)
 
 
-
-class TokenBucket:
-
-    """
-    v0.1
-        follow up server's api used-weight (tokens_used).
-
-    last confirmed at, 20240711 1044.    
-    """
-    
+class TokenBucket:    
     def __init__(self, sys_log, capacity):
         self.capacity = capacity  # Maximum number of tokens the bucket can hold
         self.tokens = capacity
@@ -70,7 +61,7 @@ class TokenBucket:
         if minutes_passed >= 1:
             self.tokens = self.capacity
             self.tokens_used = 0
-            self.last_refill_time = now # - (now % 60)  # Reset to the start of the current minute
+            self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
 
 
     def consume(self, tokens_used, tokens):
@@ -95,6 +86,14 @@ class TokenBucket:
 
 
 class Bank(UMFutures):
+
+    """
+    v0.1
+        follow up server's api used-weight (tokens_used).
+
+    last confirmed at, 20240711 1044.    
+    """
+    
     def __init__(self, **kwargs):
         
         api_key, secret_key = self.load_key(kwargs['path_api'])        
@@ -114,9 +113,7 @@ class Bank(UMFutures):
             
 
         api_rate_limit = kwargs['api_rate_limit']
-        self.token_bucket = TokenBucket(sys_log=self.sys_log, 
-                                        capacity=api_rate_limit
-                                        )
+        self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
 
         
         # load_table 
@@ -392,6 +389,7 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
+            
             
        
             
@@ -840,6 +838,45 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
 def get_order_info(self, 
                    symbol,
                    orderId):
+    
+    """
+    v1.0 
+        order_res format.
+            {'orderId': 12877344699,
+              'symbol': 'THETAUSDT',
+              'status': 'NEW',
+              'clientOrderId': 't1eOIqWG2m72oxaMKLZHKE',
+              'price': '1.9500',
+              'avgPrice': '0.00',
+              'origQty': '10.0',
+              'executedQty': '0.0',
+              'cumQty': '0.0',
+              'cumQuote': '0.00000',
+              'timeInForce': 'GTC',
+              'type': 'LIMIT',
+              'reduceOnly': False,
+              'closePosition': False,
+              'side': 'BUY',
+              'positionSide': 'LONG',
+              'stopPrice': '0.0000',
+              'workingType': 'CONTRACT_PRICE',
+              'priceProtect': False,
+              'origType': 'LIMIT',
+              'priceMatch': 'NONE',
+              'selfTradePreventionMode': 'NONE',
+              'goodTillDate': 0,
+              'updateTime': 1713354764631},
+    v2.0 
+        vivid mode.
+        
+        v2.1
+            apply token.
+        v2.2
+            show_header=True.
+            recvWindow has been changed to 5000. (preventing 'Timestamp for this request is outside of the recvWindow' error)
+
+    last confirmed at, 20240713 2019.
+    """
  
     try:                
         server_time = self.time()['data']['serverTime']
