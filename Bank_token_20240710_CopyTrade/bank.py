@@ -126,7 +126,7 @@ class Bank(UMFutures):
         db_name = self.config.database.name        
 
         self.pool = SimpleConnectionPool(1,   # min thread
-                                         20,  # max thread
+                                         10,  # max thread
                                          dbname=db_name, 
                                          user=db_user, 
                                          password=db_password,
@@ -306,7 +306,7 @@ class Bank(UMFutures):
             return pd.DataFrame()
         finally:
             self.pool.putconn(conn)
-    
+            
     def replace_table(self, df, table_name, send=False):
         
         """
@@ -367,7 +367,7 @@ class Bank(UMFutures):
             finally:
                 # Release the connection back to the pool
                 self.pool.putconn(conn)       
-             
+                
     def set_leverage(self,
                  symbol,
                  leverage):
@@ -1269,19 +1269,20 @@ def order_cancel(self,
         self.sys_log.info("{} {} canceled.".format(symbol, orderId))
 
 
-
-
 def get_quantity_unexecuted(self, 
                             symbol,
                             orderId):
-    
+
     """
     v2.0
         apply updated get_precision
     v3.0
         vivid mode.
+        
+        v3.1
+            allow Nonetype return for order_info.
 
-    last confirmed at, 20240701 2325.
+    last confirmed at, 20240715 1954.
     """
 
     order_cancel(self, 
@@ -1291,6 +1292,9 @@ def get_quantity_unexecuted(self,
     self.order_info = get_order_info(self, 
                                     symbol,
                                     orderId)
+
+    if self.order_info is None:
+        return 0
         
     quantity_unexecuted = abs(float(self.order_info['origQty'])) - abs(float(self.order_info['executedQty']))
     

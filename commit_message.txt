@@ -1,3 +1,5 @@
-JnQ - TheBank_v2.2.2
+JnQ - TheBank_v2.4
 
-1. function version history restored.
+1. modify repalce_table to truncate mode.
+2. get_order_info's recvWindow modify to 6000.
+	
