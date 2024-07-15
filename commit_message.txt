@@ -1,5 +1,4 @@
-JnQ - TheBank_v2.4
+JnQ - TheBank_v2.4.1
 
-1. modify repalce_table to truncate mode.
-2. get_order_info's recvWindow modify to 6000.
+1. using db_manger, start CopyTrading
 	
