@@ -1,4 +1,5 @@
 JnQ - TheBank_v2.4.1
 
 1. using db_manger, start CopyTrading
+	start TheBank
 	

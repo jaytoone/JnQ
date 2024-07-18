@@ -360,9 +360,13 @@ class Bank(UMFutures):
         """
         v1.0
             add RotatingFileHandler
+        v1.1
+            modify sequence of code.
 
-        last confirmed at, 20240520 0610.
-        """        
+        last confirmed at, 20240717 2243.
+        """      
+        self.sys_log = logging.getLogger('Bank')  
+        self.sys_log.setLevel(logging.DEBUG)   
         
         simple_formatter = logging.Formatter("[%(name)s] %(message)s")
         complex_formatter = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] - %(message)s")
@@ -374,14 +378,14 @@ class Bank(UMFutures):
         # file_handler = logging.FileHandler(self.path_save_log)
         file_handler = logging.handlers.RotatingFileHandler(self.path_save_log, maxBytes=10 * 1000 * 1000, backupCount=10)
         file_handler.setFormatter(complex_formatter)
-        file_handler.setLevel(logging.DEBUG)        
+        file_handler.setLevel(logging.DEBUG)  
     
-        self.sys_log = logging.getLogger('Bank')
-    
-        self.sys_log.handlers.clear()
+        # self.sys_log.handlers.clear()
         self.sys_log.addHandler(console_handler)
-        self.sys_log.addHandler(file_handler)
-        self.sys_log.setLevel(logging.DEBUG)      
+        self.sys_log.addHandler(file_handler)  
+        
+        # Prevent propagation to the root logger
+        self.sys_log.propagate = False
 
     def echo(self, update, context):    
         self.user_text = update.message.text
