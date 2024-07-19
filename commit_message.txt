@@ -1,5 +1,4 @@
-JnQ - TheBank_v2.4.1
+JnQ - TheBank_v2.4.2
 
-1. using db_manger, start CopyTrading
-	start TheBank
+1. update set_logger not to print [debug] in console.
 	

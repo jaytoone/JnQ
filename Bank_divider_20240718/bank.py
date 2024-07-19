@@ -18,13 +18,15 @@ from funcs.public.broker import *
 import pandas as pd
 import numpy as np
 import math
+import threading
 
 import time
 from datetime import datetime
 
-from sqlalchemy import create_engine, text
-import psycopg2
+
+import hashlib
 from psycopg2 import sql
+from psycopg2.pool import SimpleConnectionPool
 
 import pickle
 import logging
@@ -41,77 +43,254 @@ from telegram.ext import MessageHandler, Filters
 from IPython.display import clear_output
 
 pd.set_option('mode.chained_assignment',  None)
+pd.set_option('display.max_rows', 100)
 pd.set_option('display.max_columns', 100)
 
 
+class DatabaseManager:
+    """
+    v0.1
+        init.
+    
+    last confirmed at, 20240715 2306.
+    """
+    def __init__(self, dbname, user, password, host, port):
+        self.pool = SimpleConnectionPool(1,   # min thread
+                                         10,  # max thread
+                                         dbname=dbname, 
+                                         user=user, 
+                                         password=password,
+                                         host=host, 
+                                         port=port)
+        self.file_hashes = {}
+
+    
+    def calculate_file_hash(self, file_path):
+        """Calculate the hash of a file."""
+        hasher = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            buf = f.read()
+            hasher.update(buf)
+        return hasher.hexdigest()
+
+    def fetch_table(self, table_name, limit=None):
+    
+        """
+        v1.1
+            using engine, much faster.
+        v1.2
+            replace engine with psycopg2.
+    
+        last confirmed at, 20240713 2343.
+        """
+        
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                query = f"SELECT * FROM {table_name}"
+                if limit:
+                    query += f" LIMIT {limit}"
+                cur.execute(query)
+                result = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                return pd.DataFrame(result, columns=columns)
+        except Exception as e:
+            print(f"error fetching data from {table_name}: {e}")
+            return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)
+
+        
+    def replace_table(self, df, table_name, send=False):
+        
+        """
+        v1.1 using engine, much faster.
+        v1.2 using temp_table, stay as consistent state.
+        v1.2.1 modify to psycopg2, considering latency.
+        v1.2.2 apply pool.
+        v1.2.3 replace to truncate instead deletion.
+
+        last confirmed at, 20240715 2010.
+        """
+        temp_csv = f'{table_name}.csv'
+        df.to_csv(temp_csv, index=False, header=False)
+
+        if send:
+            # Check if the file has changed
+            new_hash = self.calculate_file_hash(temp_csv)
+            old_hash = self.file_hashes.get(temp_csv)
+
+            if new_hash == old_hash:
+                print("File has not changed. Skipping replace_table.")
+                return
+
+            # Update the hash
+            self.file_hashes[temp_csv] = new_hash
+
+            conn = self.pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    # Fetch column names and data types from the existing table
+                    cur.execute(sql.SQL("""
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_name = %s
+                        ORDER BY ordinal_position
+                    """), [table_name])
+
+                    # Retrieve the results
+                    columns = cur.fetchall()
+                    column_names = [col[0] for col in columns]
+
+                    # Truncate the table
+                    cur.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.Identifier(table_name)))
+
+                    # Use COPY command to load data
+                    with open(temp_csv, 'r') as f:
+                        cur.copy_expert(sql.SQL("COPY {} ({}) FROM STDIN WITH CSV").format(
+                            sql.Identifier(table_name),
+                            sql.SQL(', ').join(map(sql.Identifier, column_names))
+                        ), f)
+
+                    # Commit changes
+                    conn.commit()
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                print(f"Error occurred in replace_table: {e}")
+            finally:
+                # Release the connection back to the pool
+                self.pool.putconn(conn)
+
+    
+    def insert_dataframe_to_schema_table(self, df, schema, table_name):
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                for i, row in df.iterrows():
+                    try:
+                        cur.execute(sql.SQL("""
+                            INSERT INTO {}.{} (open, high, low, close, volume, symbol, datetime, timestamp)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (symbol, datetime) DO NOTHING
+                        """).format(sql.Identifier(schema), sql.Identifier(table_name)),
+                        (row['open'], row['high'], row['low'], row['close'], row['volume'], row['symbol'], row['datetime'], row['timestamp']))
+                    except Exception as e:
+                        print(f"Error occurred while inserting row: {e}")
+                conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"Error occurred: {e}")
+        finally:
+            self.pool.putconn(conn)
+
+
+class TokenBucket:    
+    
+    """
+    v0.1
+        follow up server's api used-weight (tokens_used).
+
+    last confirmed at, 20240714 2343.    
+    """
+    
+    def __init__(self, sys_log, capacity):
+        self.capacity = capacity  # Maximum number of tokens the bucket can hold
+        self.tokens = capacity
+        self.lock = threading.Lock()
+        self.sys_log = sys_log
+        # self.get_used_weight = get_used_weight # this func. require another api_wegiht...
+        self.last_refill_time = time.time()
+        
+    def refill(self):
+        now = time.time()
+        # Calculate the number of minutes that have passed since the last refill
+        minutes_passed = (now - self.last_refill_time) // 60
+        if minutes_passed >= 1:
+            self.tokens = self.capacity
+            self.tokens_used = 0
+            self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
+
+
+    def consume(self, tokens_used, tokens):
+        with self.lock: 
+            self.tokens_used = tokens_used            
+            self.refill()
+            
+            self.tokens = self.capacity - self.tokens_used
+            self.sys_log.debug(f"tokens : {self.tokens}")
+            # self.sys_log.debug(f"tokens_used : {self.tokens_used}")
+            
+            if self.tokens >= tokens: # enough to use.
+                return True
+            return False
+
+    def wait_for_token_consume(self, tokens_used, tokens=10):
+        
+        wait_time = 1
+        while not self.consume(tokens_used, tokens): # set maximium weight that can be consumed.
+            time.sleep(wait_time)
+            # wait_time = min(wait_time * 2, 60)  # Max wait time of 60 seconds # convert to static.
 
 
 class Bank(UMFutures):
 
     """
-    v4.1    
-        allow server_time.
-        remove read_and_write_config
+    v0.1
+        follow up server's api used-weight (tokens_used).
+    v0.2
+        using pool for sql.
+    v0.3
+        use DatabaseManager.
 
-        modify set_logger(), rm console handler
-    v4.2  
-        modify to rotateHandler.
-        append echo & get_messenger_bot in Class Bank.
-            caused by echo 'context missing' error.
-    v4.3
-        modify to load_table.
-        
-        v4.3.1
-            apply postgresql.
-        
-    last confirmed at, 20240705 2230.
+    last confirmed at, 20240714 2344.    
     """
-
+    
     def __init__(self, **kwargs):
         
         api_key, secret_key = self.load_key(kwargs['path_api'])        
-        UMFutures.__init__(self, key=api_key, secret=secret_key)
+        UMFutures.__init__(self, key=api_key, secret=secret_key, show_header=True)
 
         self.websocket_client = UMFuturesWebsocketClient()
         self.websocket_client.start()
         self.price_market = {}
-
+        
         
         self.path_save_log = kwargs['path_save_log']
         self.set_logger()
         
         self.path_config = kwargs['path_config']
         with open(self.path_config, 'r') as f:
-            self.config = EasyDict(json.load(f))
+            self.config = EasyDict(json.load(f))            
+            
 
-        
+        api_rate_limit = kwargs['api_rate_limit']
+        self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
+
+      
         # load_table 
         db_user = self.config.database.user
         db_password = self.config.database.password
         db_host = self.config.database.host
         db_port = self.config.database.port
-        db_name = self.config.database.name
+        db_name = self.config.database.name     
         
-        connection_string = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
-        self.engine = create_engine(connection_string, connect_args={'connect_timeout': 5})
-        
-        self.conn = psycopg2.connect(
-            dbname=self.config.database.name,
-            user=self.config.database.user, 
-            password=self.config.database.password, 
-            host=self.config.database.host
-        )
-        self.cur = self.conn.cursor()
+        self.db_manager = DatabaseManager(dbname=db_name, 
+                                         user=db_user, 
+                                         password=db_password,
+                                         host=db_host, 
+                                         port=db_port)        
 
         self.table_account_name = kwargs['table_account_name']
         self.table_condition_name = kwargs['table_condition_name']
         self.table_trade_name = kwargs['table_trade_name']
         self.table_log_name = kwargs['table_log_name']
         
-        self.table_account = self.fetch_table(self.table_account_name)
-        self.table_condition = self.fetch_table(self.table_condition_name)
-        self.table_trade = self.fetch_table(self.table_trade_name)
-        self.table_log = self.fetch_table(self.table_log_name)
+        self.table_account = self.db_manager.fetch_table(self.table_account_name)
+        self.table_condition = self.db_manager.fetch_table(self.table_condition_name)
+        self.table_trade = self.db_manager.fetch_table(self.table_trade_name)
+        self.table_log = self.db_manager.fetch_table(self.table_log_name)
 
         
         self.path_dir_df_res = kwargs['path_dir_df_res']
@@ -166,23 +345,29 @@ class Bank(UMFutures):
 
 
     def agg_trade_message_handler(self, message):
+        
         """
-        1. websocket streaming method 를 이용한 get_price_realtime method.
-            a. try --> received data = None 일 경우를 대비한다.
+        websocket streaming method 를 이용한 get_price_realtime method.
+            try --> received data = None 일 경우를 대비한다.
         """
+        
         try:
             self.price_market[message['s']] = float(message['p'])
         except Exception as e:
             pass
 
     def set_logger(self,):
-
+        
         """
         v1.0
             add RotatingFileHandler
+        v1.1
+            modify sequence of code.
 
-        last confirmed at, 20240520 0610.
-        """
+        last confirmed at, 20240717 2243.
+        """      
+        self.sys_log = logging.getLogger('Bank')  
+        self.sys_log.setLevel(logging.DEBUG)   
         
         simple_formatter = logging.Formatter("[%(name)s] %(message)s")
         complex_formatter = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] - %(message)s")
@@ -194,20 +379,20 @@ class Bank(UMFutures):
         # file_handler = logging.FileHandler(self.path_save_log)
         file_handler = logging.handlers.RotatingFileHandler(self.path_save_log, maxBytes=10 * 1000 * 1000, backupCount=10)
         file_handler.setFormatter(complex_formatter)
-        file_handler.setLevel(logging.DEBUG)        
+        file_handler.setLevel(logging.DEBUG)  
     
-        self.sys_log = logging.getLogger('Bank')
-    
-        self.sys_log.handlers.clear()
+        # self.sys_log.handlers.clear()
         self.sys_log.addHandler(console_handler)
-        self.sys_log.addHandler(file_handler)
-        self.sys_log.setLevel(logging.DEBUG)      
+        self.sys_log.addHandler(file_handler)  
+        
+        # Prevent propagation to the root logger
+        self.sys_log.propagate = False
 
     def echo(self, update, context):    
         self.user_text = update.message.text
 
     def get_messenger_bot(self, ):
-
+        
         """
         v2.0
             use token from self directly.
@@ -215,7 +400,7 @@ class Bank(UMFutures):
             remove self.msg_bot exist condition.
     
         last confirmed at, 20240528 1257.
-        """
+        """        
             
         # init
         self.msg_bot = telegram.Bot(token=self.token)    
@@ -234,144 +419,74 @@ class Bank(UMFutures):
         self.sys_log.debug("msg_bot {} assigned.".format(self.token))
     
     def push_msg(self, msg):    
-    
+        
         """
         v1.0
             this function has some time dely.
     
         last confirmed at, 20240517 1413.
-        """
+        """        
         
         try:
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
         except Exception as e:
             self.sys_log.error(e)
 
-    def fetch_table(self, table_name, limit=None):
-
-        """
-        v1.1
-            using engine, much faster.
-    
-        last confirmed at, 20240705 2208.
-        """
-    
-        # if you use self.engine, you can show table in original dtypes.
-            # %timeit -n1 -r1000 fetch_table(self.engine, 'table_log', limit=None) 
-                # 1.9 ms ± 93.7 µs per loop (mean ± std. dev. of 1000 runs, 1 loop each)
-        try:
-            with self.engine.connect() as conn:
-                if limit is None:
-                    query = text(f"SELECT * FROM {table_name};")
-                else:
-                    query = text(f"SELECT * FROM {table_name} LIMIT {limit};")
-                
-                result = conn.execute(query)
-                rows = result.fetchall()
-                df = pd.DataFrame(rows, columns=result.keys())
-                return df
-    
-        except Exception as e:
-            self.sys_log.error(f"error fetching data from {table_name}: {e}")
-            return pd.DataFrame()
-
-    def replace_table(self, df, table_name, send=False):
-    
-        """
-        v1.1
-            using engine, much faster.
-        v1.2
-            using temp_table, stay as consistent state.
-            
-            v1.2.1
-                modify to psycopg2, considering latency.
-
-        last confirmed at, 20240706 1014.
-        """  
-        
-        temp_csv = f'{table_name}.csv'
-        df.to_csv(temp_csv, index=False, header=False)
-
-        if send:
-            try:            
-                # Fetch column names and data types from the existing table            
-                self.cur.execute(sql.SQL("""
-                    SELECT column_name, data_type
-                    FROM information_schema.columns
-                    WHERE table_name = %s
-                    ORDER BY ordinal_position
-                """), [table_name])
-                
-                # Retrieve the results
-                columns = self.cur.fetchall()
-                
-                # Replace the table
-                self.cur.execute(f"DROP TABLE IF EXISTS {table_name}")            
-                
-                create_table_query = sql.SQL("CREATE TABLE {} ({});").format(
-                    sql.Identifier(table_name),
-                    sql.SQL(', ').join(
-                        sql.SQL("{} {}").format(
-                            sql.Identifier(column[0]),
-                            sql.SQL(column[1])
-                        ) for column in columns
-                    )
-                )
-                self.cur.execute(create_table_query)
-        
-                # Use COPY command to load data
-                with open(temp_csv, 'r') as f:
-                    self.cur.copy_expert(f"COPY {table_name} FROM STDIN WITH CSV", f)
-        
-                # Commit changes
-                self.conn.commit()
-            except Exception as e:
-                if self.conn:
-                    self.conn.rollback()
-                print(f"error occurred in replace_table : {e}")
-            # finally:
-                # # Remove temporary file
-                # os.remove(temp_csv)
             
     def set_leverage(self,
-                    symbol,
-                    leverage):
-
+                 symbol,
+                 leverage):
+        
         """
         v2.0
             vivid mode.
+            
+            v2.1
+                add token.
+            v2.2
+                show_header=True.
 
-        last confirmed at, 20240702 1758.
+        last confirmed at, 20240712 1041.
         """
 
-        try:
-            server_time = self.time()['serverTime']
-            self.change_leverage(symbol=symbol, 
+        try:        
+            server_time = self.time()['data']['serverTime']
+            response = self.change_leverage(symbol=symbol, 
                                 leverage=leverage, 
                                 recvWindow=6000, 
-                                timestamp=server_time)
+                                timestamp=server_time)        
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+            
         except Exception as e:
             msg = "error in change_initial_leverage : {}".format(e)
             self.sys_log.error(msg)
             self.push_msg(msg)
         else:
             self.sys_log.info('leverage changed to {}'.format(leverage))
-            
-    def set_position_mode(self, 
-                        dualSidePosition='true'):
 
+    def set_position_mode(self, 
+                        dualSidePosition='true'):    
+        
         """
         v1.0
             pass error -4059 -4046
+        v2.0
+            show_header=True. (token)
 
-        last confirmed at, 20240702 1801.
+        last confirmed at, 20240712 1038.
         """
 
         try:
-            server_time = self.time()['serverTime']
-            self.change_position_mode(dualSidePosition=dualSidePosition,
+            server_time = self.time()['data']['serverTime']
+            response = self.change_position_mode(dualSidePosition=dualSidePosition,
                                     recvWindow=2000,
                                     timestamp=server_time)
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+            
         except Exception as e:
             if '-4059' in str(e): # 'No need to change position side.'
                 return
@@ -382,25 +497,31 @@ class Bank(UMFutures):
             self.sys_log.info("dualSidePosition is true.")
             
     def set_margin_type(self, 
-                    symbol,
-                    marginType='CROSSED'): # CROSSED / ISOLATED
-
+                        symbol,
+                        marginType='CROSSED'): # CROSSED / ISOLATED
+        
         """
-        v1.0s
+        v1.0
             pass error -4046
         v2.0
             vivid mode.
+            
+            v2.1
+                show_header=True.
 
-        last confirmed at, 20240702 1805.
+        last confirmed at, 20240712 1036.
         """
 
         # margin type => "cross or isolated"
-        try:
-            server_time = self.time()['serverTime']
-            self.change_margin_type(symbol=symbol, 
+        try:            
+            server_time = self.time()['data']['serverTime']
+            response = self.change_margin_type(symbol=symbol, 
                                     marginType=marginType, 
                                     recvWindow=6000, 
                                     timestamp=server_time)
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
                 
         except Exception as e:
             if '-4046' in str(e): # 'No need to change margin type.'
@@ -410,14 +531,14 @@ class Bank(UMFutures):
             self.push_msg(msg)
         else:
             self.sys_log.info("margin type is {} now.".format(marginType))
-
-        
-
+         
+            
+       
+            
 def get_tickers(self, ):
     
     self.tickers_available = [info['symbol'] for info in self.exchange_info()['symbols']]
-                    
-
+      
     
 def get_streamer(self):
     
@@ -461,7 +582,7 @@ def get_df_new_by_streamer(self, ):
 
 
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
-    
+        
     """
     v2.0
         add self.config.trader_set.get_df_new_timeout
@@ -472,8 +593,12 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         replace to bank.concat_candlestick
     v4.0
         integrate concat_candlestick logic.
+        modify return if df_list.
+        
+        v4.1
+            add token info.
 
-    last confirmed at, 20240701 1309.
+    last confirmed at, 20240712 1024.
     """
 
     limit_kline = 1500
@@ -493,7 +618,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         df_list = []
 
         for time_start, time_end in zip(time_arr_start, time_arr_end):
-            try:
+            try:                
                 response = self.klines(
                     symbol=self.symbol,
                     interval=interval,
@@ -501,6 +626,11 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                     endTime=int(time_end),
                     limit=limit
                 )
+                
+                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+                self.token_bucket.wait_for_token_consume(tokens_used) 
+
+                response = response['data'] # replace response.
 
                 if not response:
                     if df_list: # if df_list lose middle df, occur error.
@@ -529,11 +659,10 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                 if timesleep:
                     time.sleep(timesleep)
 
-        sum_df = pd.concat(df_list)
+        if df_list:
+            sum_df = pd.concat(df_list)
 
-        return sum_df[~sum_df.index.duplicated(keep='last')]
-
-
+            return sum_df[~sum_df.index.duplicated(keep='last')]
 
 
 def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
@@ -555,7 +684,7 @@ def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
     
     last confirmed at, 20240702 1342.
     """
-    
+        
     self.len_df = len(self.df_res)
     self.np_timeidx = np.array([intmin_np(date_) for date_ in self.df_res.index.to_numpy()])     
     close = self.df_res['close'].to_numpy()
@@ -568,11 +697,8 @@ def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
         adj_price_unit(self,)
 
 
-
-
-
 def set_price_box(self, ):
-
+    
     """
     v2.0
         use table_condition & messenger.
@@ -645,14 +771,14 @@ def set_price_box(self, ):
 
 
 
-def set_price(self, close):    
+def set_price(self, close):     
     
     """
     v2.0
         use table_condition & messenger.
 
     last confirmed at, 20240528 1422.
-    """        
+    """      
     
     # price_take_profit 
         # i. 기준 : balance_available_1, gap : balance_available_box
@@ -703,7 +829,7 @@ def set_price(self, close):
 
 
 def get_reward_risk_ratio(self, unit_RRratio_adj_fee=np.arange(0, 2, 0.1)):
-
+    
     """
     v2.0
         modify to RRratio.
@@ -756,7 +882,7 @@ def get_price_entry(self,
                     df_res,
                     side_open,
                     price_entry):
-
+    
     """
     v1.0
         validate if price_entry has been replaced with price_open.
@@ -776,35 +902,41 @@ def get_price_entry(self,
 
 def get_balance_available(self, 
                           asset_type='USDT'):
-
+    
     """
-    v1.1
-        return output.
-
-    last confirmed at, 2240630 2214.
+    v1.2
+        Bank show_header=True.
+    v1.3   
+        get persistency.
+        
+    Last confirmed: 2024-07-19 11:15
     """
     
-    try:      
-        server_time = self.time()['serverTime']
-        response = self.balance(recvWindow=6000, timestamp=server_time)
-    except Exception as e:
-        msg = "error in get_balance() : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        available_asset = float([res['availableBalance'] for res in response if res['asset'] == asset_type][0])
-        balance_available = self.calc_with_precision(available_asset, 2) # default for Binance
+    while True:
+        try:      
+            server_time = self.time()['data']['serverTime']
+            response = self.balance(recvWindow=6000, timestamp=server_time)
 
-        return balance_available
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+        except Exception as e:
+            msg = "error in get_balance() : {}".format(e)
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+        else:
+            available_asset = float([res['availableBalance'] for res in response['data'] if res['asset'] == asset_type][0])
+            balance_available = self.calc_with_precision(available_asset, 2) # default for Binance
+
+            return balance_available
+        
+        time.sleep(self.config.term.balance)
         
         
-
-def get_margin_consistency(self, 
-                         margin,
+        
+        
+def get_account_normality(self, 
                          account,
-                         # balance_account,
-                         # balance_min, 
-                         mode="PROD"):
+                         ):
 
     """
     v1.0
@@ -813,70 +945,78 @@ def get_margin_consistency(self,
             compare margin & TableAccount.
             Class mode remain, cause we are using core (public) object.
                 like sys_log, tables, etc...
+    v1.1
+        func1 : check account balance sum normality
+        func2 : account normality
+        return balance.
 
-    last confirmed at, 20240701 0829.
+    Last confirmed: 2024-07-19 10:28
     """
 
     # init.
     consistency = True
+    balance = None
 
-    # update self.table_account.balance_insufficient
-    self.table_account.balance_insufficient = self.table_account.balance < self.table_account.balance_min  
+    # # update self.table_account.balance_insufficient
+    # self.table_account.balance_insufficient = self.table_account.balance < self.table_account.balance_min  
     self.sys_log.debug("self.table_account : \n{}".format(self.table_account))  
 
     # get balance_available
-    # check balance_available.
     balance_account_total = self.table_account.balance.sum()
     balance_available = get_balance_available(self)
     self.sys_log.info('balance_account_total : {:.2f}'.format(balance_account_total))
     self.sys_log.info('balance_available : {:.2f}'.format(balance_available))
     
-    # reject balance_account_total over.
+    # 1. reject balance_account_total over.
     if balance_available <= balance_account_total:
-        self.sys_log.warning("over balance : balance_available {:.2f} <= balance_account_total {:.2f}".format(balance_available, balance_account_total))
+        msg = "over balance : balance_available {:.2f} <= balance_account_total {:.2f}".format(balance_available, balance_account_total)
+        self.push_msg(msg)
+        self.sys_log.warning(msg)
         consistency = False
-
     
     # get a row by account.
     table_account_row = self.table_account[self.table_account['account'] == account]
     self.sys_log.debug("table_account_row : \n{}".format(table_account_row))
 
-    if not table_account_row.empty:    
-        # check min balance.
-        if table_account_row.balance_insufficient.values[0]:
-            self.sys_log.warning("table_account_row.balance_insufficient = True.")
-            consistency = False
-        
-        # check balance < asset. 
-        if table_account_row.balance.values[0] < margin:
-            self.sys_log.warning("table_account_row.balance < margin {:.2f}".format(margin))
-            consistency = False
+    # 2. account selection
+        # 3. check margin available
+        # 4. check min margin
+    if not table_account_row.empty:        
+        balance = table_account_row.balance.values[0]        
     else:
-        self.sys_log.warning("table_account_row is empty.")
+        msg = f"table_account_row {account} is empty."
+        self.push_msg(msg)
+        self.sys_log.warning(msg)
         consistency = False
 
-    if consistency:        
-        self.table_account.loc[self.table_account['account'] == account, 'balance'] -= margin   
-
-    return consistency
+    return consistency, balance
             
+               
                    
-
 
 
 
 def get_precision(self, 
                   symbol):
-
+    
     """
     v2.0
         modify to vivid mode.
+        
+        v2.1
+            add token.
+        v2.2
+            show_header=True.
 
-    last confirmed at, 20240614 1403.
+    last confirmed at, 2024712 1026.
     """
     
-    try:
+    try:        
         response = self.exchange_info()
+        
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+        
     except Exception as e:
         msg = "error in get_precision : {}".format(e)
         self.sys_log.error(msg)
@@ -885,12 +1025,11 @@ def get_precision(self,
         # time.sleep(self.config.trader_set.api_term)
     else:
         precision_price, precision_quantity = [[data['pricePrecision'], data['quantityPrecision']] 
-                                                         for data in response['symbols'] if data['symbol'] == symbol][0]
+                                                         for data in response['data']['symbols'] if data['symbol'] == symbol][0]
 
         return precision_price, precision_quantity
         
-
-
+        
 
 def get_leverage_limit(self, 
                        symbol, 
@@ -898,7 +1037,7 @@ def get_leverage_limit(self,
                        price_stop_loss,
                        fee_entry, 
                        fee_exit):
-
+    
     """
     v2.0
         divide into server & user
@@ -920,14 +1059,23 @@ def get_leverage_limit(self,
             v3.1
                 modify leverage_limit_user logic.
                     more comprehensive.
+            v3.2
+                add token.
+            v3.3
+                show_header=True.
 
-    last confirmed at, 20240702 1027.
-    """    
-
+    last confirmed at, 20240712 1027.
+    """
+    
     # leverage_limit (server)
-    server_time = self.time()['serverTime']
+    server_time = self.time()['data']['serverTime']
     response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)
-    leverage_limit_server = response[0]['brackets'][0]['initialLeverage']    
+    
+    tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+    self.token_bucket.wait_for_token_consume(tokens_used) 
+
+    
+    leverage_limit_server = response['data'][0]['brackets'][0]['initialLeverage']    
     
     loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
     loss_pct = loss / price_entry * 100
@@ -936,7 +1084,6 @@ def get_leverage_limit(self,
     leverage_limit = min(leverage_limit_user, leverage_limit_server)
 
     return loss, leverage_limit_user, leverage_limit_server, leverage_limit
-    
 
 
 
@@ -957,77 +1104,10 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
     return price_liquidation
 
 
-
-
-def set_leverage(self,):
-
-    try:
-        server_time = self.time()['serverTime']
-        self.change_leverage(symbol=self.symbol, leverage=self.leverage, recvWindow=6000, timestamp=server_time)
-    except Exception as e:
-        msg = "error in change_initial_leverage : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        self.sys_log.info('self.leverage changed to {}'.format(self.leverage))
-
-
-
-
-def set_position_mode(self, ):
-
-    """
-    v1.0
-        pass error -4059 -4046
-
-    last confirmed at, 20240504 1948.
-    """
-
-    try:
-        server_time = self.time()['serverTime']
-        self.change_position_mode(dualSidePosition="true", recvWindow=2000, timestamp=server_time)
-    except Exception as e:
-        if '-4059' in str(e): # 'No need to change position side.'
-            return
-        msg = "error in set_position_mode : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        self.sys_log.info("dualSidePosition is true.")
-
-
-def set_margin_type(self, margin_type='CROSSED'):
-
-    """
-    v1.0
-        pass error -4046
-
-    last confirmed at, 20240504 1948.
-    """
-
-    # margin type => "cross or isolated"
-    try:
-        server_time = self.time()['serverTime']
-        if margin_type == 'CROSSED':
-            self.change_margin_type(symbol=self.symbol, marginType=FuturesMarginType.CROSSED, recvWindow=6000, timestamp=server_time)
-        else:
-            self.change_margin_type(symbol=self.symbol, marginType=FuturesMarginType.ISOLATED, recvWindow=6000, timestamp=server_time)
-            
-    except Exception as e:
-        if '-4046' in str(e): # 'No need to change margin type.'
-            return
-        msg = "error in set_margin_type : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        self.sys_log.info("margin type is {} now.".format(margin_type))
-
-
-
 def get_order_info(self, 
                    symbol,
                    orderId):
-
+    
     """
     v1.0 
         order_res format.
@@ -1057,23 +1137,32 @@ def get_order_info(self,
               'updateTime': 1713354764631},
     v2.0 
         vivid mode.
+        
+        v2.1
+            apply token.
+        v2.2
+            show_header=True.
+            recvWindow has been changed to 6000. (preventing 'Timestamp for this request is outside of the recvWindow' error)
 
-    last confirmed at, 20240701 2259.
+    last confirmed at, 20240714 1939.
     """
-    
-    try:
-        server_time = self.time()['serverTime']
-        order_info = self.query_order(symbol=symbol, 
+ 
+    try:                
+        server_time = self.time()['data']['serverTime']
+        response = self.query_order(symbol=symbol, 
                                       orderId=orderId, 
-                                      recvWindow=2000, 
+                                      recvWindow=6000, 
                                       timestamp=server_time)
-        return order_info
+        
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+        
+        return response['data']
         
     except Exception as e:
-        msg = "error in get_order_info : {}".format(e)
+        msg = f"error in get_order_info : {e}, tokens : {self.token_bucket.tokens}"
         self.sys_log.error(msg)
         self.push_msg(msg)
-        
         
 
 def get_price_realtime(self, symbol):
@@ -1087,11 +1176,13 @@ def get_price_realtime(self, symbol):
     v3.2
         restore agg_trade
     v3.3
-        vivid mode.
+        vivid mode.        
+        access to self.price_market by symbol.
+            we don't need token for it.        
     
-    last confirmed at, 20240701 1042.
+    last confirmed at, 20240713 2328.
     """
-    
+        
     try:
         price_realtime =  self.price_market[symbol]
     except Exception as e:
@@ -1133,10 +1224,6 @@ def check_expiration(side_position,
     return expired
 
 
-
-
-
-
 def check_stop_loss(self,
                     side_open,
                     price_realtime,
@@ -1157,7 +1244,7 @@ def check_stop_loss(self,
         
     last confirmed at, 20240701 2300.
     """
-
+    
     order_market_on = False
             
     if side_open == 'SELL':
@@ -1172,11 +1259,10 @@ def check_stop_loss(self,
     self.sys_log.info("order_market_on : {}".format(order_market_on))
 
     return order_market_on
-                    
 
 
 def get_price_replacement(self, order_info_old, idx):
-
+    
     """
     v2.0
         modify to vivid in-out
@@ -1220,32 +1306,34 @@ def get_price_replacement(self, order_info_old, idx):
     self.table_trade.at[idx, 'price_take_profit'] = self.price_take_profit
 
 
-
-
 def order_cancel(self, 
                 symbol,
-                orderId):
-
+                orderId):    
+    
     """
     v1.0
         add table_order logic.
-    v2.0
+    v2.1
+        show_header=True.
 
-    last confirmed at, 20240701 2330.
+    last confirmed at, 20240712 1028.
     """
     
-    try:
-        server_time = self.time()['serverTime']
-        _ = self.cancel_order(symbol=symbol, 
+    try:     
+        server_time = self.time()['data']['serverTime']
+        response = self.cancel_order(symbol=symbol, 
                               orderId=orderId, 
                               timestamp=server_time)
+        
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+        
     except Exception as e:        
         msg = "error in order_cancel : {}".format(e)
         self.sys_log.error(msg)
         self.push_msg(msg)
     else:
         self.sys_log.info("{} {} canceled.".format(symbol, orderId))
-
 
 
 def get_quantity_unexecuted(self, 
@@ -1257,8 +1345,11 @@ def get_quantity_unexecuted(self,
         apply updated get_precision
     v3.0
         vivid mode.
+        
+        v3.1
+            allow Nonetype return for order_info.
 
-    last confirmed at, 20240701 2325.
+    last confirmed at, 20240715 1954.
     """
 
     order_cancel(self, 
@@ -1268,6 +1359,9 @@ def get_quantity_unexecuted(self,
     self.order_info = get_order_info(self, 
                                     symbol,
                                     orderId)
+
+    if self.order_info is None:
+        return 0
         
     quantity_unexecuted = abs(float(self.order_info['origQty'])) - abs(float(self.order_info['executedQty']))
     
@@ -1284,14 +1378,13 @@ def get_quantity_unexecuted(self,
     return quantity_unexecuted
 
 
-
 def order_limit(self, 
                 symbol,
                 side_order, 
                 side_position, 
                 price, 
                 quantity):
-
+    
     """
     v2.0
         1. symbol included.
@@ -1301,18 +1394,20 @@ def order_limit(self,
             remove order_data
     v4.0
         vivid mode.
-            remove orderType... we don't need this in order_'limit'.
+            remove orderType... we don't need this in order_'limit'.        
+        v4.1
+            show_header=True.
             
-    last confirmed at, 20240701 2338.
+    last confirmed at, 20240712 1029.
     """
-    
+        
     # init.  
     order_result = None
     error_code = 0
     
-    try:
-        server_time = self.time()['serverTime']
-        order_result = self.new_order(timeInForce=TimeInForce.GTC,
+    try:        
+        server_time = self.time()['data']['serverTime']
+        response = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
                                         side=side_order,
                                         positionSide=side_position,
@@ -1321,6 +1416,10 @@ def order_limit(self,
                                         price=str(price),
                                         timestamp=server_time)
         
+        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        self.token_bucket.wait_for_token_consume(tokens_used) 
+
+        order_result = response['data']        
         self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
         
     except Exception as e:
@@ -1340,8 +1439,6 @@ def order_limit(self,
 
 
 
-
-
 def order_market(self, 
                  symbol,
                  side_order,
@@ -1353,15 +1450,19 @@ def order_market(self,
         update retry_count        
     v3.0
         remove order_res_list.
-        remove error solution phase.   
-    v3.1
-        replace get_quantity_unexecuted()
+        remove error solution phase.
+        
+        v3.1
+            replace get_quantity_unexecuted()
     v4.0
         vivid mode.
-        
-    last confirmed at, 20240701 2353.
-    """
 
+        v4.1
+            show_header=True.
+        
+    last confirmed at, 20240712 1030.
+    """
+    
     while 1:
 
         # quantity_unexecuted = get_quantity_unexecuted(self, 
@@ -1374,14 +1475,18 @@ def order_market(self,
         
         # while 1:
         try:
-            server_time = self.time()['serverTime']
-            order_result = self.new_order(symbol=symbol,
+            server_time = self.time()['data']['serverTime']
+            response = self.new_order(symbol=symbol,
                                         side=side_order,
                                         positionSide=side_position,
                                         type=OrderType.MARKET,
                                         quantity=str(quantity),
                                         timestamp=server_time)
             
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+
+            order_result = response['data']            
             self.sys_log.info("order_market succeed. : {}".format(order_result))
             
         except Exception as e:
@@ -1425,7 +1530,7 @@ def order_market(self,
             else:
                 self.sys_log.info("order_market failed.")
                 continue
-            
+
 
 def get_income_info(self, 
                     table_log,
@@ -1435,7 +1540,7 @@ def get_income_info(self,
                     income_accumulated,
                     profit_accumulated,
                     mode="PROD", 
-                    currency="USDT"):
+                    currency="USDT"):    
 
     """
     v2.0
@@ -1453,7 +1558,7 @@ def get_income_info(self,
 
     last confimred at, 20240702 1353.    
     """
-
+    
     table_log = table_log.astype({'cumQuote' : 'float'})
     table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
     table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.trader_set.fee_limit, self.config.trader_set.fee_market)
