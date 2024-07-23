@@ -584,23 +584,21 @@ def get_df_new_by_streamer(self, ):
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
      
     """
-    v2.0
-        add self.config.trader_set.get_df_new_timeout
-        add df_res = None to all return phase.
-    v3.0
-        replace concat_candlestick to v2.0
-    v3.1
-        replace to bank.concat_candlestick
-    v4.0
-        integrate concat_candlestick logic.
+    v2.0 - add self.config.trader_set.get_df_new_timeout
+            df_res = None to all return phase.
+    v3.0 replace concat_candlestick to v2.0
+    v3.1 replace to bank.concat_candlestick
+    v4.0 integrate concat_candlestick logic.
         modify return if df_list.
-    v4.1
-        - add
+    v4.1 - add
             token info.
         - replace
-            time.sleep, use term.df_new            
+            time.sleep, use term.df_new     
+    v4.2 - change
+        fetch 'df' in reverse chronological order and
+        sort 'sum_df' in ascending chronological order.
 
-    Last confirmed: 2024-07-22 10:50
+    Last confirmed: 2024-07-22 12:53
     """
 
     limit_kline = 1500
@@ -619,7 +617,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
         df_list = []
 
-        for time_start, time_end in zip(time_arr_start, time_arr_end):
+        for idx, (time_start, time_end) in enumerate(zip(reversed(time_arr_start), reversed(time_arr_end))):
             try:                
                 response = self.klines(
                     symbol=self.symbol,
@@ -647,8 +645,21 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
                 if True:  # Always show process for debugging
                     self.sys_log.debug(f"{self.symbol} {df.index[0]} --> {df.index[-1]}")
-
+                    
                 df_list.append(df)
+                
+                # check last row's time.
+                if idx == 0:
+                    time_gap = time.time() - datetime.timestamp(df.index[-1])
+                    if time_gap > itv_to_number(interval) * 60:
+                        df_list = [] # reset until valid time come.
+                        
+                        msg = f"warning in get_df_new : time_gap {time_gap}"
+                        self.sys_log.warning(msg)
+                        self.push_msg(msg)
+                        time.sleep(self.config.term.df_new)
+                        
+                        break
                 
             except Exception as e:
                 msg = f"error in klines : {str(e)}"
@@ -662,9 +673,10 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                     time.sleep(timesleep)
 
         if df_list:
-            sum_df = pd.concat(df_list)
+            sum_df = pd.concat(df_list).sort_index()
 
             return sum_df[~sum_df.index.duplicated(keep='last')]
+
 
 
 def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
@@ -935,29 +947,31 @@ def get_balance_available(self,
         
         
         
-        
 def get_account_normality(self, 
                          account,
                          ):
 
     """
-    v1.0
+    v1.0 - modify
         derived after get_balance_info v2.0
         modify to vivid mode.
             compare margin & TableAccount.
             Class mode remain, cause we are using core (public) object.
                 like sys_log, tables, etc...
-    v1.1
+    v1.1 - update
         func1 : check account balance sum normality
         func2 : account normality
         return balance.
+    v1.1.1 - modify
+        return balance_origin.        
 
-    Last confirmed: 2024-07-19 10:28
+    Last confirmed: 2024-07-22 17:15
     """
 
     # init.
     consistency = True
     balance = None
+    balance_origin = None
 
     # # update self.table_account.balance_insufficient
     # self.table_account.balance_insufficient = self.table_account.balance < self.table_account.balance_min  
@@ -972,8 +986,8 @@ def get_account_normality(self,
     # 1. reject balance_account_total over.
     if balance_available <= balance_account_total:
         msg = "over balance : balance_available {:.2f} <= balance_account_total {:.2f}".format(balance_available, balance_account_total)
-        self.push_msg(msg)
         self.sys_log.warning(msg)
+        self.push_msg(msg)
         consistency = False
     
     # get a row by account.
@@ -984,15 +998,17 @@ def get_account_normality(self,
         # 3. check margin available
         # 4. check min margin
     if not table_account_row.empty:        
-        balance = table_account_row.balance.values[0]        
+        balance = table_account_row.balance.values[0]     
+        balance_origin = table_account_row.balance_origin.values[0]       
     else:
         msg = f"table_account_row {account} is empty."
-        self.push_msg(msg)
         self.sys_log.warning(msg)
+        self.push_msg(msg)
         consistency = False
 
-    return consistency, balance
+    return consistency, balance, balance_origin
             
+                  
        
 
 def get_precision(self, symbol):

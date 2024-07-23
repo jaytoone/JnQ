@@ -905,26 +905,32 @@ def get_balance_available(self,
     """
     v1.2
         Bank show_header=True.
-
-    last confirmed at, 240712 1025.
+    v1.3   
+        get persistency.
+        
+    Last confirmed: 2024-07-19 11:15
     """
     
-    try:      
-        server_time = self.time()['data']['serverTime']
-        response = self.balance(recvWindow=6000, timestamp=server_time)
+    while True:
+        try:      
+            server_time = self.time()['data']['serverTime']
+            response = self.balance(recvWindow=6000, timestamp=server_time)
 
-        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-        self.token_bucket.wait_for_token_consume(tokens_used) 
-    except Exception as e:
-        msg = "error in get_balance() : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-    else:
-        available_asset = float([res['availableBalance'] for res in response['data'] if res['asset'] == asset_type][0])
-        balance_available = self.calc_with_precision(available_asset, 2) # default for Binance
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
+        except Exception as e:
+            msg = "error in get_balance() : {}".format(e)
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+        else:
+            available_asset = float([res['availableBalance'] for res in response['data'] if res['asset'] == asset_type][0])
+            balance_available = self.calc_with_precision(available_asset, 2) # default for Binance
 
-        return balance_available
+            return balance_available
         
+        time.sleep(self.config.term.balance)
+        
+         
         
         
 

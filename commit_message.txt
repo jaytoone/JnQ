@@ -1,4 +1,8 @@
-JnQ - TheBank_v2.4.2
+JnQ - TheBank_v2.5
 
-1. update set_logger not to print [debug] in console.
-	
+- Enhance
+	Encapsulate API functions within while loop to ensure robustness.
+- Introduce 
+	Integrate push_msg into get_balance_available for improved communication.
+- Refactor
+	Update balance_origin logic for better accuracy.

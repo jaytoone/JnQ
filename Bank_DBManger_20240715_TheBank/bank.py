@@ -1183,7 +1183,7 @@ def get_price_realtime(self, symbol):
     """
         
     try:
-        price_realtime =  self.price_market[symbol]
+        price_realtime = self.price_market[symbol]
     except Exception as e:
         price_realtime = np.nan   
         

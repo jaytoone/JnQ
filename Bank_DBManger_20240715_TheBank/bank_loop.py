@@ -951,6 +951,7 @@ def loop_table_trade(self, ):
                                                     mode="PROD", 
                                                     currency="USDT")
             
+            self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += row.margin
             self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += self.income
             
             self.sys_log.debug("LoopTableTrade : elasped time, get_income_info : %.4fs" % (time.time() - start_time)) 
