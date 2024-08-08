@@ -123,11 +123,20 @@ def loop_table_condition(self, drop=False, debugging=False):
 
     v1.5.6:
         - Replace target_loss to divider.
+    v1.5.8:
+        - modify
+            table_condition
+                remove interval value. 
+        - update required
+            value usage between self & row.
+    v1.6
+    - update
+        use point_bool & zone_bool.
 
-    Last confirmed: 2024-07-23 09:15
+    Last confirmed: 2024-08-01 12:00
     """
 
-    start_time_loop = time.time()
+    
     for idx, row in self.table_condition.iterrows(): # idx can be used, cause table_condition's index are not reset.
 
         # init.        
@@ -139,15 +148,19 @@ def loop_table_condition(self, drop=False, debugging=False):
         # self.price_entry = row.price_entry
         # self.price_stop_loss = row.price_stop_loss
         # self.leverage = row.leverage
-        self.position = row.position
-        self.interval = row.interval
-        self.interval_value = row.interval_value
+        
         self.priceBox_indicator = row.priceBox_indicator
         self.priceBox_value = row.priceBox_value
+        self.point_mode = row.point_mode
         self.point_indicator = row.point_indicator
         self.point_value = row.point_value
         self.zone_indicator = row.zone_indicator
         self.zone_value = row.zone_value
+        
+        self.position = row.position
+        self.interval = row.interval
+        self.RRratio = row.RRratio
+        
         self.divider = row.divider
         self.account = row.account
         
@@ -173,10 +186,14 @@ def loop_table_condition(self, drop=False, debugging=False):
         # get df_res
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()
+        
+        values = [self.priceBox_value, self.point_value, self.zone_value]
+        days = np.nanmax([value if value is not None else np.nan for value in values]) / (1440 / itv_to_number(self.interval)) + 1        
+        self.sys_log.debug(f"days: {days}")
   
         self.df_res = get_df_new(self, 
                                interval=self.interval, 
-                               days=self.interval_value, 
+                               days=days, 
                                limit=1500, 
                                timesleep=0.0) # changed to 0.0
                 
@@ -184,7 +201,10 @@ def loop_table_condition(self, drop=False, debugging=False):
         self.sys_log.debug("LoopTableCondition : elasped time, get_df_new : {:.2f}s".format(time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")
  
-        if self.df_res is None:
+        if self.df_res is None or len(self.df_res) < abs(self.config.bank.complete_index):
+            msg = f"Warning in df_res : {self.df_res}"
+            self.sys_log.warning(msg)
+            self.push_msg(msg)
             continue     
             
         
@@ -194,28 +214,46 @@ def loop_table_condition(self, drop=False, debugging=False):
         start_time = time.time()
         
         self.df_res, \
-        cross_over, \
-        cross_under = get_point_index(self.df_res,
+        point_bool_long, \
+        point_bool_short = get_point_bool(self.df_res,
                                         row.point_mode,
                                         row.point_indicator,
                                         row.point_value,
-                                        row.interval,
-                                        return_bool=True)
+                                        row.interval)
+        self.sys_log.debug("point_bool_long[self.config.bank.complete_index] : {}".format(point_bool_long[self.config.bank.complete_index]))
+        self.sys_log.debug("point_bool_short[self.config.bank.complete_index] : {}".format(point_bool_short[self.config.bank.complete_index]))
+                
+                
+        if row.zone_indicator == 'NULL': 
+            zone_bool_long = point_bool_long
+            zone_bool_short = point_bool_short
+        else:   
+            self.df_res, \
+            zone_bool_long, \
+            zone_bool_short = get_zone_bool(self.df_res, 
+                                        row.zone_indicator,
+                                        row.zone_value, 
+                                        row.interval,)
+            self.sys_log.debug("zone_bool_long[self.config.bank.complete_index] : {}".format(zone_bool_long[self.config.bank.complete_index]))
+            self.sys_log.debug("zone_bool_short[self.config.bank.complete_index] : {}".format(zone_bool_short[self.config.bank.complete_index]))
+            
+        
+        cross_over = zone_bool_long * point_bool_long
+        cross_under = zone_bool_short * point_bool_short        
+        self.sys_log.debug("cross_over[self.config.bank.complete_index] : {}".format(cross_over[self.config.bank.complete_index]))
+        self.sys_log.debug("cross_under[self.config.bank.complete_index] : {}".format(cross_under[self.config.bank.complete_index]))
+        
         
         point_index_long = np.argwhere(cross_over).ravel() # input for get_price_arr
         point_index_short = np.argwhere(cross_under).ravel()   
+            
 
-        point_min_len = abs(self.config.trader_set.complete_index)
-        if len(cross_over) >= point_min_len and len(cross_under) >= point_min_len:
-            self.sys_log.debug("cross_over[self.config.trader_set.complete_index] : {}".format(cross_over[self.config.trader_set.complete_index]))
-            self.sys_log.debug("cross_under[self.config.trader_set.complete_index] : {}".format(cross_under[self.config.trader_set.complete_index]))
-    
-            if self.position == 'LONG':
-                if cross_over[self.config.trader_set.complete_index] or debugging:
-                    self.side_open = 'BUY'
-            else:
-                if cross_under[self.config.trader_set.complete_index] or debugging:
-                    self.side_open = 'SELL' 
+        if self.position == 'LONG':
+            if cross_over[self.config.bank.complete_index] or debugging:
+                self.side_open = 'BUY'
+        else:
+            if cross_under[self.config.bank.complete_index] or debugging:
+                self.side_open = 'SELL' 
                     
         self.sys_log.debug("LoopTableCondition : elasped time, set point : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")
@@ -268,10 +306,10 @@ def loop_table_condition(self, drop=False, debugging=False):
                     set_price_and_open_signal(self, env='BANK') # env select not to use adj_price_unit().       
                     
                     RRratio_adj_fee_category = self.df_res['RRratio_adj_fee_category'].to_numpy()            
-                    self.sys_log.debug("RRratio_adj_fee_category[self.config.trader_set.complete_index] : {}".format(RRratio_adj_fee_category[self.config.trader_set.complete_index]))
-                    self.sys_log.debug("self.zone_value.split(';') : {}".format(self.zone_value.split(';')))
+                    self.sys_log.debug("RRratio_adj_fee_category[self.config.bank.complete_index] : {}".format(RRratio_adj_fee_category[self.config.bank.complete_index]))
+                    self.sys_log.debug("self.RRratio.split(';') : {}".format(self.RRratio.split(';')))
                     
-                    if not (RRratio_adj_fee_category[self.config.trader_set.complete_index] in self.zone_value.split(';') or debugging):
+                    if not (RRratio_adj_fee_category[self.config.bank.complete_index] in self.RRratio.split(';') or debugging):
                         self.side_open = np.nan                      
                 else:
                     self.side_open = np.nan  
@@ -281,23 +319,12 @@ def loop_table_condition(self, drop=False, debugging=False):
             except Exception as e:
                 msg = "error in get_priceBox, get_price_arr : {}".format(e)
                 self.sys_log.error(msg)
-                # self.push_msg(msg)
-                continue 
+                self.push_msg(msg)
+                # continue 
                 
             self.sys_log.debug("LoopTableCondition : elasped time, get_priceBox, get_price_arr : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")
-    
-    
             
-            # # set zone (4)
-            #     # RRratio phase should be after set_price_and_open_signal.
-            # self.sys_log.debug("------------------------------------------------")
-            # start_time = time.time()
-            
-            # self.sys_log.debug("LoopTableCondition : elasped time, set zone : %.4fs" % (time.time() - start_time)) 
-            # self.sys_log.debug("------------------------------------------------")
-    
-
             
             if not pd.isnull(self.side_open): # default = np.nan
     
@@ -320,12 +347,9 @@ def loop_table_condition(self, drop=False, debugging=False):
             # check df_res integrity.
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()            
-        
-        # self.path_df_res = "{}\\{}.ftr".format(self.path_dir_df_res, self.symbol)
-        # self.df_res.reset_index(drop=False).to_feather(self.path_df_res , compression='lz4')        
+            
         self.path_df_res = "{}\\{}.csv".format(self.path_dir_df_res, self.symbol)
-        self.df_res.to_csv(self.path_df_res, index=False)
-
+        self.df_res.to_csv(self.path_df_res, index=True) # leave datetime index.
         
         self.sys_log.debug("LoopTableCondition : elasped time, save df_res : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")
@@ -350,7 +374,7 @@ def loop_table_condition(self, drop=False, debugging=False):
     
     self.sys_log.debug("LoopTableCondition : elasped time, replace_table (send=True)  : %.4fs" % (time.time() - start_time)) 
     self.sys_log.debug("------------------------------------------------")
-     
+  
 
 def init_table_trade(self, ):
 
@@ -467,8 +491,8 @@ def init_table_trade(self, ):
                                        self.symbol, 
                                        self.price_entry, 
                                        self.price_stop_loss, 
-                                       self.config.trader_set.fee_market,
-                                       self.config.trader_set.fee_market)
+                                       self.config.broker.fee_market,
+                                       self.config.broker.fee_market)
     # self.get_leverage(self)
     
     self.sys_log.debug("InitTableTrade : elasped time, get_leverage : %.4fs" % (time.time() - start_time)) 
@@ -594,12 +618,12 @@ def init_table_trade(self, ):
     start_time = time.time()
     
     self.db_manager.replace_table(self.table_account, self.table_account_name, send=True)
-    self.db_manager.replace_table(self.table_trade, self.table_trade_name, send=True)
+    self.db_manager.replace_table(self.table_trade, self.table_trade_name, send=True, mode=['UPDATE', 'DELETE'])
     
     self.sys_log.debug("InitTableTrade : elasped time, replace_table (send=True)  : %.4fs" % (time.time() - start_time)) 
     self.sys_log.debug("------------------------------------------------")
     
-    
+
 def loop_table_trade(self, ):
     """
     Changelog:
@@ -633,21 +657,21 @@ def loop_table_trade(self, ):
         - Integrated DBMS
         - Separated send/server logic
         - Applied dynamic api_count adjustment (+8)
-
     v1.1.4
         - Incorporated TokenBucket functionality
-
     v1.1.5
         - Internalized TokenBucket logic
         - Set Bank show_header=True by default
     v1.1.6
         - update 
             db_manager.
+            save income / profit_acc on json.
         - modify
             return used margin into account.
             add balance_origin
+            table_log reset_index for 'id' pkey.
 
-    Last confirmed: 2024-07-22 17:25
+    Last confirmed: 2024-07-27 10:46
     """
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().
@@ -752,9 +776,9 @@ def loop_table_trade(self, ):
                     self.sys_log.debug("------------------------------------------------")
                     start_time = time.time()
                     
-                    # logging : transfer rows to Table - log.        
-                    self.table_log = pd.concat([self.table_log, self.table_trade.loc[[idx]]]) # list input persist dataframe oubalance_availableut.
-                    self.table_log.reset_index(drop=True, inplace=True) # for indexing row by 'loc'    
+                    # logging : transfer rows to Table - log.                    
+                    self.table_log = self.table_log.append(self.table_trade.loc[[idx]], ignore_index=True) # Append the new row to table_log
+                    self.table_log['id'] = self.table_log.index + 1 # Update 'id' column to be the new index + 1
                     self.db_manager.replace_table(self.table_log, self.table_log_name)
                     
                     self.sys_log.debug("LoopTableTrade : elasped time, replace_table : %.4fs" % (time.time() - start_time)) 
@@ -960,6 +984,12 @@ def loop_table_trade(self, ):
             self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += self.income
             self.table_account.loc[self.table_account['account'] == row.account, 'balance_origin'] += self.income
             
+            self.config.bank.income_accumulated = self.income_accumulated
+            self.config.bank.profit_accumulated = self.profit_accumulated
+            
+            with open(self.path_config, 'w') as f:
+                json.dump(self.config, f, indent=2)
+            
             self.sys_log.debug("LoopTableTrade : elasped time, get_income_info : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")  
             # display(self.table_trade)
@@ -970,7 +1000,7 @@ def loop_table_trade(self, ):
         start_time = time.time()
         
         self.db_manager.replace_table(self.table_account, self.table_account_name)
-        self.db_manager.replace_table(self.table_trade, self.table_trade_name)
+        self.db_manager.replace_table(self.table_trade, self.table_trade_name, mode=['UPDATE', 'DELETE'])
         
         self.sys_log.debug("LoopTableTrade : elasped time, replace_table : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")  
@@ -984,7 +1014,7 @@ def loop_table_trade(self, ):
     start_time = time.time()
     
     self.db_manager.replace_table(self.table_account, self.table_account_name, send=True)
-    self.db_manager.replace_table(self.table_trade, self.table_trade_name, send=True)
+    self.db_manager.replace_table(self.table_trade, self.table_trade_name, send=True, mode=['UPDATE', 'DELETE'])
     self.db_manager.replace_table(self.table_log, self.table_log_name, send=True)
     
     self.sys_log.debug("LoopTableTrade : elasped time, replace_table (send=True) : %.4fs" % (time.time() - start_time)) 

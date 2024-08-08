@@ -27,6 +27,8 @@ from datetime import datetime
 import hashlib
 from psycopg2 import sql
 from psycopg2.pool import SimpleConnectionPool
+from psycopg2.extras import execute_values
+
 
 import pickle
 import logging
@@ -49,10 +51,18 @@ pd.set_option('display.max_columns', 100)
 
 class DatabaseManager:
     """
-    v0.1
-        init.
+    v0.1 - Init.
+    v0.1.1 - update replace_table.      
+    v0.2
+        - add
+            IDEP monitor methodd. 
+            insert_table
+            fetch_trade_result
+         - update
+            replace_table v1.3.1
+            fetch_table_result v0.2
     
-    last confirmed at, 20240715 2306.
+    Last confirmed: 2024-07-28 23:07
     """
     def __init__(self, dbname, user, password, host, port):
         self.pool = SimpleConnectionPool(1,   # min thread
@@ -62,7 +72,152 @@ class DatabaseManager:
                                          password=password,
                                          host=host, 
                                          port=port)
-        self.file_hashes = {}
+        self.file_hashes = {}        
+        
+    def insert_table(self, schema, table_name, df, conflict_columns):
+        """
+        Generalized function: Insert DataFrame into table
+            use for table_result, df_res.
+        """
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                # Convert each row of the DataFrame to a tuple
+                values = [tuple(row) for row in df.itertuples(index=False, name=None)]
+                
+                # Safely format column names
+                columns = [sql.Identifier(col) for col in df.columns]
+                
+                # Construct query
+                query = sql.SQL("""
+                    INSERT INTO {}.{} ({})
+                    VALUES %s
+                    ON CONFLICT ({}) DO NOTHING
+                """).format(
+                    sql.Identifier(schema),
+                    sql.Identifier(table_name),
+                    sql.SQL(', ').join(columns),
+                    sql.SQL(', ').join(map(sql.Identifier, conflict_columns))
+                )
+                
+                # Use execute_values to insert multiple rows
+                execute_values(cur, query, values)
+                conn.commit()
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"Error occurred: {e}")
+        finally:
+            self.pool.putconn(conn)      
+                  
+    def fetch_trade_result(self, table_name, config):
+        """
+        v0.2
+        
+        Last confirmed: 2024-07-28 23:02.
+        """
+        
+        conn = self.pool.getconn()
+        try:
+            cursor = conn.cursor()
+            query = sql.SQL("""
+                SELECT * FROM {table_name}
+                WHERE "priceBox_indicator" = {priceBox_indicator}
+                    AND "priceBox_value" = {priceBox_value}
+                    AND "point_mode" = {point_mode}
+                    AND "point_indicator" = {point_indicator}
+                    AND "point_value" = {point_value}
+                    AND ("zone_indicator" IS NULL OR "zone_indicator" = {zone_indicator})
+                    AND "zone_value" = {zone_value}
+                    AND "interval" = {interval}
+            """).format(
+                table_name=sql.Identifier(table_name),
+                priceBox_indicator=sql.Literal(config['priceBox_indicator']),
+                priceBox_value=sql.Literal(config['priceBox_value']),
+                point_mode=sql.Literal(config['point_mode']),
+                point_indicator=sql.Literal(config['point_indicator']),
+                point_value=sql.Literal(config['point_value']),
+                zone_indicator=sql.Literal(config['zone_indicator']) if config['zone_indicator'] is not None else sql.SQL('NULL'),
+                zone_value=sql.Literal(config['zone_value']),
+                interval=sql.Literal(config['interval'])
+            )
+            
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+            if rows:
+                columns = [desc[0] for desc in cursor.description]
+                result_df = pd.DataFrame(rows, columns=columns)
+            else:
+                result_df = pd.DataFrame()
+
+            cursor.close()
+            return result_df
+        except Exception as e:
+            print(f"Error: {e}")
+            return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)  
+             
+    def distinct_symbol_from_table(self, schema, table_name):
+        
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                
+                cur.execute(sql.SQL("""
+                    SELECT DISTINCT symbol FROM {}.{}
+                """).format(
+                    sql.Identifier(schema), 
+                    sql.Identifier(table_name)
+                ))
+                
+                result = cur.fetchall()
+                unique_symbols = [row[0] for row in result]
+                return unique_symbols
+        except Exception as e:
+            print(f"Error get_symbol_from_table {table_name}: {e}")
+            return []
+        finally:
+            self.pool.putconn(conn)
+    
+    def fetch_df_res(self, schema, table_name, symbol, limit=None):
+        """
+        v0.1
+            315 ms ± 4.23 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
+            - add
+                order by.
+                limit parameter to fetch limited rows.
+            - modify
+                fetch the last 'limit' rows from the sorted table.
+
+        Last confirmed: 2024-07-24 23:29
+        """
+        
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                query = sql.SQL("""
+                    SELECT * FROM (
+                        SELECT * FROM {}.{} WHERE symbol = {} ORDER BY timestamp DESC
+                        {}
+                    ) subquery ORDER BY timestamp
+                """).format(
+                    sql.Identifier(schema), 
+                    sql.Identifier(table_name), 
+                    sql.Literal(symbol),
+                    sql.SQL('LIMIT {}').format(sql.Literal(limit)) if limit is not None else sql.SQL('')
+                )
+                
+                cur.execute(query)
+                result = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                return pd.DataFrame(result, columns=columns).set_index('datetime')
+        except Exception as e:
+            print(f"Error fetching data from {table_name}: {e}")
+            return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)
 
     
     def calculate_file_hash(self, file_path):
@@ -73,21 +228,21 @@ class DatabaseManager:
             hasher.update(buf)
         return hasher.hexdigest()
 
-    def fetch_table(self, table_name, limit=None):
-    
+    def fetch_table(self, table_name, limit=None, primary_key='id'):
         """
-        v1.1
-            using engine, much faster.
-        v1.2
-            replace engine with psycopg2.
-    
-        last confirmed at, 20240713 2343.
+        v1.1 - using engine, much faster.
+        v1.2 - replace engine with psycopg2.
+        v1.2.1 - update using pkey for ordering.
+
+        Last confirmed: 2024-07-24 10:02
         """
         
         conn = self.pool.getconn()
         try:
             with conn.cursor() as cur:
                 query = f"SELECT * FROM {table_name}"
+                if primary_key:
+                    query += f" ORDER BY {primary_key}"
                 if limit:
                     query += f" LIMIT {limit}"
                 cur.execute(query)
@@ -99,91 +254,100 @@ class DatabaseManager:
             return pd.DataFrame()
         finally:
             self.pool.putconn(conn)
+            
+    def fill_missing_ids(self, df, id_column='id'):
+        # Find the maximum id value
+        max_id = df[id_column].max()
+        if pd.isna(max_id):
+            max_id = 0
+        else:
+            max_id = int(max_id)
 
-        
-    def replace_table(self, df, table_name, send=False):
-        
+        # Identify missing id values and fill them
+        missing_idx = df[df[id_column].isna() | (df[id_column] == 0)].index
+        df.loc[missing_idx, id_column] = range(max_id + 1, max_id + len(missing_idx) + 1)
+
+        return df     
+          
+    def replace_table(self, df, table_name, send=False, mode=['UPDATE'], primary_keys=['id'], batch_size=1000):
         """
         v1.1 using engine, much faster.
         v1.2 using temp_table, stay as consistent state.
         v1.2.1 modify to psycopg2, considering latency.
         v1.2.2 apply pool.
         v1.2.3 replace to truncate instead deletion.
+        v1.2.4 add scheduler.
+        v1.3 - modify to use update, not upload.
+            csv header = True.
+        v1.3.1 
+            - modify
+                to use execute_values
+            - fix 
+                issues with execute_values usage and delete handling
 
-        last confirmed at, 20240715 2010.
+        Last confirmed: 2024-07-26 10:43
         """
+        
+        df = self.fill_missing_ids(df)
+            
         temp_csv = f'{table_name}.csv'
-        df.to_csv(temp_csv, index=False, header=False)
+        df.to_csv(temp_csv, index=False, header=True)
 
-        if send:
-            # Check if the file has changed
+        if send:        
             new_hash = self.calculate_file_hash(temp_csv)
-            old_hash = self.file_hashes.get(temp_csv)
-
-            if new_hash == old_hash:
+            if self.file_hashes.get(temp_csv) == new_hash:
                 print("File has not changed. Skipping replace_table.")
                 return
 
-            # Update the hash
             self.file_hashes[temp_csv] = new_hash
 
-            conn = self.pool.getconn()
-            try:
-                with conn.cursor() as cur:
-                    # Fetch column names and data types from the existing table
-                    cur.execute(sql.SQL("""
-                        SELECT column_name, data_type
-                        FROM information_schema.columns
-                        WHERE table_name = %s
-                        ORDER BY ordinal_position
-                    """), [table_name])
+            existing_data = self.fetch_table(table_name)
 
-                    # Retrieve the results
-                    columns = cur.fetchall()
-                    column_names = [col[0] for col in columns]
+            to_delete = pd.DataFrame()
+            changes = pd.DataFrame()
+            
+            if 'DELETE' in mode:
+                to_delete = existing_data[~existing_data.apply(tuple, 1).isin(df.apply(tuple, 1))]
 
-                    # Truncate the table
-                    cur.execute(sql.SQL("TRUNCATE TABLE {}").format(sql.Identifier(table_name)))
-
-                    # Use COPY command to load data
-                    with open(temp_csv, 'r') as f:
-                        cur.copy_expert(sql.SQL("COPY {} ({}) FROM STDIN WITH CSV").format(
-                            sql.Identifier(table_name),
-                            sql.SQL(', ').join(map(sql.Identifier, column_names))
-                        ), f)
-
-                    # Commit changes
-                    conn.commit()
-            except Exception as e:
-                if conn:
+            if 'UPDATE' in mode:
+                changes = df[~df.apply(tuple, 1).isin(existing_data.apply(tuple, 1))]
+            
+            if not to_delete.empty or not changes.empty:
+                conn = self.pool.getconn()
+                try:
+                    with conn.cursor() as cur:
+                        if not to_delete.empty:
+                            # Handle deletions
+                            primary_keys_str = ' AND '.join([f'"{col}" = %s' for col in primary_keys])
+                            delete_stmt = f"DELETE FROM {table_name} WHERE {primary_keys_str}"
+                            cur.executemany(delete_stmt, [tuple(row[pk] for pk in primary_keys) for _, row in to_delete.iterrows()])
+                        
+                        if not changes.empty:
+                            # Handle insertions/updates
+                            columns = [sql.Identifier(col) for col in df.columns]
+                            values = [tuple(row) for row in changes.itertuples(index=False, name=None)]
+                            primary_keys_str = sql.SQL(', ').join(map(sql.Identifier, primary_keys))
+                            on_conflict = sql.SQL(', ').join([sql.SQL(f'"{col}" = EXCLUDED."{col}"') for col in df.columns if col not in primary_keys])
+                            insert_stmt = sql.SQL("""
+                                INSERT INTO {} ({})
+                                VALUES %s
+                                ON CONFLICT ({}) DO UPDATE SET {}
+                            """).format(
+                                sql.Identifier(table_name),
+                                sql.SQL(', ').join(columns),
+                                primary_keys_str,
+                                on_conflict
+                            )
+                            for start in range(0, len(values), batch_size):
+                                execute_values(cur, insert_stmt, values[start:start + batch_size])
+                        conn.commit()
+                except Exception as e:
                     conn.rollback()
-                print(f"Error occurred in replace_table: {e}")
-            finally:
-                # Release the connection back to the pool
-                self.pool.putconn(conn)
+                    print(f"Error occurred: {e}")
+                finally:
+                    self.pool.putconn(conn)
 
-    
-    def insert_dataframe_to_schema_table(self, df, schema, table_name):
-        conn = self.pool.getconn()
-        try:
-            with conn.cursor() as cur:
-                for i, row in df.iterrows():
-                    try:
-                        cur.execute(sql.SQL("""
-                            INSERT INTO {}.{} (open, high, low, close, volume, symbol, datetime, timestamp)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (symbol, datetime) DO NOTHING
-                        """).format(sql.Identifier(schema), sql.Identifier(table_name)),
-                        (row['open'], row['high'], row['low'], row['close'], row['volume'], row['symbol'], row['datetime'], row['timestamp']))
-                    except Exception as e:
-                        print(f"Error occurred while inserting row: {e}")
-                conn.commit()
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            print(f"Error occurred: {e}")
-        finally:
-            self.pool.putconn(conn)
+
 
 
 class TokenBucket:    
@@ -243,8 +407,15 @@ class Bank(UMFutures):
         using pool for sql.
     v0.3
         use DatabaseManager.
+    v0.3.1
+        - update
+            use while loop.
+            get_messenger_bot v3.1
+    v0.3.2
+        - update
+            use log_name.            
 
-    last confirmed at, 20240714 2344.    
+    Last confirmed at, 2024-08-06 18:01. 
     """
     
     def __init__(self, **kwargs):
@@ -258,7 +429,7 @@ class Bank(UMFutures):
         
         
         self.path_save_log = kwargs['path_save_log']
-        self.set_logger()
+        self.set_logger(kwargs['log_name'])
         
         self.path_config = kwargs['path_config']
         with open(self.path_config, 'r') as f:
@@ -299,17 +470,17 @@ class Bank(UMFutures):
         # add messegner
         self.chat_id = kwargs['chat_id']
         self.token = kwargs['token'] # "7156517117:AAF_Qsz3pPTHSHWY-ZKb8LSKP6RyHSMTupo"        
-        self.msg_bot = None # default.
+        # self.msg_bot = None # default.
         self.get_messenger_bot()
 
         
         # income
         self.income = 0.0
-        self.income_accumulated = self.config.trader_set.income_accumulated
+        self.income_accumulated = self.config.bank.income_accumulated
         
         # profit
         self.profit = 0.0
-        self.profit_accumulated = self.config.trader_set.profit_accumulated
+        self.profit_accumulated = self.config.bank.profit_accumulated
         
         
         
@@ -356,17 +527,19 @@ class Bank(UMFutures):
         except Exception as e:
             pass
 
-    def set_logger(self,):
+    def set_logger(self, name='Bank'):
         
         """
         v1.0
             add RotatingFileHandler
         v1.1
-            modify sequence of code.
+        - modify
+            sequence of code.
+            add name param.
 
-        last confirmed at, 20240717 2243.
+        Last confirmed: 2024-08-06 17:57.
         """      
-        self.sys_log = logging.getLogger('Bank')  
+        self.sys_log = logging.getLogger(name)  
         self.sys_log.setLevel(logging.DEBUG)   
         
         simple_formatter = logging.Formatter("[%(name)s] %(message)s")
@@ -377,7 +550,7 @@ class Bank(UMFutures):
         console_handler.setLevel(logging.DEBUG)
     
         # file_handler = logging.FileHandler(self.path_save_log)
-        file_handler = logging.handlers.RotatingFileHandler(self.path_save_log, maxBytes=10 * 1000 * 1000, backupCount=10)
+        file_handler = logging.handlers.RotatingFileHandler(self.path_save_log, maxBytes=100 * 1000 * 1000, backupCount=24)
         file_handler.setFormatter(complex_formatter)
         file_handler.setLevel(logging.DEBUG)  
     
@@ -391,17 +564,24 @@ class Bank(UMFutures):
     def echo(self, update, context):    
         self.user_text = update.message.text
 
-    def get_messenger_bot(self, ):
-        
+    def get_messenger_bot(self):
+
         """
         v2.0
             use token from self directly.
         v3.0
             remove self.msg_bot exist condition.
-    
-        last confirmed at, 20240528 1257.
-        """        
-            
+        v3.1
+            add check to prevent re-initialization if self.msg_bot is already assigned.
+
+        Last confirmed: 2024-07-24 14:00
+        """
+        
+        # Check if msg_bot is already assigned
+        if hasattr(self, 'msg_bot') and self.msg_bot is not None:
+            self.sys_log.debug("msg_bot is already assigned.")
+            return
+        
         # init
         self.msg_bot = telegram.Bot(token=self.token)    
         self.user_text = None # messenger buffer.
@@ -416,8 +596,10 @@ class Bank(UMFutures):
         # start_polling.
         self.updater.start_polling()
         
-        self.sys_log.debug("msg_bot {} assigned.".format(self.token))
-    
+        msg = f"msg_bot {self.token} assigned."
+        self.sys_log.debug(msg)
+        self.push_msg(msg)
+        
     def push_msg(self, msg):    
         
         """
@@ -434,106 +616,115 @@ class Bank(UMFutures):
 
             
     def set_leverage(self,
-                 symbol,
-                 leverage):
+                    symbol,
+                    leverage):
         
         """
         v2.0
             vivid mode.
-            
-            v2.1
-                add token.
-            v2.2
-                show_header=True.
+        v2.1
+            add token.
+        v2.2
+            show_header=True.
+        v2.3
+            while loop completion.
 
-        last confirmed at, 20240712 1041.
+        Last confirmed: 2024-07-21 22:49
         """
-
-        try:        
-            server_time = self.time()['data']['serverTime']
-            response = self.change_leverage(symbol=symbol, 
-                                leverage=leverage, 
-                                recvWindow=6000, 
-                                timestamp=server_time)        
-            
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
-            
-        except Exception as e:
-            msg = "error in change_initial_leverage : {}".format(e)
-            self.sys_log.error(msg)
-            self.push_msg(msg)
-        else:
-            self.sys_log.info('leverage changed to {}'.format(leverage))
-
-    def set_position_mode(self, 
-                        dualSidePosition='true'):    
         
+        while True:
+            try:        
+                server_time = self.time()['data']['serverTime']
+                response = self.change_leverage(symbol=symbol, 
+                                    leverage=leverage, 
+                                    recvWindow=6000, 
+                                    timestamp=server_time)        
+                
+                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+                self.token_bucket.wait_for_token_consume(tokens_used) 
+                
+                self.sys_log.info('leverage changed to {}'.format(leverage))
+                return
+                
+            except Exception as e:
+                msg = "error in change_initial_leverage : {}".format(e)
+                self.sys_log.error(msg)
+                self.push_msg(msg)
+                time.sleep(self.config.term.symbolic)
+
+
+    def set_position_mode(self, dualSidePosition='true'):
         """
         v1.0
             pass error -4059 -4046
         v2.0
             show_header=True. (token)
+        v2.1
+            get persistency
+        v2.2
+            while loop completion.
 
-        last confirmed at, 20240712 1038.
+        Last confirmed: 2024-07-21 22:49
         """
-
-        try:
-            server_time = self.time()['data']['serverTime']
-            response = self.change_position_mode(dualSidePosition=dualSidePosition,
-                                    recvWindow=2000,
-                                    timestamp=server_time)
-            
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
-            
-        except Exception as e:
-            if '-4059' in str(e): # 'No need to change position side.'
-                return
-            msg = "error in set_position_mode : {}".format(e)
-            self.sys_log.error(msg)
-            self.push_msg(msg)
-        else:
-            self.sys_log.info("dualSidePosition is true.")
-            
-    def set_margin_type(self, 
-                        symbol,
-                        marginType='CROSSED'): # CROSSED / ISOLATED
         
+        while True:
+            try:
+                server_time = self.time()['data']['serverTime']
+                response = self.change_position_mode(dualSidePosition=dualSidePosition,
+                                                    recvWindow=6000,
+                                                    timestamp=server_time)
+                
+                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+                self.token_bucket.wait_for_token_consume(tokens_used) 
+                
+                self.sys_log.info("dualSidePosition is true.")
+                return
+                
+            except Exception as e:
+                if '-4059' in str(e): # 'No need to change position side.'
+                    return
+                msg = "error in set_position_mode : {}".format(e)
+                self.sys_log.error(msg)
+                self.push_msg(msg)
+                time.sleep(self.config.term.symbolic)
+            
+    def set_margin_type(self, symbol, marginType='CROSSED'): # CROSSED / ISOLATED
         """
         v1.0
             pass error -4046
         v2.0
             vivid mode.
-            
-            v2.1
-                show_header=True.
+        v2.1
+            show_header=True.
+        v2.2
+            while loop completion.
 
-        last confirmed at, 20240712 1036.
+        Last confirmed: 2024-07-21 22:49
         """
-
-        # margin type => "cross or isolated"
-        try:            
-            server_time = self.time()['data']['serverTime']
-            response = self.change_margin_type(symbol=symbol, 
-                                    marginType=marginType, 
-                                    recvWindow=6000, 
-                                    timestamp=server_time)
-            
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
+        
+        while True:
+            try:            
+                server_time = self.time()['data']['serverTime']
+                response = self.change_margin_type(symbol=symbol, 
+                                                marginType=marginType, 
+                                                recvWindow=6000, 
+                                                timestamp=server_time)
                 
-        except Exception as e:
-            if '-4046' in str(e): # 'No need to change margin type.'
+                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+                self.token_bucket.wait_for_token_consume(tokens_used) 
+                
+                self.sys_log.info("margin type is {} now.".format(marginType))
                 return
-            msg = "error in set_margin_type : {}".format(e)
-            self.sys_log.error(msg)
-            self.push_msg(msg)
-        else:
-            self.sys_log.info("margin type is {} now.".format(marginType))
-         
-            
+                
+            except Exception as e:
+                if '-4046' in str(e): # 'No need to change margin type.'
+                    return
+                msg = "error in set_margin_type : {}".format(e)
+                self.sys_log.error(msg)
+                self.push_msg(msg)
+                time.sleep(self.config.term.symbolic)
        
+            
             
 def get_tickers(self, ):
     
@@ -656,7 +847,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                         
                         msg = f"warning in get_df_new : time_gap {time_gap}"
                         self.sys_log.warning(msg)
-                        self.push_msg(msg)
+                        # self.push_msg(msg)
                         time.sleep(self.config.term.df_new)
                         
                         break
@@ -853,8 +1044,8 @@ def get_reward_risk_ratio(self, unit_RRratio_adj_fee=np.arange(0, 2, 0.1)):
     last confirmed at, 20240610 1552.
     """
 
-    fee_entry = self.config.trader_set.fee_market # can be replaced later.
-    fee_exit = self.config.trader_set.fee_market
+    fee_entry = self.config.broker.fee_market # can be replaced later.
+    fee_exit = self.config.broker.fee_market
     
     self.df_res['RRratio'] = abs(self.price_take_profit - self.price_entry) / abs(self.price_entry - self.price_stop_loss)
     self.df_res['RRratio_adj_fee'] = (abs(self.price_take_profit - self.price_entry) - (self.price_entry * fee_entry + self.price_take_profit * fee_exit)) / (abs(self.price_entry - self.price_stop_loss) + (self.price_entry * fee_entry + self.price_stop_loss * fee_exit))
@@ -946,26 +1137,30 @@ def get_balance_available(self,
         time.sleep(self.config.term.balance)
         
         
-        
 def get_account_normality(self, 
                          account,
                          ):
 
     """
-    v1.0 - modify
+    v1.0 
+    - modify
         derived after get_balance_info v2.0
         modify to vivid mode.
             compare margin & TableAccount.
             Class mode remain, cause we are using core (public) object.
                 like sys_log, tables, etc...
-    v1.1 - update
+    v1.1
+    - update
         func1 : check account balance sum normality
         func2 : account normality
         return balance.
-    v1.1.1 - modify
-        return balance_origin.        
+    v1.1.1
+    - modify
+        return balance_origin.     
+        not allow account = None
+           
 
-    Last confirmed: 2024-07-22 17:15
+    Last confirmed: 2024-07-27 22:42
     """
 
     # init.
@@ -984,31 +1179,31 @@ def get_account_normality(self,
     self.sys_log.info('balance_available : {:.2f}'.format(balance_available))
     
     # 1. reject balance_account_total over.
-    if balance_available <= balance_account_total:
-        msg = "over balance : balance_available {:.2f} <= balance_account_total {:.2f}".format(balance_available, balance_account_total)
+    if balance_available < balance_account_total:
+        msg = "over balance : balance_available {:.2f} < balance_account_total {:.2f}".format(balance_available, balance_account_total)
         self.sys_log.warning(msg)
         self.push_msg(msg)
         consistency = False
     
     # get a row by account.
-    table_account_row = self.table_account[self.table_account['account'] == account]
-    self.sys_log.debug("table_account_row : \n{}".format(table_account_row))
+    if account: # is not None.
+        table_account_row = self.table_account[self.table_account['account'] == account]
+        self.sys_log.debug("table_account_row : \n{}".format(table_account_row))
 
-    # 2. account selection
-        # 3. check margin available
-        # 4. check min margin
-    if not table_account_row.empty:        
-        balance = table_account_row.balance.values[0]     
-        balance_origin = table_account_row.balance_origin.values[0]       
-    else:
-        msg = f"table_account_row {account} is empty."
-        self.sys_log.warning(msg)
-        self.push_msg(msg)
-        consistency = False
+        # 2. account selection
+            # 3. check margin available
+            # 4. check min margin
+        if not table_account_row.empty:        
+            balance = table_account_row.balance.values[0]     
+            balance_origin = table_account_row.balance_origin.values[0]       
+        else:
+            msg = f"table_account_row {account} is empty."
+            self.sys_log.warning(msg)
+            self.push_msg(msg)
+            consistency = False
 
     return consistency, balance, balance_origin
-            
-                  
+         
        
 
 def get_precision(self, symbol):
@@ -1580,7 +1775,7 @@ def get_income_info(self,
     
     table_log = table_log.astype({'cumQuote' : 'float'})
     table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
-    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.trader_set.fee_limit, self.config.trader_set.fee_market)
+    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.broker.fee_limit, self.config.broker.fee_market)
     table_log_valid['fee'] = table_log_valid.cumQuote * table_log_valid.fee_ratio
     
     # if PARTIALLY_FILLED & FILLED exist both, use FILLED only.
