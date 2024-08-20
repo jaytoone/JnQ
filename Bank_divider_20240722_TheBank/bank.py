@@ -350,52 +350,44 @@ class DatabaseManager:
 
 
 
-class TokenBucket:    
-    
+class TokenBucket:
     """
     v0.1
         follow up server's api used-weight (tokens_used).
-
-    last confirmed at, 20240714 2343.    
+    v0.2
+        - update
+            simplify.
+   
+    Last confirmed at, 2024-08-20 18:31. 
     """
-    
+
     def __init__(self, sys_log, capacity):
-        self.capacity = capacity  # Maximum number of tokens the bucket can hold
-        self.tokens = capacity
+        self.capacity = capacity  # Maximum number of tokens the bucket can handle per minute
+        self.tokens_used = 0
         self.lock = threading.Lock()
         self.sys_log = sys_log
-        # self.get_used_weight = get_used_weight # this func. require another api_wegiht...
         self.last_refill_time = time.time()
-        
+            
     def refill(self):
         now = time.time()
         # Calculate the number of minutes that have passed since the last refill
         minutes_passed = (now - self.last_refill_time) // 60
         if minutes_passed >= 1:
-            self.tokens = self.capacity
             self.tokens_used = 0
             self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
 
-
-    def consume(self, tokens_used, tokens):
-        with self.lock: 
-            self.tokens_used = tokens_used            
-            self.refill()
+    def consume(self, tokens_used, tokens_needed):
+        with self.lock:     
+            self.tokens_used = tokens_used    
+            self.refill()   
             
-            self.tokens = self.capacity - self.tokens_used
-            self.sys_log.debug(f"tokens : {self.tokens}")
-            # self.sys_log.debug(f"tokens_used : {self.tokens_used}")
-            
-            if self.tokens >= tokens: # enough to use.
-                return True
-            return False
+            tokens = self.capacity - self.tokens_used
+            self.sys_log.debug(f"tokens : {tokens}")
+            return tokens >= tokens_needed
 
-    def wait_for_token_consume(self, tokens_used, tokens=10):
-        
-        wait_time = 1
-        while not self.consume(tokens_used, tokens): # set maximium weight that can be consumed.
-            time.sleep(wait_time)
-            # wait_time = min(wait_time * 2, 60)  # Max wait time of 60 seconds # convert to static.
+    def wait_for_token_consume(self, tokens_used, tokens_needed=10 * 2): # we need at least 10 * 2 remain tokens, cause this func. place after API func.
+        while not self.consume(tokens_used, tokens_needed):
+            time.sleep(1)
 
 
 class Bank(UMFutures):
@@ -1355,8 +1347,11 @@ def get_order_info(self, symbol, orderId):
         recvWindow has been changed to 6000. (preventing 'Timestamp for this request is outside of the recvWindow' error)
     v2.3
         while loop completion.
+    v2.3.1
+        - update
+            add exception for Token error.
 
-    Last confirmed: 2024-07-21 22:49
+    Last confirmed: 2024-08-20 18:49.
     """
  
     while True:
@@ -1376,8 +1371,12 @@ def get_order_info(self, symbol, orderId):
             msg = f"error in get_order_info : {e}"
             self.sys_log.error(msg)
             self.push_msg(msg)
-            time.sleep(self.config.term.order_info)   
-        
+            
+            if '-1003' in str(e): # Token error.
+                self.token_bucket.wait_for_token_consume(tokens_used, 50) # enough to wait token feeled.
+            else:
+                time.sleep(self.config.term.order_info)    
+
 
 def get_price_realtime(self, symbol):
     
@@ -1753,8 +1752,7 @@ def get_income_info(self,
                     leverage,
                     income_accumulated,
                     profit_accumulated,
-                    mode="PROD", 
-                    currency="USDT"):    
+                    currency="USDT"):
 
     """
     v2.0
@@ -1765,17 +1763,20 @@ def get_income_info(self,
         select cumQuote by order_way.
         modify using last row : PARTIALLY_FILLED & FILLED exist both, use FILLED only.
     v4.0
-        vivid input / output
-        
-        v4.1
-            push_msg included to Bank.
+        vivid input / output        
+    v4.1
+        - modify
+            push_msg integrated to Bank. 
+    v4.1.1
+        - update
+            remove mode from this func.
 
-    last confimred at, 20240702 1353.    
+    Last confimred: 2024-08-20 18:11
     """
-    
+
     table_log = table_log.astype({'cumQuote' : 'float'})
     table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
-    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.broker.fee_limit, self.config.broker.fee_market)
+    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.trader_set.fee_limit, self.config.trader_set.fee_market)
     table_log_valid['fee'] = table_log_valid.cumQuote * table_log_valid.fee_ratio
     
     # if PARTIALLY_FILLED & FILLED exist both, use FILLED only.
@@ -1815,18 +1816,6 @@ def get_income_info(self,
         profit = income / cumQuote_open * leverage
     profit_accumulated += profit
     self.sys_log.info("profit : {:.4f}".format(profit))
-
-
-    # set to outer scope using output vars. later.
-    # if self.config.trader_set.profit_mode == "PROD":
-    #     # add your income.
-    #     balance_available += income
-        
-    #     # update config.
-    #     self.config.trader_set.initial_asset = balance_available
-
-    #     with open(self.path_config, 'w') as cfg:
-    #         json.dump(self.config, cfg, indent=2)   
     
             
     msg = ("cumQuote_open : {:.4f}\n" + 
@@ -1849,7 +1838,6 @@ def get_income_info(self,
     self.push_msg(msg)
 
     return income, income_accumulated, profit, profit_accumulated
-
 
 
     

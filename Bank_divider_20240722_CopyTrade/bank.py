@@ -390,7 +390,7 @@ class TokenBucket:
                 return True
             return False
 
-    def wait_for_token_consume(self, tokens_used, tokens=10):
+    def wait_for_token_consume(self, tokens_used, tokens=10 * 2): # we need at least 10 * 2 remain tokens, cause this func. place after API func.
         
         wait_time = 1
         while not self.consume(tokens_used, tokens): # set maximium weight that can be consumed.
@@ -411,9 +411,11 @@ class Bank(UMFutures):
         - update
             use while loop.
             get_messenger_bot v3.1
-            
+    v0.3.2
+        - update
+            use log_name.            
 
-    Last confirmed at, 2024-07-24 14:20. 
+    Last confirmed at, 2024-08-06 18:01. 
     """
     
     def __init__(self, **kwargs):
@@ -427,7 +429,7 @@ class Bank(UMFutures):
         
         
         self.path_save_log = kwargs['path_save_log']
-        self.set_logger()
+        self.set_logger(kwargs['log_name'])
         
         self.path_config = kwargs['path_config']
         with open(self.path_config, 'r') as f:
@@ -525,17 +527,19 @@ class Bank(UMFutures):
         except Exception as e:
             pass
 
-    def set_logger(self,):
+    def set_logger(self, name='Bank'):
         
         """
         v1.0
             add RotatingFileHandler
         v1.1
-            modify sequence of code.
+        - modify
+            sequence of code.
+            add name param.
 
-        last confirmed at, 20240717 2243.
+        Last confirmed: 2024-08-06 17:57.
         """      
-        self.sys_log = logging.getLogger('Bank')  
+        self.sys_log = logging.getLogger(name)  
         self.sys_log.setLevel(logging.DEBUG)   
         
         simple_formatter = logging.Formatter("[%(name)s] %(message)s")
@@ -721,7 +725,6 @@ class Bank(UMFutures):
                 time.sleep(self.config.term.symbolic)
        
             
-       
             
 def get_tickers(self, ):
     

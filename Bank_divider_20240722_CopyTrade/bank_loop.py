@@ -378,9 +378,7 @@ def loop_table_condition(self, drop=False, debugging=False):
 
 def init_table_trade(self, ):
 
-    """
-    Changelog:
-    
+    """    
     v1.0
         rm OrderSide, PositionSide.
     v2.0
@@ -400,12 +398,17 @@ def init_table_trade(self, ):
         move TokenBucket to function internal.
     v2.3.2
         use db_manger.
-    v2.3.3 - replace
+    v2.3.3 
+        - replace
             margin_consistency to account_normality.
-    v2.3.4 - modify
+    v2.3.4 
+        - modify
             divide balance into balance_origin (margin unconsidered.)
+    v2.3.5
+        - modify
+            config info.
     
-    Last confirmed: 2024-07-22 17:07
+    Last confirmed: 2024-08-18 09:23
     """
            
     # init.
@@ -553,7 +556,7 @@ def init_table_trade(self, ):
             self.sys_log.debug("------------------------------------------------")
             start_time = time.time()  
             
-            if not self.config.trader_set.backtrade:
+            if not self.config.bank.backtrade:
                                 
                 self.set_leverage(self.symbol,
                                 self.leverage)      
@@ -663,15 +666,18 @@ def loop_table_trade(self, ):
         - Internalized TokenBucket logic
         - Set Bank show_header=True by default
     v1.1.6
-        - update 
-            db_manager.
-            save income / profit_acc on json.
-        - modify
-            return used margin into account.
-            add balance_origin
-            table_log reset_index for 'id' pkey.
+    - update 
+        db_manager.
+        save income / profit_acc on json.
+    - modify
+        return used margin into account.
+        add balance_origin
+        table_log reset_index for 'id' pkey.
+    v1.1.7
+    - modify
+        margin return to balance.
 
-    Last confirmed: 2024-07-27 10:46
+    Last confirmed: 2024-08-15 22:07
     """
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().
@@ -715,9 +721,7 @@ def loop_table_trade(self, ):
 
             if self.symbol not in self.price_market.keys(): # only once.
                 
-                self.websocket_client.agg_trade(symbol=self.symbol, 
-                                                id=1, 
-                                                callback=self.agg_trade_message_handler)
+                self.websocket_client.agg_trade(symbol=self.symbol, id=1, callback=self.agg_trade_message_handler)
                 self.set_position_mode(dualSidePosition='true')
                 self.set_margin_type(symbol=self.symbol)
             
@@ -788,7 +792,7 @@ def loop_table_trade(self, ):
                 
                 # set order, order_way (CLOSE)
                 if row.order_way == 'OPEN':         
-                    if (abs(float(self.order_info['executedQty']) / float(self.order_info['origQty'])) >= self.config.trader_set.quantity_open_exec_ratio) or self.order_info['status'] == 'FILLED':           
+                    if (abs(float(self.order_info['executedQty']) / float(self.order_info['origQty'])) >= self.config.bank.quantity_open_exec_ratio) or self.order_info['status'] == 'FILLED':           
                         
                         self.sys_log.debug("------------------------------------------------")
                         start_time = time.time()
@@ -853,7 +857,7 @@ def loop_table_trade(self, ):
             
         
         # order_limit
-        if not self.config.trader_set.backtrade and not self.order_motion:
+        if not self.config.bank.backtrade and not self.order_motion:
 
            # reflect updated row.
            if self.table_trade.at[idx, 'order'] == 1:
@@ -906,8 +910,9 @@ def loop_table_trade(self, ):
                 else:
                     self.table_trade.at[idx, 'remove_row'] = 1
                     
-                    if self.table_trade.at[idx, 'order_way'] == 'OPEN': # if open fail, deposit withdrew margin.
-                        self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += row.margin
+                    # return sequence duplicated with under 'remove_row' == 1 phase.
+                    # if self.table_trade.at[idx, 'order_way'] == 'OPEN': # if open fail, deposit withdrew margin.
+                    #     self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += row.margin
                     
                 self.sys_log.debug("LoopTableTrade : elasped time, order_limit : %.4fs" % (time.time() - start_time)) 
                 self.sys_log.debug("------------------------------------------------")

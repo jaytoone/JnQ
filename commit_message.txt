@@ -1,8 +1,12 @@
-JnQ - TheBank_v2.5
+JnQ - TheBank_v2.6.1
 
-- Enhance
-	Encapsulate API functions within while loop to ensure robustness.
-- Introduce 
-	Integrate push_msg into get_balance_available for improved communication.
-- Refactor
-	Update balance_origin logic for better accuracy.
+- modify
+	config format.
+	returnning margin into 'balance'.
+	------>	enough token but got error...
+	v	add error cover on exception phase.
+	v	is there zero api cost ? for checking token_used ?
+	v		not possible...
+- update
+	Sum prod on last code phase
+	get_income_info (v4.1.1)
