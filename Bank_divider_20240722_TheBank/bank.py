@@ -179,9 +179,9 @@ class DatabaseManager:
             print(f"Error get_symbol_from_table {table_name}: {e}")
             return []
         finally:
-            self.pool.putconn(conn)
-    
-    def fetch_df_res(self, schema, table_name, symbol, limit=None):
+            self.pool.putconn(conn)        
+
+    def fetch_df_res(self, schema, table_name, symbol, limit=None, datetime_after=None):
         """
         v0.1
             315 ms ± 4.23 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
@@ -190,22 +190,34 @@ class DatabaseManager:
                 limit parameter to fetch limited rows.
             - modify
                 fetch the last 'limit' rows from the sorted table.
+        v0.2
+            - update
+                Added datetime_after parameter to filter rows based on timestamp.
 
-        Last confirmed: 2024-07-24 23:29
+        Last confirmed: 2024-08-20 23:29
         """
         
         conn = self.pool.getconn()
         try:
             with conn.cursor() as cur:
+                # Build the WHERE clause
+                where_clause = sql.SQL("WHERE symbol = {}").format(sql.Literal(symbol))
+                
+                # Add timestamp condition if datetime_after is provided
+                if datetime_after is not None:
+                    # where_clause = where_clause + sql.SQL(" AND timestamp > {}").format(sql.Literal(datetime_after))
+                    where_clause = where_clause + sql.SQL(" AND datetime >= {}").format(sql.Literal(datetime_after))
+                
+                # Construct the full query
                 query = sql.SQL("""
                     SELECT * FROM (
-                        SELECT * FROM {}.{} WHERE symbol = {} ORDER BY timestamp DESC
+                        SELECT * FROM {}.{} {} ORDER BY timestamp DESC
                         {}
                     ) subquery ORDER BY timestamp
                 """).format(
                     sql.Identifier(schema), 
                     sql.Identifier(table_name), 
-                    sql.Literal(symbol),
+                    where_clause,
                     sql.SQL('LIMIT {}').format(sql.Literal(limit)) if limit is not None else sql.SQL('')
                 )
                 
@@ -348,8 +360,6 @@ class DatabaseManager:
                     self.pool.putconn(conn)
 
 
-
-
 class TokenBucket:
     """
     v0.1
@@ -357,35 +367,45 @@ class TokenBucket:
     v0.2
         - update
             simplify.
+    v0.3
+        - update
+            refill based on tokens_used reset.
+        - deprecate
+            we cannot know reset 'tokens_used' info.
    
     Last confirmed at, 2024-08-20 18:31. 
     """
 
-    def __init__(self, sys_log, capacity):
+    def __init__(self, sys_log, server_timer, capacity):
+        self.server_timer = server_timer
         self.capacity = capacity  # Maximum number of tokens the bucket can handle per minute
         self.tokens_used = 0
         self.lock = threading.Lock()
         self.sys_log = sys_log
-        self.last_refill_time = time.time()
-            
-    def refill(self):
-        now = time.time()
-        # Calculate the number of minutes that have passed since the last refill
-        minutes_passed = (now - self.last_refill_time) // 60
-        if minutes_passed >= 1:
+        self.last_tokens_used = 0
+        
+    def refill(self, tokens_used):
+        try:        
+            response = self.server_timer()
+            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+        except Exception as e:
+            self.sys_log.error(f"Error in TokenBucket.refill(): {e}")
+        
+        # Refill tokens if tokens_used is reset to 0
+        if self.tokens_used < self.last_tokens_used:
             self.tokens_used = 0
-            self.last_refill_time = now - (now % 60)  # Reset to the start of the current minute
+            
+        self.last_tokens_used = self.tokens_used
 
     def consume(self, tokens_used, tokens_needed):
-        with self.lock:     
-            self.tokens_used = tokens_used    
-            self.refill()   
+        with self.lock:
+            self.refill(tokens_used)            
             
             tokens = self.capacity - self.tokens_used
             self.sys_log.debug(f"tokens : {tokens}")
             return tokens >= tokens_needed
 
-    def wait_for_token_consume(self, tokens_used, tokens_needed=10 * 2): # we need at least 10 * 2 remain tokens, cause this func. place after API func.
+    def wait_for_token_consume(self, tokens_used, tokens_needed=10 * 2): 
         while not self.consume(tokens_used, tokens_needed):
             time.sleep(1)
 
@@ -405,9 +425,12 @@ class Bank(UMFutures):
             get_messenger_bot v3.1
     v0.3.2
         - update
-            use log_name.            
+            use log_name.   
+    v0.4 
+        - update
+            use TokenBucket v0.3
 
-    Last confirmed at, 2024-08-06 18:01. 
+    Last confirmed at, 2024-08-20 22:13. 
     """
     
     def __init__(self, **kwargs):
@@ -421,15 +444,16 @@ class Bank(UMFutures):
         
         
         self.path_save_log = kwargs['path_save_log']
-        self.set_logger(kwargs['log_name'])
+        self.set_logger(kwargs.get('log_name', None))
         
         self.path_config = kwargs['path_config']
         with open(self.path_config, 'r') as f:
             self.config = EasyDict(json.load(f))            
             
-
-        api_rate_limit = kwargs['api_rate_limit']
-        self.token_bucket = TokenBucket(sys_log=self.sys_log, capacity=api_rate_limit)
+            
+        self.token_bucket = TokenBucket(sys_log=self.sys_log,
+                                        server_timer=self.time,
+                                        capacity=kwargs['api_rate_limit'])
 
       
         # load_table 
@@ -715,13 +739,11 @@ class Bank(UMFutures):
                 self.sys_log.error(msg)
                 self.push_msg(msg)
                 time.sleep(self.config.term.symbolic)
-       
+     
             
-            
-def get_tickers(self, ):
-    
-    self.tickers_available = [info['symbol'] for info in self.exchange_info()['symbols']]
-      
+def get_tickers(self, ):  
+    return [info['symbol'] for info in self.exchange_info()['data']['symbols']]  
+  
     
 def get_streamer(self):
     
@@ -771,17 +793,23 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
             df_res = None to all return phase.
     v3.0 replace concat_candlestick to v2.0
     v3.1 replace to bank.concat_candlestick
-    v4.0 integrate concat_candlestick logic.
+    v4.0 
+        integrate concat_candlestick logic.
         modify return if df_list.
-    v4.1 - add
+    v4.1 
+        - add
             token info.
         - replace
             time.sleep, use term.df_new     
-    v4.2 - change
-        fetch 'df' in reverse chronological order and
-        sort 'sum_df' in ascending chronological order.
+    v4.2 
+        - modify
+            fetch 'df' in reverse chronological order and
+            sort 'sum_df' in ascending chronological order.
+        - update
+            add -1122 error.
+            return None only.
 
-    Last confirmed: 2024-07-22 12:53
+    Last confirmed: 2024-08-20 22:00
     """
 
     limit_kline = 1500
@@ -817,7 +845,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
                 if not response:
                     if df_list: # if df_list lose middle df, occur error.
-                        return None, ''
+                        return None
                     time.sleep(timesleep)
                     continue
 
@@ -839,7 +867,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                         
                         msg = f"warning in get_df_new : time_gap {time_gap}"
                         self.sys_log.warning(msg)
-                        # self.push_msg(msg)
+                        self.push_msg(msg)
                         time.sleep(self.config.term.df_new)
                         
                         break
@@ -847,8 +875,11 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
             except Exception as e:
                 msg = f"error in klines : {str(e)}"
                 self.sys_log.error(msg)
-                if 'sum_df' not in msg:
+                if '-1122' in msg:
                     self.push_msg(msg)
+                    return                    
+                elif 'sum_df' not in msg: # what type of this message ?
+                    self.push_msg(msg)                    
                 time.sleep(self.config.term.df_new)
                 
             else:
@@ -859,6 +890,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
             sum_df = pd.concat(df_list).sort_index()
 
             return sum_df[~sum_df.index.duplicated(keep='last')]
+
 
 
 
@@ -1373,10 +1405,9 @@ def get_order_info(self, symbol, orderId):
             self.push_msg(msg)
             
             if '-1003' in str(e): # Token error.
-                self.token_bucket.wait_for_token_consume(tokens_used, 50) # enough to wait token feeled.
+                self.token_bucket.wait_for_token_consume(self.token_bucket.tokens_used, 50) # enough to wait token feeled.
             else:
-                time.sleep(self.config.term.order_info)    
-
+                time.sleep(self.config.term.order_info)
 
 def get_price_realtime(self, symbol):
     
