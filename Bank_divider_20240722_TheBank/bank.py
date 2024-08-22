@@ -22,6 +22,7 @@ import threading
 
 import time
 from datetime import datetime
+import re
 
 
 import hashlib
@@ -372,8 +373,14 @@ class TokenBucket:
             refill based on tokens_used reset.
         - deprecate
             we cannot know reset 'tokens_used' info.
+    v0.3.1
+        - update
+            removed unnecessary tokens_used parameter from wait_for_token_consume.
+    v0.3.2
+        - update
+            divide try / exception on refill().
    
-    Last confirmed at, 2024-08-20 18:31. 
+    Last confirmed at, 2024-08-22
     """
 
     def __init__(self, sys_log, server_timer, capacity):
@@ -384,29 +391,40 @@ class TokenBucket:
         self.sys_log = sys_log
         self.last_tokens_used = 0
         
-    def refill(self, tokens_used):
+    def refill(self):
         try:        
             response = self.server_timer()
-            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))            
+            
+            # Refill tokens if tokens_used is reset to 0            
+                # unnecessary phase, if self.tokens_used is not updated,
+            if self.tokens_used < self.last_tokens_used:
+                self.tokens_used = 0
+                
         except Exception as e:
             self.sys_log.error(f"Error in TokenBucket.refill(): {e}")
-        
-        # Refill tokens if tokens_used is reset to 0
-        if self.tokens_used < self.last_tokens_used:
-            self.tokens_used = 0
             
-        self.last_tokens_used = self.tokens_used
+            error_message = str(e)        
+            # Use regular expressions to extract the 'x-mbx-used-weight-1m' value
+            match = re.search(r"'x-mbx-used-weight-1m':\s*'(\d+)'", error_message)
+            
+            if match:
+                self.tokens_used = int(match.group(1))
+            else:
+                self.sys_log.warning("Could not find the x-mbx-used-weight-1m value.")                        
+            
+        self.last_tokens_used = self.tokens_used # follow up udpated tokens_used.
 
-    def consume(self, tokens_used, tokens_needed):
+    def check(self, tokens_needed):
         with self.lock:
-            self.refill(tokens_used)            
+            self.refill()  # Fetch the latest tokens_used from the server
             
             tokens = self.capacity - self.tokens_used
             self.sys_log.debug(f"tokens : {tokens}")
             return tokens >= tokens_needed
 
-    def wait_for_token_consume(self, tokens_used, tokens_needed=10 * 2): 
-        while not self.consume(tokens_used, tokens_needed):
+    def wait_for_tokens(self, tokens_needed=20):  # minimum 20,
+        while not self.check(tokens_needed):
             time.sleep(1)
 
 
@@ -649,15 +667,14 @@ class Bank(UMFutures):
         """
         
         while True:
-            try:        
+            try:       
+                self.token_bucket.wait_for_tokens()
+                                
                 server_time = self.time()['data']['serverTime']
                 response = self.change_leverage(symbol=symbol, 
                                     leverage=leverage, 
                                     recvWindow=6000, 
-                                    timestamp=server_time)        
-                
-                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-                self.token_bucket.wait_for_token_consume(tokens_used) 
+                                    timestamp=server_time)  
                 
                 self.sys_log.info('leverage changed to {}'.format(leverage))
                 return
@@ -685,13 +702,12 @@ class Bank(UMFutures):
         
         while True:
             try:
+                self.token_bucket.wait_for_tokens() 
+                
                 server_time = self.time()['data']['serverTime']
                 response = self.change_position_mode(dualSidePosition=dualSidePosition,
                                                     recvWindow=6000,
-                                                    timestamp=server_time)
-                
-                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-                self.token_bucket.wait_for_token_consume(tokens_used) 
+                                                    timestamp=server_time)                
                 
                 self.sys_log.info("dualSidePosition is true.")
                 return
@@ -720,14 +736,13 @@ class Bank(UMFutures):
         
         while True:
             try:            
+                self.token_bucket.wait_for_tokens() 
+                
                 server_time = self.time()['data']['serverTime']
                 response = self.change_margin_type(symbol=symbol, 
                                                 marginType=marginType, 
                                                 recvWindow=6000, 
-                                                timestamp=server_time)
-                
-                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-                self.token_bucket.wait_for_token_consume(tokens_used) 
+                                                timestamp=server_time)                
                 
                 self.sys_log.info("margin type is {} now.".format(marginType))
                 return
@@ -787,33 +802,48 @@ def get_df_new_by_streamer(self, ):
 
 
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
-     
     """
-    v2.0 - add self.config.trader_set.get_df_new_timeout
-            df_res = None to all return phase.
-    v3.0 replace concat_candlestick to v2.0
-    v3.1 replace to bank.concat_candlestick
+    v2.0 
+        - Add 
+            `self.config.trader_set.get_df_new_timeout`.
+        - Set 
+            `df_res = None` in all return phases.
+    v3.0 
+        - Replace 
+            `concat_candlestick` with v2.0 logic.
+    v3.1 
+        - Replace 
+            with `bank.concat_candlestick`.
     v4.0 
-        integrate concat_candlestick logic.
-        modify return if df_list.
+        - Integrate 
+            `concat_candlestick` logic directly into the function.
+        - Modify 
+            return behavior based on the presence of `df_list`.
     v4.1 
-        - add
-            token info.
-        - replace
-            time.sleep, use term.df_new     
+        - Add 
+            token information.
+        - Replace 
+            `time.sleep` with `term.df_new`.
     v4.2 
-        - modify
-            fetch 'df' in reverse chronological order and
-            sort 'sum_df' in ascending chronological order.
-        - update
-            add -1122 error.
-            return None only.
+        - Modify 
+            fetch `df` in reverse chronological order and 
+            sort `sum_df` in ascending chronological order.
+        - Add 
+            `wait_for_tokens` logic.
+        - Update 
+            to return `None` only, deprecating previous return behavior.
+            Add handling for `-1122` error.
+    v4.2.1 
+        - Modify 
+            behavior for handling consecutive errors.
 
-    Last confirmed: 2024-08-20 22:00
+    Last confirmed: 2024-08-22.
     """
 
     limit_kline = 1500
-    assert limit <= limit_kline, f"assert limit < limit_kline ({limit_kline})"
+    assert limit <= limit_kline, f"assert limit <= limit_kline: ({limit_kline})"
+    assert days > 0, f"assert days: {days} > 0"
+
 
     while True:
         if end_date is None:
@@ -827,9 +857,12 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         time_arr_end = time_arr_start + timestamp_unit
 
         df_list = []
+        consecutive_errors = 0
 
         for idx, (time_start, time_end) in enumerate(zip(reversed(time_arr_start), reversed(time_arr_end))):
-            try:                
+            try:
+                self.token_bucket.wait_for_tokens()
+
                 response = self.klines(
                     symbol=self.symbol,
                     interval=interval,
@@ -837,58 +870,62 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                     endTime=int(time_end),
                     limit=limit
                 )
-                
-                tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-                self.token_bucket.wait_for_token_consume(tokens_used) 
 
-                response = response['data'] # replace response.
+                response = response['data']  # replace response.
 
                 if not response:
-                    if df_list: # if df_list lose middle df, occur error.
+                    consecutive_errors += 1                    
+                    self.sys_log.debug(f"consecutive_errors: {consecutive_errors}")
+                                   
+                    if df_list:  # consequent error means data end.
+                        if consecutive_errors > 1:
+                            sum_df = pd.concat(df_list).sort_index()
+                            return sum_df[~sum_df.index.duplicated(keep='last')]
+                    else:
+                        time.sleep(timesleep)
+                        continue
+                else:
+                    if consecutive_errors: # sparsed data error.
                         return None
-                    time.sleep(timesleep)
-                    continue
 
                 df = pd.DataFrame(np.array(response)).set_index(0).iloc[:, :5]
-                df.index = list(map(lambda x: datetime.fromtimestamp(int(x) / 1000), df.index)) # modify to datetime format.
+                df.index = list(map(lambda x: datetime.fromtimestamp(int(x) / 1000), df.index))  # Modify to datetime format.
                 df.columns = ['open', 'high', 'low', 'close', 'volume']
                 df = df.astype(float)
 
-                if True:  # Always show process for debugging
-                    self.sys_log.debug(f"{self.symbol} {df.index[0]} --> {df.index[-1]}")
-                    
                 df_list.append(df)
-                
-                # check last row's time.
+                self.sys_log.debug(f"{self.symbol} {df.index[0]} --> {df.index[-1]}")
+
+                # Check last row's time.
                 if idx == 0:
                     time_gap = time.time() - datetime.timestamp(df.index[-1])
                     if time_gap > itv_to_number(interval) * 60:
-                        df_list = [] # reset until valid time come.
-                        
-                        msg = f"warning in get_df_new : time_gap {time_gap}"
+                        df_list = []  # Reset until valid time comes.
+                        msg = f"Warning in get_df_new : time_gap {time_gap}"
                         self.sys_log.warning(msg)
-                        self.push_msg(msg)
                         time.sleep(self.config.term.df_new)
-                        
-                        break
-                
+                        break  # Start from the beginning.
+
             except Exception as e:
-                msg = f"error in klines : {str(e)}"
+                msg = f"Error in klines : {e}"
                 self.sys_log.error(msg)
+                
                 if '-1122' in msg:
                     self.push_msg(msg)
-                    return                    
-                elif 'sum_df' not in msg: # what type of this message ?
-                    self.push_msg(msg)                    
+                    return
+                elif 'sum_df' not in msg:  
+                    # What type of this message could be ?
+                        # Length mismatch: Expected axis has 0 elements, new values have 5 elements
+                    self.push_msg(msg)
+                    
                 time.sleep(self.config.term.df_new)
-                
+
             else:
                 if timesleep:
                     time.sleep(timesleep)
 
         if df_list:
             sum_df = pd.concat(df_list).sort_index()
-
             return sum_df[~sum_df.index.duplicated(keep='last')]
 
 
@@ -1143,11 +1180,11 @@ def get_balance_available(self,
     
     while True:
         try:      
+            self.token_bucket.wait_for_tokens() 
+            
             server_time = self.time()['data']['serverTime']
             response = self.balance(recvWindow=6000, timestamp=server_time)
-
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
+            
         except Exception as e:
             msg = "error in get_balance() : {}".format(e)
             self.sys_log.error(msg)
@@ -1245,12 +1282,10 @@ def get_precision(self, symbol):
     """
     
     while True:
-        try:        
-            response = self.exchange_info()
-            
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
-            
+        try:       
+            self.token_bucket.wait_for_tokens() 
+             
+            response = self.exchange_info()  
             precision_price, precision_quantity = [[data['pricePrecision'], data['quantityPrecision']] 
                                                          for data in response['data']['symbols'] if data['symbol'] == symbol][0]
             return precision_price, precision_quantity
@@ -1300,11 +1335,10 @@ def get_leverage_limit(self,
       
     while True:
         try:
-            server_time = self.time()['data']['serverTime']
-            response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)
+            self.token_bucket.wait_for_tokens() 
             
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
+            server_time = self.time()['data']['serverTime']
+            response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)            
             
             leverage_limit_server = response['data'][0]['brackets'][0]['initialLeverage']    
             
@@ -1387,15 +1421,14 @@ def get_order_info(self, symbol, orderId):
     """
  
     while True:
-        try:                
+        try:         
+            self.token_bucket.wait_for_tokens() 
+                   
             server_time = self.time()['data']['serverTime']
             response = self.query_order(symbol=symbol, 
                                         orderId=orderId, 
                                         recvWindow=6000, 
-                                        timestamp=server_time)
-            
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
+                                        timestamp=server_time)            
             
             return response['data']
             
@@ -1404,10 +1437,10 @@ def get_order_info(self, symbol, orderId):
             self.sys_log.error(msg)
             self.push_msg(msg)
             
-            if '-1003' in str(e): # Token error.
-                self.token_bucket.wait_for_token_consume(self.token_bucket.tokens_used, 50) # enough to wait token feeled.
-            else:
-                time.sleep(self.config.term.order_info)
+            # if '-1003' in str(e): # Token error.
+            #     self.token_bucket.wait_for_tokens(50) # enough to wait token feeled.
+            # else:
+            time.sleep(self.config.term.order_info)
 
 def get_price_realtime(self, symbol):
     
@@ -1566,13 +1599,12 @@ def order_cancel(self,
     """
     
     try:     
+        self.token_bucket.wait_for_tokens() 
+        
         server_time = self.time()['data']['serverTime']
         response = self.cancel_order(symbol=symbol, 
                               orderId=orderId, 
                               timestamp=server_time)
-        
-        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-        self.token_bucket.wait_for_token_consume(tokens_used) 
         
     except Exception as e:        
         msg = "error in order_cancel : {}".format(e)
@@ -1651,7 +1683,9 @@ def order_limit(self,
     order_result = None
     error_code = 0
     
-    try:        
+    try:  
+        self.token_bucket.wait_for_tokens() 
+
         server_time = self.time()['data']['serverTime']
         response = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
@@ -1662,9 +1696,6 @@ def order_limit(self,
                                         price=str(price),
                                         timestamp=server_time)
         
-        tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-        self.token_bucket.wait_for_token_consume(tokens_used) 
-
         order_result = response['data']        
         self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
         
@@ -1720,6 +1751,8 @@ def order_market(self,
         
         # while 1:
         try:
+            self.token_bucket.wait_for_tokens() 
+            
             server_time = self.time()['data']['serverTime']
             response = self.new_order(symbol=symbol,
                                         side=side_order,
@@ -1728,9 +1761,6 @@ def order_market(self,
                                         quantity=str(quantity),
                                         timestamp=server_time)
             
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
-
             order_result = response['data']            
             self.sys_log.info("order_market succeed. : {}".format(order_result))
             
@@ -1801,13 +1831,15 @@ def get_income_info(self,
     v4.1.1
         - update
             remove mode from this func.
+        - modify 
+            config info.
 
-    Last confimred: 2024-08-20 18:11
+    Last confimred: 2024-08-21
     """
 
     table_log = table_log.astype({'cumQuote' : 'float'})
     table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
-    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.trader_set.fee_limit, self.config.trader_set.fee_market)
+    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.broker.fee_limit, self.config.broker.fee_market)
     table_log_valid['fee'] = table_log_valid.cumQuote * table_log_valid.fee_ratio
     
     # if PARTIALLY_FILLED & FILLED exist both, use FILLED only.

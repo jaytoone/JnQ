@@ -629,15 +629,12 @@ def init_table_trade(self, ):
 
 def loop_table_trade(self, ):
     """
-    Changelog:
-
     v1.0
         - Enforced static row values
         - Prevented duplicate order_market entries
         - Optimized order phase status updates
         - Unified table_log concatenation with loc
         - Ensured secure orderId dtype handling
-
     v1.1
         - Added trade completion check
         - Migrated to feather format (orderId as int64)
@@ -648,14 +645,11 @@ def loop_table_trade(self, ):
         - Enhanced websocket_client remove logic
         - Improved get_price_realtime error handling
         - Safeguarded orderId with set_table integration
-
     v1.1.1
         - Enhanced input/output readability
         - Added newline formatting for rows
-
     v1.1.2
         - Minimized unnecessary self references
-
     v1.1.3
         - Integrated DBMS
         - Separated send/server logic
@@ -666,18 +660,22 @@ def loop_table_trade(self, ):
         - Internalized TokenBucket logic
         - Set Bank show_header=True by default
     v1.1.6
-    - update 
-        db_manager.
-        save income / profit_acc on json.
-    - modify
-        return used margin into account.
-        add balance_origin
-        table_log reset_index for 'id' pkey.
+        - update 
+            db_manager.
+            save income / profit_acc on json.
+        - modify
+            return used margin into account.
+            add balance_origin
+            table_log reset_index for 'id' pkey.
     v1.1.7
-    - modify
-        margin return to balance.
+        - modify
+            margin return to balance.
+            config info.
+            allow 'COMPOUND' moce.
+        - update
+            use get_income_info (v4.1.1)
 
-    Last confirmed: 2024-08-15 22:07
+    Last confirmed: 2024-08-20 18:09
     """
     
     for idx, row in self.table_trade.iterrows(): # for save iteration, use copy().
@@ -981,13 +979,14 @@ def loop_table_trade(self, ):
                                                     row.side_position,
                                                     row.leverage,
                                                     self.income_accumulated,
-                                                    self.profit_accumulated,                    
-                                                    mode="PROD", 
+                                                    self.profit_accumulated,
                                                     currency="USDT")
             
             self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += row.margin
             self.table_account.loc[self.table_account['account'] == row.account, 'balance'] += self.income
-            self.table_account.loc[self.table_account['account'] == row.account, 'balance_origin'] += self.income
+            
+            if self.config.bank.profit_mode == 'COMPOUND':
+                self.table_account.loc[self.table_account['account'] == row.account, 'balance_origin'] += self.income
             
             self.config.bank.income_accumulated = self.income_accumulated
             self.config.bank.profit_accumulated = self.profit_accumulated
