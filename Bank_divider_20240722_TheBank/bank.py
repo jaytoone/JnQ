@@ -33,8 +33,11 @@ from psycopg2.extras import execute_values
 
 import pickle
 import logging
+from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
+import gzip
+import os
+# import logging.config
 
-import logging.config
 from easydict import EasyDict
 import json
 from ast import literal_eval
@@ -62,9 +65,13 @@ class DatabaseManager:
          - update
             replace_table v1.3.1
             fetch_table_result v0.2
+    v0.3
+        fetch_table_result v0.4
+        fetch_df_res v0.3
     
-    Last confirmed: 2024-07-28 23:07
+    Last confirmed: 20240829 0923.
     """
+    
     def __init__(self, dbname, user, password, host, port):
         self.pool = SimpleConnectionPool(1,   # min thread
                                          10,  # max thread
@@ -110,19 +117,29 @@ class DatabaseManager:
             print(f"Error occurred: {e}")
         finally:
             self.pool.putconn(conn)      
-                  
-    def fetch_trade_result(self, table_name, config):
+
+    def fetch_trade_result(self, schema_name, table_name, config, datetime_before=None):
         """
-        v0.2
-        
-        Last confirmed: 2024-07-28 23:02.
+        v0.3
+            - update
+                Added datetime_before parameter as a string to filter rows based on timestamp.
+                datetime_before is converted to Unix timestamp to match the int type of the timestamp column.
+        v0.4
+            - update
+                Added schema_name parameter to allow specifying a schema.
+                Added datetime_before parameter as a string to filter rows based on timestamp.
+                datetime_before is converted to Unix timestamp to match the int type of the timestamp column.
+
+        Last confirmed: 20240827 2137.
         """
         
         conn = self.pool.getconn()
         try:
             cursor = conn.cursor()
+            
+            # Start constructing the query
             query = sql.SQL("""
-                SELECT * FROM {table_name}
+                SELECT * FROM {schema_name}.{table_name}
                 WHERE "priceBox_indicator" = {priceBox_indicator}
                     AND "priceBox_value" = {priceBox_value}
                     AND "point_mode" = {point_mode}
@@ -131,7 +148,11 @@ class DatabaseManager:
                     AND ("zone_indicator" IS NULL OR "zone_indicator" = {zone_indicator})
                     AND "zone_value" = {zone_value}
                     AND "interval" = {interval}
-            """).format(
+            """)
+        
+            # Finalize query formatting
+            query = query.format(
+                schema_name=sql.Identifier(schema_name),
                 table_name=sql.Identifier(table_name),
                 priceBox_indicator=sql.Literal(config['priceBox_indicator']),
                 priceBox_value=sql.Literal(config['priceBox_value']),
@@ -142,6 +163,22 @@ class DatabaseManager:
                 zone_value=sql.Literal(config['zone_value']),
                 interval=sql.Literal(config['interval'])
             )
+            
+
+            # Convert datetime_before string to Unix timestamp if provided
+            if datetime_before is not None:
+                # Assuming the datetime_before string is in a standard format like '%Y-%m-%d %H:%M:%S'
+                datetime_obj = datetime.strptime(datetime_before, '%Y-%m-%d %H:%M:%S')
+                datetime_before_ts = int(time.mktime(datetime_obj.timetuple()))
+            else:
+                datetime_before_ts = None
+            
+            # Add datetime_before condition if provided
+            if datetime_before_ts is not None:
+                query = query + sql.SQL(" AND timestamp_entry <= {datetime_before_ts}").format(
+                    datetime_before_ts=sql.Literal(datetime_before_ts)
+                )
+
             
             cursor.execute(query)
             rows = cursor.fetchall()
@@ -158,8 +195,8 @@ class DatabaseManager:
             print(f"Error: {e}")
             return pd.DataFrame()
         finally:
-            self.pool.putconn(conn)  
-             
+            self.pool.putconn(conn)
+
     def distinct_symbol_from_table(self, schema, table_name):
         
         conn = self.pool.getconn()
@@ -182,7 +219,7 @@ class DatabaseManager:
         finally:
             self.pool.putconn(conn)        
 
-    def fetch_df_res(self, schema, table_name, symbol, limit=None, datetime_after=None):
+    def fetch_df_res(self, schema, table_name, symbol, limit=None, datetime_after=None, datetime_before=None):
         """
         v0.1
             315 ms ± 4.23 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
@@ -194,8 +231,11 @@ class DatabaseManager:
         v0.2
             - update
                 Added datetime_after parameter to filter rows based on timestamp.
+        v0.3
+            - update
+                Added datetime_before parameter to filter rows based on timestamp.
 
-        Last confirmed: 2024-08-20 23:29
+        Last confirmed: 20240825 2127.
         """
         
         conn = self.pool.getconn()
@@ -204,10 +244,13 @@ class DatabaseManager:
                 # Build the WHERE clause
                 where_clause = sql.SQL("WHERE symbol = {}").format(sql.Literal(symbol))
                 
-                # Add timestamp condition if datetime_after is provided
+                # Add datetime_after condition if provided
                 if datetime_after is not None:
-                    # where_clause = where_clause + sql.SQL(" AND timestamp > {}").format(sql.Literal(datetime_after))
                     where_clause = where_clause + sql.SQL(" AND datetime >= {}").format(sql.Literal(datetime_after))
+                
+                # Add datetime_before condition if provided
+                if datetime_before is not None:
+                    where_clause = where_clause + sql.SQL(" AND datetime <= {}").format(sql.Literal(datetime_before))
                 
                 # Construct the full query
                 query = sql.SQL("""
@@ -379,12 +422,19 @@ class TokenBucket:
     v0.3.2
         - update
             divide try / exception on refill().
+    v0.3.3
+        - update
+            set retry-after
+    v0.4
+        - optimization
+            simplified error handling, removed redundant loops, improved clarity.
    
-    Last confirmed at, 2024-08-22
+    Last confirmed at, 20240823 0743
     """
 
     def __init__(self, sys_log, server_timer, capacity):
         self.server_timer = server_timer
+        self.server_time = int(time.time() * 1000)  # Initialize with local time
         self.capacity = capacity  # Maximum number of tokens the bucket can handle per minute
         self.tokens_used = 0
         self.lock = threading.Lock()
@@ -392,40 +442,55 @@ class TokenBucket:
         self.last_tokens_used = 0
         
     def refill(self):
-        try:        
+        try:
             response = self.server_timer()
-            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))            
+            self.server_time = response['data']['serverTime']
+            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M', 0))  # Default to 0 if not found
             
-            # Refill tokens if tokens_used is reset to 0            
-                # unnecessary phase, if self.tokens_used is not updated,
+            # Reset tokens_used if it's less than last_tokens_used, indicating a reset
             if self.tokens_used < self.last_tokens_used:
                 self.tokens_used = 0
                 
         except Exception as e:
             self.sys_log.error(f"Error in TokenBucket.refill(): {e}")
+            self.handle_refill_error(e)
             
-            error_message = str(e)        
-            # Use regular expressions to extract the 'x-mbx-used-weight-1m' value
-            match = re.search(r"'x-mbx-used-weight-1m':\s*'(\d+)'", error_message)
-            
-            if match:
-                self.tokens_used = int(match.group(1))
-            else:
-                self.sys_log.warning("Could not find the x-mbx-used-weight-1m value.")                        
-            
-        self.last_tokens_used = self.tokens_used # follow up udpated tokens_used.
+        self.last_tokens_used = self.tokens_used  # Update last_tokens_used for the next cycle
+
+    def handle_refill_error(self, error):
+        """Handles errors during the refill process, including retry-after handling."""
+        error_message = str(error)
+        retry_after = 1  # Default to 1 second if 'retry-after' is not found
+
+        # Extract the 'retry-after' value from the error message, if available
+        retry_match = re.search(r"'retry-after':\s*'(\d+)'", error_message)
+        if retry_match:
+            retry_after = int(retry_match.group(1))
+        else:
+            self.sys_log.warning("Could not find the 'retry-after' value.")
+        
+        # Extract the 'x-mbx-used-weight-1m' value from the error message, if available
+        tokens_match = re.search(r"'x-mbx-used-weight-1m':\s*'(\d+)'", error_message)
+        if tokens_match:
+            self.tokens_used = int(tokens_match.group(1))
+        else:
+            self.sys_log.warning("Could not find the 'x-mbx-used-weight-1m' value.")
+        
+        # Wait for the 'retry-after' duration before retrying
+        time.sleep(retry_after)
+        self.refill()  # Retry the refill after waiting
 
     def check(self, tokens_needed):
         with self.lock:
             self.refill()  # Fetch the latest tokens_used from the server
             
-            tokens = self.capacity - self.tokens_used
-            self.sys_log.debug(f"tokens : {tokens}")
-            return tokens >= tokens_needed
+            tokens_available = self.capacity - self.tokens_used
+            self.sys_log.debug(f"tokens_available: {tokens_available}")
+            return tokens_available >= tokens_needed
 
-    def wait_for_tokens(self, tokens_needed=20):  # minimum 20,
+    def wait_for_tokens(self, tokens_needed=20):  # Minimum 20 tokens
         while not self.check(tokens_needed):
-            time.sleep(1)
+            time.sleep(1)  # Sleep briefly before rechecking
 
 
 class Bank(UMFutures):
@@ -496,6 +561,9 @@ class Bank(UMFutures):
         self.table_condition = self.db_manager.fetch_table(self.table_condition_name)
         self.table_trade = self.db_manager.fetch_table(self.table_trade_name)
         self.table_log = self.db_manager.fetch_table(self.table_log_name)
+        
+        # update_balance with margin data info table_trade.
+        self.table_account = self.update_balance()
 
         
         self.path_dir_df_res = kwargs['path_dir_df_res']
@@ -561,18 +629,30 @@ class Bank(UMFutures):
         except Exception as e:
             pass
 
+    def namer(self, name):
+        return name + ".gz"
+
+    def rotator(self, source, dest):
+        with open(source, "rb") as sf:
+            with gzip.open(dest, "wb") as df:
+                df.writelines(sf)
+        os.remove(source)
+
     def set_logger(self, name='Bank'):
         
         """
         v1.0
             add RotatingFileHandler
         v1.1
-        - modify
-            sequence of code.
-            add name param.
+            - modify
+                sequence of code.
+                add name param.
+        v1.2
+            add file compressure.
 
-        Last confirmed: 2024-08-06 17:57.
+        Last confirmed: 2024828 1141.
         """      
+        
         self.sys_log = logging.getLogger(name)  
         self.sys_log.setLevel(logging.DEBUG)   
         
@@ -582,19 +662,27 @@ class Bank(UMFutures):
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(simple_formatter)
         console_handler.setLevel(logging.DEBUG)
-    
-        # file_handler = logging.FileHandler(self.path_save_log)
-        file_handler = logging.handlers.RotatingFileHandler(self.path_save_log, maxBytes=100 * 1000 * 1000, backupCount=24)
-        file_handler.setFormatter(complex_formatter)
-        file_handler.setLevel(logging.DEBUG)  
-    
-        # self.sys_log.handlers.clear()
+        
+        # Use TimedRotatingFileHandler with a daily rotation
+        timed_handler = TimedRotatingFileHandler(self.path_save_log, when='midnight', interval=1, backupCount=2)
+        timed_handler.setFormatter(complex_formatter)
+        timed_handler.setLevel(logging.DEBUG)
+
+        # Add RotatingFileHandler to limit file size
+        rotating_handler = RotatingFileHandler(self.path_save_log, maxBytes=100 * 1024 * 1024, backupCount=24)
+        rotating_handler.setFormatter(complex_formatter)
+        rotating_handler.setLevel(logging.DEBUG)
+        # rotating_handler.rotator = self.rotator
+        # rotating_handler.namer = self.namer
+
+        # Adding handlers
         self.sys_log.addHandler(console_handler)
-        self.sys_log.addHandler(file_handler)  
+        # self.sys_log.addHandler(timed_handler)
+        self.sys_log.addHandler(rotating_handler)
         
         # Prevent propagation to the root logger
         self.sys_log.propagate = False
-
+        
     def echo(self, update, context):    
         self.user_text = update.message.text
 
@@ -647,6 +735,32 @@ class Bank(UMFutures):
             self.msg_bot.sendMessage(chat_id=self.chat_id, text=msg)
         except Exception as e:
             self.sys_log.error(e)
+            
+    def update_balance(self):
+        """
+        Updates the 'balance' column in the 'table_account' DataFrame by subtracting the total margin 
+        from the 'balance_origin' for each account.
+        
+        Parameters:
+        self (object): An object that contains the 'table_trade' and 'table_account' DataFrames.
+
+        Returns:
+        pd.DataFrame: The updated 'table_account' DataFrame with the new balance values.
+        """
+        # Calculate the total margin for each account
+        total_margin_df = self.table_trade.groupby('account')['margin'].sum().reset_index()
+
+        # Merge the total margin with the account table
+        df_account = self.table_account.merge(total_margin_df, on='account')
+
+        # Update the balance by subtracting the total margin from balance_origin
+        df_account['balance'] = df_account['balance_origin'] - df_account['margin']
+
+        # Optionally, drop the 'margin' column
+        df_account.drop(columns=['margin'], inplace=True)
+
+        # Return the updated account DataFrame
+        return df_account
 
             
     def set_leverage(self,
@@ -670,7 +784,7 @@ class Bank(UMFutures):
             try:       
                 self.token_bucket.wait_for_tokens()
                                 
-                server_time = self.time()['data']['serverTime']
+                server_time = self.token_bucket.server_time
                 response = self.change_leverage(symbol=symbol, 
                                     leverage=leverage, 
                                     recvWindow=6000, 
@@ -704,7 +818,7 @@ class Bank(UMFutures):
             try:
                 self.token_bucket.wait_for_tokens() 
                 
-                server_time = self.time()['data']['serverTime']
+                server_time = self.token_bucket.server_time
                 response = self.change_position_mode(dualSidePosition=dualSidePosition,
                                                     recvWindow=6000,
                                                     timestamp=server_time)                
@@ -738,7 +852,7 @@ class Bank(UMFutures):
             try:            
                 self.token_bucket.wait_for_tokens() 
                 
-                server_time = self.time()['data']['serverTime']
+                server_time = self.token_bucket.server_time
                 response = self.change_margin_type(symbol=symbol, 
                                                 marginType=marginType, 
                                                 recvWindow=6000, 
@@ -801,6 +915,7 @@ def get_df_new_by_streamer(self, ):
     #     return df_res
 
 
+
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
     """
     v2.0 
@@ -836,8 +951,11 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
     v4.2.1 
         - Modify 
             behavior for handling consecutive errors.
+            end_date assertion.
+        - update
+            add server_time.
 
-    Last confirmed: 2024-08-22.
+    Last confirmed: 20240905 1317.
     """
 
     limit_kline = 1500
@@ -847,9 +965,11 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
     while True:
         if end_date is None:
-            end_date = str(datetime.now()).split(' ')[0]
-
-        timestamp_end = int(datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59).timestamp() * 1000)
+            timestamp_end = time.time() * 1000
+        else:
+            assert end_date != str(datetime.now()).split(' ')[0], "end_date shouldd not be today."
+            timestamp_end = int(datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59).timestamp() * 1000)
+            
         timestamp_start = timestamp_end - days * 24 * 60 * 60 * 1000
         timestamp_unit = itv_to_number(interval) * 60 * 1000 * limit
 
@@ -857,35 +977,40 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         time_arr_end = time_arr_start + timestamp_unit
 
         df_list = []
-        consecutive_errors = 0
+        res_error_cnt = 0
 
         for idx, (time_start, time_end) in enumerate(zip(reversed(time_arr_start), reversed(time_arr_end))):
             try:
+                self.sys_log.debug(f"{datetime.fromtimestamp(time_start / 1000)} - {datetime.fromtimestamp(time_end / 1000)}")
+                    
                 self.token_bucket.wait_for_tokens()
 
+                server_time = self.token_bucket.server_time
                 response = self.klines(
                     symbol=self.symbol,
                     interval=interval,
                     startTime=int(time_start),
                     endTime=int(time_end),
-                    limit=limit
+                    limit=limit,
+                    timestamp=server_time
                 )
 
                 response = response['data']  # replace response.
 
                 if not response:
-                    consecutive_errors += 1                    
-                    self.sys_log.debug(f"consecutive_errors: {consecutive_errors}")
+                    res_error_cnt += 1                    
+                    self.sys_log.error(f"Error in get_df_new, res_error_cnt: {res_error_cnt}")
                                    
                     if df_list:  # consequent error means data end.
-                        if consecutive_errors > 1:
+                        if res_error_cnt > 1:
                             sum_df = pd.concat(df_list).sort_index()
                             return sum_df[~sum_df.index.duplicated(keep='last')]
                     else:
                         time.sleep(timesleep)
                         continue
                 else:
-                    if consecutive_errors: # sparsed data error.
+                    if res_error_cnt: # sparsed data error.
+                        self.sys_log.error("Error in get_df_new, sparsed data error")
                         return None
 
                 df = pd.DataFrame(np.array(response)).set_index(0).iloc[:, :5]
@@ -894,7 +1019,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                 df = df.astype(float)
 
                 df_list.append(df)
-                self.sys_log.debug(f"{self.symbol} {df.index[0]} --> {df.index[-1]}")
+                self.sys_log.debug(f"{self.symbol} {df.index[0]} - {df.index[-1]}")
 
                 # Check last row's time.
                 if idx == 0:
@@ -1182,7 +1307,7 @@ def get_balance_available(self,
         try:      
             self.token_bucket.wait_for_tokens() 
             
-            server_time = self.time()['data']['serverTime']
+            server_time = self.token_bucket.server_time
             response = self.balance(recvWindow=6000, timestamp=server_time)
             
         except Exception as e:
@@ -1337,7 +1462,7 @@ def get_leverage_limit(self,
         try:
             self.token_bucket.wait_for_tokens() 
             
-            server_time = self.time()['data']['serverTime']
+            server_time = self.token_bucket.server_time
             response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)            
             
             leverage_limit_server = response['data'][0]['brackets'][0]['initialLeverage']    
@@ -1424,7 +1549,7 @@ def get_order_info(self, symbol, orderId):
         try:         
             self.token_bucket.wait_for_tokens() 
                    
-            server_time = self.time()['data']['serverTime']
+            server_time = self.token_bucket.server_time
             response = self.query_order(symbol=symbol, 
                                         orderId=orderId, 
                                         recvWindow=6000, 
@@ -1436,11 +1561,8 @@ def get_order_info(self, symbol, orderId):
             msg = f"error in get_order_info : {e}"
             self.sys_log.error(msg)
             self.push_msg(msg)
-            
-            # if '-1003' in str(e): # Token error.
-            #     self.token_bucket.wait_for_tokens(50) # enough to wait token feeled.
-            # else:
             time.sleep(self.config.term.order_info)
+            
 
 def get_price_realtime(self, symbol):
     
@@ -1601,7 +1723,7 @@ def order_cancel(self,
     try:     
         self.token_bucket.wait_for_tokens() 
         
-        server_time = self.time()['data']['serverTime']
+        server_time = self.token_bucket.server_time
         response = self.cancel_order(symbol=symbol, 
                               orderId=orderId, 
                               timestamp=server_time)
@@ -1686,7 +1808,7 @@ def order_limit(self,
     try:  
         self.token_bucket.wait_for_tokens() 
 
-        server_time = self.time()['data']['serverTime']
+        server_time = self.token_bucket.server_time
         response = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
                                         side=side_order,
@@ -1753,7 +1875,7 @@ def order_market(self,
         try:
             self.token_bucket.wait_for_tokens() 
             
-            server_time = self.time()['data']['serverTime']
+            server_time = self.token_bucket.server_time
             response = self.new_order(symbol=symbol,
                                         side=side_order,
                                         positionSide=side_position,
@@ -1806,6 +1928,7 @@ def order_market(self,
                     continue
 
 
+
 def get_income_info(self, 
                     table_log,
                     code,
@@ -1833,14 +1956,49 @@ def get_income_info(self,
             remove mode from this func.
         - modify 
             config info.
+    v4.2
+        - update
+            replace OPEN X PARTIALLY_FILLED  rows.
 
-    Last confimred: 2024-08-21
+    Last confimred: 20240907 1248.
     """
 
-    table_log = table_log.astype({'cumQuote' : 'float'})
-    table_log_valid = table_log[(table_log.code == code) & (table_log.cumQuote != 0)]
-    table_log_valid['fee_ratio'] = np.where(table_log_valid.type == 'LIMIT', self.config.broker.fee_limit, self.config.broker.fee_market)
-    table_log_valid['fee'] = table_log_valid.cumQuote * table_log_valid.fee_ratio
+    # Convert cumQuote to float and filter rows
+    table_log_valid = self.table_log.astype({'cumQuote': 'float'}).query('code == @code and cumQuote != 0')
+
+    # Filter rows with 'OPEN' and 'PARTIALLY_FILLED' status
+    open_partial_row = table_log_valid[
+        (table_log_valid['order_way'] == 'OPEN') & (table_log_valid['status'] == 'PARTIALLY_FILLED')
+    ]
+
+    # Process the filtered rows
+    for idx, row in open_partial_row.iterrows():
+        self.order_info = get_order_info(self, row.symbol, row.orderId)
+        
+        if self.order_info:  # Proceed only if order information exists
+            start_time = time.time()
+
+            # Update the table_log with order information
+            self.table_log.loc[idx, self.order_info.keys()] = self.order_info.values()
+
+            # Log the elapsed time for updating table_log
+            self.sys_log.debug(
+                f"------------------------------------------------\n"
+                f"LoopTableTrade : elapsed time, update table_log : {time.time() - start_time:.4f}s\n"
+                f"------------------------------------------------"
+            )
+
+    # Copy and filter the table again (only if there are matching rows)
+    if not open_partial_row.empty:    
+        table_log_valid = self.table_log.astype({'cumQuote': 'float'}).query('code == @code and cumQuote != 0')
+
+    
+    fee_limit = self.config.broker.fee_limit
+    fee_market = self.config.broker.fee_market
+    table_log_valid['fee_ratio'] = np.where(table_log_valid['type'] == 'LIMIT', fee_limit, fee_market)
+    
+    table_log_valid['fee'] = table_log_valid['cumQuote'] * table_log_valid['fee_ratio']
+
     
     # if PARTIALLY_FILLED & FILLED exist both, use FILLED only.
     table_log_valid_open = table_log_valid[table_log_valid.order_way == 'OPEN']
@@ -1901,7 +2059,6 @@ def get_income_info(self,
     self.push_msg(msg)
 
     return income, income_accumulated, profit, profit_accumulated
-
 
     
 

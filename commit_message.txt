@@ -1,7 +1,11 @@
-JnQ - TheBank_v2.6.2
+JnQ - TheBank_v2.6.4
 
 - modify
+	get_new_df,
+		modify sparse data rejection algorithm.
 - update
-	get_df_new v4.2
-	fetch_df_res use datetime_after.
-	TokenBucket v0.3
+	SELECT * FROM {schema_name}.{table_name}
+	TokenBucket version.
+		no server time.
+	logger update
+		try TimeRorateHandler.

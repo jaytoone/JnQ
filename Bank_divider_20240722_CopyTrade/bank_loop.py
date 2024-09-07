@@ -93,34 +93,26 @@ def loop_table_condition(self, drop=False, debugging=False):
         - Modify to TableCondition_v0.3 version.
         - Modify drop to False.
         - Remove elapsed time +.
-
     v1.5:
         - Add column 'timestampLastUsed' in tableCondition.
         - Apply remaining minutes to zero.
         - Add interval_value (days).
-
     v1.5.1:
         - Apply functional idep.py.
         - Add target_loss, account.
-
     v1.5.2:
         - Apply dbms.
-
     v1.5.2.1:
         - Divide send / save.
         - Add debug mode.
         - api_count + 1.
-
     v1.5.3:
         - Apply TokenBucket.
-
     v1.5.4:
         - Remove loop duration.
         - Move token info to internal function.
-
     v1.5.5:
         - Use db_manager.
-
     v1.5.6:
         - Replace target_loss to divider.
     v1.5.8:
@@ -130,10 +122,11 @@ def loop_table_condition(self, drop=False, debugging=False):
         - update required
             value usage between self & row.
     v1.6
-    - update
-        use point_bool & zone_bool.
+        - update
+            use point_bool & zone_bool.
+            add account info to code.
 
-    Last confirmed: 2024-08-01 12:00
+    Last confirmed: 20240829 2156.
     """
 
     
@@ -365,6 +358,8 @@ def loop_table_condition(self, drop=False, debugging=False):
         self.sys_log.debug("LoopTableCondition : elasped time, replace_table  : %.4fs" % (time.time() - start_time)) 
         self.sys_log.debug("------------------------------------------------")
         
+        # # preventing API flood.
+        time.sleep(self.config.term.loop_table_condition)
 
 
     self.sys_log.debug("------------------------------------------------")
@@ -407,8 +402,9 @@ def init_table_trade(self, ):
     v2.3.5
         - modify
             config info.
+            add account to push_msg.
     
-    Last confirmed: 2024-08-18 09:23
+    Last confirmed: 20240829 2310.
     """
            
     # init.
@@ -613,7 +609,7 @@ def init_table_trade(self, ):
             self.sys_log.debug("InitTableTrade : elasped time, append row to TableTrade. : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")
             
-            self.push_msg("{} row insert into TableTrade.".format(self.code))        
+            self.push_msg("{} {} row insert into TableTrade.".format(self.code, self.account))
         
         
     # preventing losing table_account info.
@@ -1011,7 +1007,7 @@ def loop_table_trade(self, ):
 
         
         # # preventing API flood.
-        # time.sleep(0.1)
+        time.sleep(self.config.term.loop_table_trade)
 
     # use send=True instead time.sleep for API flood.
     self.sys_log.debug("------------------------------------------------")
