@@ -1849,6 +1849,7 @@ def get_quantity_unexecuted(self,
     return quantity_unexecuted
 
 
+
 def order_limit(self, 
                 symbol,
                 side_order, 
@@ -1867,46 +1868,67 @@ def order_limit(self,
         vivid mode.
             remove orderType... we don't need this in order_'limit'.        
     v4.1
-        show_header=True.
+        - update
+            show_header=True.    
+    v4.2
+        - update
+            error case -4014.
             
-    last confirmed at, 20240712 1029.
+    Last confirmed, 20241012 1248.
     """
-        
-    # init.  
-    order_result = None
-    error_code = 0
     
-    try:  
-        self.token_bucket.wait_for_tokens() 
-
-        server_time = self.token_bucket.server_time
-        response = self.new_order(timeInForce=TimeInForce.GTC,
-                                        symbol=symbol,
-                                        side=side_order,
-                                        positionSide=side_position,
-                                        type=OrderType.LIMIT,
-                                        quantity=str(quantity),
-                                        price=str(price),
-                                        timestamp=server_time)
+    while 1:
         
-        order_result = response['data']        
-        self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
+        # init.  
+        order_result = None
+        error_code = 0
         
-    except Exception as e:
-        msg = "error in order_limit : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-        time.sleep(self.config.term.order_limit)      
+        try:        
+            server_time = self.time()['data']['serverTime']
+            response = self.new_order(timeInForce=TimeInForce.GTC,
+                                            symbol=symbol,
+                                            side=side_order,
+                                            positionSide=side_position,
+                                            type=OrderType.LIMIT,
+                                            quantity=str(quantity),
+                                            price=str(price),
+                                            timestamp=server_time)
+            
+            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
+            self.token_bucket.wait_for_token_consume(tokens_used) 
 
-        # error casing. (later)
+            order_result = response['data']        
+            self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
+            
+        except Exception as e:
+            msg = "error in order_limit : {}".format(e)
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+            time.sleep(self.config.term.order_limit)      
 
-        # 1. order_limit() 에서 해결할 수 없는 error 일 경우, return
-        #       a. -4003 : quantity less than zero
-        # if "-4003" in str(e):
-        #     error_code = -4003
-        error_code = -4003
+            # error casing. (later)
+            # -4014, 'Price not increased by tick size.',
+            if "-4014" in str(e):
+                price_precision_prev = self.get_precision_by_price(price)
+                self.sys_log.debug(f"price_precision_prev: {price_precision_prev}")
+                if price_precision_prev == 0:
+                    error_code = -4014
+                else:
+                    price_precision_new = price_precision_prev - 1
+                    price = self.calc_with_precision(price, price_precision_new)
+                    self.sys_log.debug(f"price_precision_new: {price_precision_new}")
+                    self.sys_log.debug(f"price: {price}")
+                    continue
+                            
+            
+            # -4003, 'quantity less than zero.'
+                # if error cannot be solved in this loop, return
+            elif "-4003" in str(e):
+                error_code = -4003
+            else:
+                error_code = 'Unknown'
 
-    return order_result, error_code
+        return order_result, error_code
 
 
 

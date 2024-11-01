@@ -26,6 +26,8 @@ import re
 
 
 import hashlib
+import uuid
+import io
 from psycopg2 import sql
 from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import execute_values
@@ -74,13 +76,14 @@ class DatabaseManager:
             use path_dir_table
         - update
             fetch_table_trade v0.5
+            add fetch_partition
     
-    Last confirmed, 20240929 1439.
+    Last confirmed, 20241025 1337.
     """
     
     def __init__(self, dbname, user, password, host, port, path_dir_table):
         self.pool = SimpleConnectionPool(1,   # min thread
-                                         10,  # max thread
+                                         20,  # max thread
                                          dbname=dbname, 
                                          user=user, 
                                          password=password,
@@ -91,39 +94,130 @@ class DatabaseManager:
         
     def insert_table(self, schema, table_name, df, conflict_columns):
         """
-        Generalized function: Insert DataFrame into table
-            use for table_result, df_res.
+        v1.1    
+            - update
+                use COPY.
+            - modify
+                use temp table for conflicts.
+        
+        20241031 1400.    
         """
         conn = self.pool.getconn()
         try:
+            # Create an in-memory buffer
+            buffer = io.StringIO()
+            df.to_csv(buffer, index=False, header=False)
+            buffer.seek(0)
+
             with conn.cursor() as cur:
-                # Convert each row of the DataFrame to a tuple
-                values = [tuple(row) for row in df.itertuples(index=False, name=None)]
+                # Create a temporary table for data import
+                temp_table_name = f"{table_name}_temp_{uuid.uuid4().hex}"
                 
-                # Safely format column names
-                columns = [sql.Identifier(col) for col in df.columns]
-                
-                # Construct query
-                query = sql.SQL("""
-                    INSERT INTO {}.{} ({})
-                    VALUES %s
+                cur.execute(sql.SQL("CREATE TEMP TABLE {} (LIKE {} INCLUDING ALL)")
+                            .format(sql.Identifier(temp_table_name),
+                                    sql.Identifier(schema, table_name)))
+
+                # COPY data into the temporary table
+                cur.copy_expert(
+                    sql.SQL("COPY {} FROM STDIN WITH CSV").format(sql.Identifier(temp_table_name)),
+                    buffer
+                )
+
+                # Insert from the temporary table into the target table with conflict handling
+                insert_query = sql.SQL("""
+                    INSERT INTO {}.{} 
+                    SELECT * FROM {}
                     ON CONFLICT ({}) DO NOTHING
                 """).format(
                     sql.Identifier(schema),
                     sql.Identifier(table_name),
-                    sql.SQL(', ').join(columns),
+                    sql.Identifier(temp_table_name),
                     sql.SQL(', ').join(map(sql.Identifier, conflict_columns))
                 )
-                
-                # Use execute_values to insert multiple rows
-                execute_values(cur, query, values)
+
+                cur.execute(insert_query)
                 conn.commit()
+
         except Exception as e:
             if conn:
                 conn.rollback()
             print(f"Error occurred: {e}")
+
         finally:
-            self.pool.putconn(conn)      
+            self.pool.putconn(conn)
+            
+
+    def fetch_partition(self, schema_name, config, start_partition, end_partition, limit=None):
+        """
+        v0.2.2
+            - modify
+                    use condition.
+
+        last confirmed, 20241025 1337.
+        """
+        
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                # Generate the range of partitions between start_partition and end_partition
+                start_year, start_month = map(int, start_partition.split('_'))
+                end_year, end_month = map(int, end_partition.split('_'))
+
+                # Construct the dynamic table name based on the partitioned columns
+                table_name = f"{config['priceBox_indicator']}_{config['point_mode']}_{config['point_indicator']}_{config['zone_indicator']}"
+            
+                # Create a list to store all partition names between start and end
+                partition_names = []
+                year, month = start_year, start_month
+                while (year < end_year) or (year == end_year and month <= end_month):
+                    partition_names.append(f"{table_name}_{year:04d}_{month:02d}")
+                    # Move to the next month
+                    if month == 12:
+                        year += 1
+                        month = 1
+                    else:
+                        month += 1
+                print(f"partition_names: {partition_names}")                    
+
+                # Construct a query to fetch data from all relevant partitions
+                query_parts = []
+                for partition in partition_names:
+                    
+                    query = sql.SQL("""
+                        SELECT * FROM {schema_name}.{table_name}
+                        WHERE "priceBox_value" = {priceBox_value}
+                            AND "point_value" = {point_value}
+                            AND "zone_value" = {zone_value}
+                            AND "interval" = {interval}
+                    """).format(
+                        schema_name=sql.Identifier(schema_name),
+                        table_name=sql.Identifier(partition),  # 수정된 부분
+                        priceBox_value=sql.Literal(config['priceBox_value']),
+                        point_value=sql.Literal(config['point_value']),
+                        zone_value=sql.Literal(config['zone_value']),
+                        interval=sql.Literal(config['interval'])
+                    )
+                    
+                    query_parts.append(query)
+                    
+                full_query = sql.SQL(" UNION ALL ").join(query_parts)
+
+                if limit:
+                    full_query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+                
+                # Execute the combined query
+                cur.execute(full_query)
+                result = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+
+                # Return the result as a pandas DataFrame
+                return pd.DataFrame(result, columns=columns)
+        except Exception as e:
+            print(f"Error fetching data from partitions: {e}")
+            return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)
+
 
     def fetch_trade_result(self, schema_name, config, datetime_before=None):
         """
@@ -521,8 +615,9 @@ class Bank(UMFutures):
     v0.4.1
         - modify
             to use config values.
+            log file name
 
-    Last confirmed, 20240907 2001.
+    Last confirmed, 20241017 1137.
     """
     
     def __init__(self, **kwargs):
@@ -535,7 +630,8 @@ class Bank(UMFutures):
         for path in ['path_dir_log', 'path_dir_table', 'path_dir_df_res']:
             os.makedirs(kwargs[path], exist_ok=True)
             
-        self.path_log = os.path.join(kwargs['path_dir_log'], "{}.log".format(datetime.now().strftime('%Y%m%d%H%M%S')))
+        self.path_log = os.path.join(kwargs['path_dir_log'], f"{self.config.bank.log_name}.log")
+        
         self.path_dir_df_res = kwargs['path_dir_df_res']  
         
             
@@ -1494,29 +1590,42 @@ def get_precision(self, symbol):
             time.sleep(self.config.term.precision)      
         
 
+
+
+def get_leverage_brackets(self):
+    """
+    Creates a mapping of symbol to its bracket data from the leverage_brackets API response.
+    
+    Returns:
+        data_by_symbol (dict): A dictionary mapping each symbol to its bracket information.
+    """
+    
+    # Get the current server time
+    server_time = self.time()['data']['serverTime']
+    
+    # Request leverage bracket information
+    response = self.leverage_brackets(
+        recvWindow=6000, 
+        timestamp=server_time
+    )
+
+    # Extract data from the API response
+    data = response['data']
+
+    # Create a mapping of symbol to its bracket data
+    data_by_symbol = {item['symbol']: item['brackets'] for item in data}
+    
+    return data_by_symbol
+
+
+
 def get_leverage_limit(self, 
                        symbol, 
+                       amount_entry,
+                       loss,
                        price_entry, 
-                       price_stop_loss,
-                       fee_entry, 
-                       fee_exit):
+                       ):
     """
-    v2.0
-        divide into server & user
-            compare which one is minimal.
-        leverage_limit is calculated by amount / target_loss    
-            quantity = target_loss / loss
-            amount = quantity * price_entry
-            
-            leverage_limit  = amount / target_loss
-                ex) amount_required = 150 USDT, target_loss = 15 USDT, leverage_limit = 10.
-            leverage_limit  = ((target_loss / loss) * price_entry) / target_loss
-            leverage_limit  = ((1 / loss) * price_entry)
-            
-            leverage_limit  = price_entry / loss
-            loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
-    v3.0
-        modify to vivid input & output.
     v3.1
         modify leverage_limit_user logic.
             more comprehensive.
@@ -1526,25 +1635,40 @@ def get_leverage_limit(self,
         show_header=True.
     v3.4
         while loop completion.
+    v3.5
+        - update
+            leverage_limit use amount_entry.
 
-    Last confirmed: 2024-07-21 22:49
+    Last confirmed, 20241012 1425.
     """
       
-    while True:
+    while 1:
         try:
-            self.token_bucket.wait_for_tokens()            
-            server_time = self.token_bucket.server_time
+            leverage_brackets = get_leverage_brackets(self)
             
-            response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)                        
-            leverage_limit_server = response['data'][0]['brackets'][0]['initialLeverage']    
+            # Find the appropriate bracket for the given symbol and amount_entry
+            if symbol in leverage_brackets:
+                brackets = leverage_brackets[symbol]
+                
+                # Use a list comprehension and min function to find the correct bracket quickly
+                leverage_limit_server = min(
+                    (bracket['initialLeverage'] for bracket in brackets 
+                    if bracket['notionalFloor'] <= amount_entry <= bracket['notionalCap']),
+                    default=np.inf
+                )
+            else:
+                leverage_limit_server = np.inf  # If the symbol is not found, default to infinity or any other value
+
             
-            loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
             loss_pct = loss / price_entry * 100
             leverage_limit_user = np.maximum(1, np.floor(100 / loss_pct).astype(int))
 
             leverage_limit = min(leverage_limit_user, leverage_limit_server)
+                        
+            self.sys_log.debug(f"leverage_limit_server: {leverage_limit_server}")
+            self.sys_log.debug(f"leverage_limit_user: {leverage_limit_user}")
 
-            return loss, leverage_limit_user, leverage_limit_server, leverage_limit
+            return leverage_limit_user, leverage_limit_server, leverage_limit
             
         except Exception as e:
             msg = "error in get_leverage_limit : {}".format(e)
@@ -1849,6 +1973,7 @@ def get_quantity_unexecuted(self,
     return quantity_unexecuted
 
 
+
 def order_limit(self, 
                 symbol,
                 side_order, 
@@ -1867,46 +1992,149 @@ def order_limit(self,
         vivid mode.
             remove orderType... we don't need this in order_'limit'.        
     v4.1
-        show_header=True.
+        - update
+            show_header=True.    
+    v4.2
+        - update
+            error case -4014.
             
-    last confirmed at, 20240712 1029.
+    Last confirmed, 20241012 1248.
     """
-        
-    # init.  
-    order_result = None
-    error_code = 0
     
-    try:  
-        self.token_bucket.wait_for_tokens() 
+    loop_cnt  = 0
+    while 1:
+        
+        # init.  
+        order_result = None
+        error_code = 0
+        
+        try:        
+            self.token_bucket.wait_for_tokens() 
 
-        server_time = self.token_bucket.server_time
-        response = self.new_order(timeInForce=TimeInForce.GTC,
+            server_time = self.token_bucket.server_time
+            response = self.new_order(timeInForce=TimeInForce.GTC,
+                                            symbol=symbol,
+                                            side=side_order,
+                                            positionSide=side_position,
+                                            type=OrderType.LIMIT,
+                                            quantity=str(quantity),
+                                            price=str(price),
+                                            timestamp=server_time)
+            
+            order_result = response['data']        
+            self.sys_log.info("order_limit succeed: {}".format(order_result))
+            
+        except Exception as e:
+            msg = "error in order_limit : {}".format(e)
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+            time.sleep(self.config.term.order_limit)      
+
+            # error casing. (later)
+            # -4014, 'Price not increased by tick size.',
+            if "-4014" in str(e):
+                price_precision_prev = self.get_precision_by_price(price)
+                self.sys_log.debug(f"price_precision_prev: {price_precision_prev}")
+                
+                if price_precision_prev == 0:
+                    error_code = -4014
+                else:
+                    price_precision_new = price_precision_prev + (-1 if loop_cnt == 0 else 1)                        
+                    price = self.calc_with_precision(price, price_precision_new)
+                    self.sys_log.debug(f"price_precision_new: {price_precision_new}")
+                    self.sys_log.debug(f"price: {price}")
+                    
+                    loop_cnt += 1
+                    if loop_cnt < 3:
+                        continue
+                    else:
+                        error_code = -4014
+                            
+            
+            # -4003, 'quantity less than zero.'
+                # if error cannot be solved in this loop, return
+            elif "-4003" in str(e):
+                error_code = -4003
+            else:
+                error_code = 'Unknown'
+
+        return order_result, error_code
+    
+    
+def order_stop_market(self, 
+                symbol,
+                side_order, 
+                side_position, 
+                price, 
+                quantity):
+    
+    """
+    v0.1
+        - init
+            
+    20241101 0727.
+    """
+    
+    loop_cnt  = 0
+    while 1:
+        
+        # init.  
+        order_result = None
+        error_code = 0
+        
+        try:        
+            self.token_bucket.wait_for_tokens() 
+            server_time = self.token_bucket.server_time
+            
+            response = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
                                         side=side_order,
                                         positionSide=side_position,
-                                        type=OrderType.LIMIT,
+                                        type=OrderType.STOP_MARKET,
                                         quantity=str(quantity),
-                                        price=str(price),
-                                        timestamp=server_time)
-        
-        order_result = response['data']        
-        self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
-        
-    except Exception as e:
-        msg = "error in order_limit : {}".format(e)
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-        time.sleep(self.config.term.order_limit)      
+                                        stopPrice=str(price), 
+                                        timestamp=server_time
+                                        )
+            
+            order_result = response['data']        
+            self.sys_log.info("order_stop_market succeed: {}".format(order_result))
+            
+        except Exception as e:
+            msg = "error in order_limit : {}".format(e)
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+            time.sleep(self.config.term.order_stop_market)      
 
-        # error casing. (later)
+            # error casing. (later)
+            # -4014, 'Price not increased by tick size.',
+            if "-4014" in str(e):
+                price_precision_prev = self.get_precision_by_price(price)
+                self.sys_log.debug(f"price_precision_prev: {price_precision_prev}")
+                
+                if price_precision_prev == 0:
+                    error_code = -4014
+                else:
+                    price_precision_new = price_precision_prev + (-1 if loop_cnt == 0 else 1)                        
+                    price = self.calc_with_precision(price, price_precision_new)
+                    self.sys_log.debug(f"price_precision_new: {price_precision_new}")
+                    self.sys_log.debug(f"price: {price}")
+                    
+                    loop_cnt += 1
+                    if loop_cnt < 3:
+                        continue
+                    else:
+                        error_code = -4014
+                            
+            
+            # -4003, 'quantity less than zero.'
+                # if error cannot be solved in this loop, return
+            elif "-4003" in str(e):
+                error_code = -4003
+            else:
+                error_code = 'Unknown'
 
-        # 1. order_limit() 에서 해결할 수 없는 error 일 경우, return
-        #       a. -4003 : quantity less than zero
-        # if "-4003" in str(e):
-        #     error_code = -4003
-        error_code = -4003
+        return order_result, error_code
 
-    return order_result, error_code
 
 
 
@@ -1934,10 +2162,6 @@ def order_market(self,
     
     while 1:
 
-        # quantity_unexecuted = get_quantity_unexecuted(self, 
-        #                                             symbol,
-        #                                             orderId)
-
         # order_market
         order_result = None
         error_code = 0
@@ -1955,7 +2179,7 @@ def order_market(self,
                                         timestamp=server_time)
             
             order_result = response['data']            
-            self.sys_log.info("order_market succeed. : {}".format(order_result))
+            self.sys_log.info("order_market succeed: {}".format(order_result))
             
         except Exception as e:
             msg = "error in order_market : {}".format(e)

@@ -1,8 +1,7 @@
-JnQ - TheBank_v2.7
+JnQ - TheBank_v2.7.1
 
 - modify
 	
 - update
-	table_account's account anme rule updated. (condition)
-	push_msg on table_condition
-	code naming rule
+	leverage_limit considering amount_entry
+	price_precision updating modules.
