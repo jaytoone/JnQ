@@ -22,7 +22,7 @@ import math
 import threading
 
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 
 
@@ -1270,37 +1270,13 @@ def get_df_new_by_streamer(self, ):
     #     return df_res
 
 
-
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
+    
     """
-    v4.1 
-        - Add 
-            token information.
-        - Replace 
-            `time.sleep` with `term.df_new`.
-    v4.2 
-        - Modify 
-            fetch `df` in reverse chronological order and 
-            sort `sum_df` in ascending chronological order.
-        - Add 
-            `wait_for_tokens` logic.
-        - Update 
-            to return `None` only, deprecating previous return behavior.
-            Add handling for `-1122` error.
-    v4.2.1 
-        - Modify 
-            behavior for handling consecutive errors.
-            end_date assertion.
-            return error_code.
-        - update
-            add server_time.
-            add timegap error.
-            add no symbol without error.
     v4.2.2
-        - Modify
-            focus on patternized error '01'.  (this pattern should be rejected.)   
-
-    Last confirmed, 20240922 0840.
+        - focus on patternized error '01'.  (this pattern should be rejected.)
+        - error 부연 설명 진행. 20250311 1916.
+        - df phase modified  20250312 0830.
     """
 
     limit_kline = 1500
@@ -1313,7 +1289,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         if end_date is None:
             timestamp_end = time.time() * 1000
         else:
-            assert end_date != str(datetime.now()).split(' ')[0], "end_date should not be today."
+            assert end_date != str(datetime.now()).split(' ')[0], "end_date shouldd not be today."
             timestamp_end = int(datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59).timestamp() * 1000)
             
         timestamp_start = timestamp_end - days * 24 * 60 * 60 * 1000
@@ -1344,22 +1320,25 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
 
                 response = response.get('data', [])  # Safely handle the response
 
+
                 if not response:
                     res_error_list.append(0)     
-                    msg = f"Error in get_df_new, res_error_list: {res_error_list}"                  
+                    msg = f"Error in {self.symbol} get_df_new, res_error_list: {res_error_list}"                  
                     self.sys_log.error(msg)                    
                     self.push_msg(msg)
                     
                     # consequent error (= means data end, should return valid df_list.)  
                         # criteria : 100 (v) | 101 (sparse error)   
                     if df_list:                        
-                        if res_error_list[-2:]  == [0, 0]:
+                        if res_error_list[-2:]  == [0, 0]: # 일시적인 에러가 아니라고 판단하는 것. (아님을 판단하기 위해 0 을 두번까지 확인한다.)
                             sum_df = pd.concat(df_list).sort_index()
                             return sum_df[~sum_df.index.duplicated(keep='last')]
+                        else:
+                            pass # 일시적인 에러인지를 판단하기 위해 retry 기회 준다.
                     else:
-                        # no symbol but no error...
-                            # first idx response should not be normal.
-                            # no more retries than 2.
+                        # 저장된 유효 df 가 없는 경우
+                            # idx = 0 는 error 가 없어야한다. (아닌 경우 invalid symbol 확률이 크다.)
+                            # 재시도는 2번까지.
                         if idx == 0 or len(res_error_list) > 2: 
                             return '-1122'
                         
@@ -1369,51 +1348,51 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
                     res_error_list.append(1)
                     
                     # sparsed data error.
-                    if res_error_list[-2:]  == [0, 1]:
+                    if res_error_list[-2:]  == [0, 1]: # 일시적인 에러, sparsed data 발생.
                         self.sys_log.error(f"Error in get_df_new, sparsed data error, res_error_list: {res_error_list}")
                         self.push_msg(msg)
                         return                
                     
 
-                df = pd.DataFrame(np.array(response)).set_index(0).iloc[:, :5]
-                df.index = list(map(lambda x: datetime.fromtimestamp(int(x) / 1000), df.index))  # Modify to datetime format.
-                df.columns = ['open', 'high', 'low', 'close', 'volume']
-                df = df.astype(float)
+                    df = pd.DataFrame(np.array(response)).set_index(0).iloc[:, :5]
+                    df.index = list(map(lambda x: datetime.fromtimestamp(int(x) / 1000), df.index))  # Modify to datetime format.
+                    df.columns = ['open', 'high', 'low', 'close', 'volume']
+                    df = df.astype(float)
 
-                df_list.append(df)
-                self.sys_log.debug(f"{self.symbol} {df.index[0]} - {df.index[-1]}")
-                
+                    df_list.append(df)
+                    self.sys_log.debug(f"{self.symbol} {df.index[0]} - {df.index[-1]}")
+                    
 
-                # Check last row's time.
-                if idx == 0:
-                    time_gap = time.time() - datetime.timestamp(df.index[-1])
-                    itv_number = itv_to_number(interval)
-                    self.sys_log.debug(f"itv_number: {itv_number}")
-                    
-                    # we don't need data exceeded 2 min.
-                    if time_gap > (itv_number + 1) * 60:
-                        msg = f"Error in in get_df_new : time_gap {time_gap} exceeded ({itv_number} + 1) * 60"
-                        self.sys_log.warning(msg)
-                        return
-                    
-                    # give one more chance over 1 min.
-                    elif time_gap > itv_number * 60:
-                        df_list = []  # Reset until valid time comes.
-                        msg = f"Warning in get_df_new : time_gap {time_gap}"
-                        self.sys_log.warning(msg)
-                        time.sleep(self.config.term.df_new)
-                        break  # Start from the beginning.
+                    # Check Realtime df sync. by lastest row's timestamp.
+                    if idx == 0:
+                        time_gap = time.time() - datetime.timestamp(df.index[-1])
+                        itv_number = itv_to_number(interval)
+                        self.sys_log.debug(f"itv_number: {itv_number}")
+                        
+                        # we don't need data exceeded 2 min.
+                        if time_gap > (itv_number + 1) * 60:
+                            msg = f"Error in in get_df_new : time_gap {time_gap} exceeded ({itv_number} + 1) * 60"
+                            self.sys_log.warning(msg)
+                            return
+                        
+                        # give one more chance over 1 min.
+                        elif time_gap > itv_number * 60:
+                            df_list = []  # Reset until valid time comes.
+                            msg = f"Warning in get_df_new : time_gap {time_gap}"
+                            self.sys_log.warning(msg)
+                            time.sleep(self.config.term.df_new)
+                            break  # Start from the beginning.
 
             except Exception as e:
                 msg = f"Error in klines : {e}"
                 self.sys_log.error(msg)
                 self.push_msg(msg)
                 
-                if '-1122' in msg: # no symbol error.
+                if '-1122' in msg: # no / invalid symbol error.
                     return '-1122'
                 
                 elif 'sum_df' not in msg:  
-                    # What type of this message could be ?
+                    # Todo) What type of this message could be ?
                         # Length mismatch: Expected axis has 0 elements, new values have 5 elements
                     pass
                     
@@ -1426,9 +1405,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         if df_list:
             sum_df = pd.concat(df_list).sort_index()
             return sum_df[~sum_df.index.duplicated(keep='last')]
-
-
-
+        
 
 def set_price_and_open_signal(self, mode='OPEN', env='BANK'):
     
@@ -1627,6 +1604,11 @@ def adj_price_unit(self):
     self.df_res['long_out_{}'.format(self.config.selection_id)] = calc_with_hoga_unit_vecto(self.df_res['long_out_{}'.format(self.config.selection_id)].to_numpy(), 2)
 
 
+        
+def __________________0():
+    pass
+
+
 def get_side_info(self, side_open):
     
     if side_open == 'BUY':
@@ -1641,6 +1623,7 @@ def get_side_info(self, side_open):
         #     self.order_motion = 1
 
     return side_close, side_position
+
 
 
 def get_price_entry(self,
@@ -1918,6 +1901,11 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
     return price_liquidation
 
 
+        
+def __________________1():
+    pass
+
+
 def get_order_info(self, symbol, orderId):
     """
     v1.0 
@@ -2016,30 +2004,53 @@ def get_price_realtime(self, symbol):
     return float(price_realtime)
 
 
-def check_expiration(side_position,
+def check_expiration(self, 
+                    interval,
+                    entry_timeIndex,
+                    side_position,
                     price_realtime, 
-                    price_expiration):
-    
+                    price_expiration,
+                    ncandle_game=None):
     """
-    Checks if the position has expired based on the real-time price and the expiration price.
-
-    Parameters:
-    - price_realtime: float, the current real-time price.
-    - price_expiration: float, the price at which the position expires.
-    - side_position: str, the position side, either 'SHORT' or 'LONG'.
-
+    v0.2
+        - Expired_x: 가격 조건에 따른 만료 (LONG: 현재가 >= 만료가, SHORT: 현재가 <= 만료가)
+        - Expired_y: ncandle_game 값에 따른 만료. (예: ncandle_game == 2이면, 진입 시각 + (interval*2) 이후 만료)
+    
     Returns:
-    - expired: int, 1 if the position has expired, 0 otherwise.
+        int: 만료 상태
+             0 - 만료 아님,
+             1 - 가격 조건(Expired_x)에 의한 만료,
+             2 - ncandle_game 조건(Expired_y)에 의한 만료. 20250317 1355.        
     """
-    
     expired = 0
-    if side_position == 'SHORT':
-        if price_realtime <= price_expiration:
-            expired = 1
-    else:  # side_position == 'LONG'
+
+    # 01 Expired_x: 가격 조건 검사
+    if side_position == 'LONG':
         if price_realtime >= price_expiration:
             expired = 1
+    else:  # SHORT인 경우
+        if price_realtime <= price_expiration:
+            expired = 1
+
+    # 02 Expired_y: Candle Game 조건 검사
+    if ncandle_game:
+        itv_number = itv_to_number(interval)
+        entry_timestamp = int(time.mktime(time.strptime(str(entry_timeIndex), "%Y-%m-%d %H:%M:%S")))
+        
+        # 예: ncandle_game==2이면, 진입 시각이 "04:15:00"일 경우 만료 시각은 "04:44:59"가 됨.
+            # backtest 는 timeIndex 만으로 보기 때문에 헷갈릴 수 있는 부분. ("04:15:00", "04:30:00")
+        if time.time() - entry_timestamp >= itv_number * 60 * ncandle_game:
+            expired = 2
+
+    # 필요한 입력 인자와 최종 expired 상태를 보기 좋게 로그로 남김.
+    self.sys_log.info(
+        "check_expiration: side=%s | price_realtime=%.2f | price_expiration=%.2f | expired=%d | interval=%s | entry_timeIndex=%s | ncandle_game=%s",
+        side_position, price_realtime, price_expiration, expired, interval, entry_timeIndex, ncandle_game
+    )
+    
     return expired
+
+
 
 
 def check_stop_loss(self,
@@ -2062,7 +2073,7 @@ def check_stop_loss(self,
         
     last confirmed at, 20240701 2300.
     """
-    
+
     order_market_on = False
             
     if side_open == 'SELL':
@@ -2077,6 +2088,69 @@ def check_stop_loss(self,
     self.sys_log.info("order_market_on : {}".format(order_market_on))
 
     return order_market_on
+           
+
+
+def check_closer(self,
+                interval,
+                entry_timeIndex,
+                ncandle_game=None):    
+    """
+    v0.1
+        - init. 20250317 1044.
+    """
+    
+    order_market_on = False
+    
+    if ncandle_game: 
+        itv_number = itv_to_number(interval)
+        entry_timestamp = int(time.mktime(time.strptime(str(entry_timeIndex), "%Y-%m-%d %H:%M:%S")))
+        
+         # if ncandle_game == 2, 04:30:01 기준, 
+            # 진입바의 timeIndex = 04:15:00, expiry 는 04:45:00 timeIndex 에 일어난다.         
+        if time.time() - entry_timestamp > itv_number * 60 * ncandle_game:            
+            order_market_on = True
+            
+    # 필요한 파라미터와 결과를 로그에 출력
+    self.sys_log.info(
+        "check_closer: order_market_on=%s | interval=%s | entry_timeIndex=%s | ncandle_game=%s",
+        order_market_on, interval, entry_timeIndex, ncandle_game
+    )    
+    
+    return order_market_on
+
+
+def wait_barClosed(self, interval, entry_timeIndex):
+    """
+    v0.1
+        - use interval, entry_timeIndex. 20250317 0926.
+        - candle_close_time의 초와 마이크로초를 00으로 설정 (예: 09:30:00)
+    """
+    
+    # entry_timeIndex를 datetime 객체로 변환 (예: "2025-03-17 04:15:00")
+    try:
+        entry_dt = datetime.strptime(entry_timeIndex, '%Y-%m-%d %H:%M:%S')
+    except Exception as e:
+        msg = "Error parsing entry_timeIndex {}: {}".format(entry_timeIndex, e)
+        self.sys_log.error(msg)
+        self.push_msg(msg)
+        entry_dt = datetime.now()
+    
+    # itv_to_number()로 interval을 분 단위 숫자로 변환
+    itv_number = itv_to_number(interval)
+    
+    # candle_close_time 계산 후 초와 마이크로초를 0으로 세팅
+    candle_close_time = (entry_dt + timedelta(minutes=itv_number)).replace(second=0, microsecond=0)
+    now = datetime.now()
+    
+    if now < candle_close_time:
+        wait_seconds = (candle_close_time - now).total_seconds()
+        self.sys_log.debug("Waiting {:.2f} seconds until candle close time: {}.".format(wait_seconds, candle_close_time))
+        time.sleep(wait_seconds)
+    else:
+        self.sys_log.debug("Candle already closed at {}.".format(candle_close_time))
+
+
 
 
 def get_price_replacement(self, order_info_old, idx):
@@ -2122,6 +2196,11 @@ def get_price_replacement(self, order_info_old, idx):
                                           self.side_open, 
                                           self.df_res)
     self.table_trade.at[idx, 'price_take_profit'] = self.price_take_profit
+
+
+        
+def __________________2():
+    pass
 
 
 def order_cancel(self, 

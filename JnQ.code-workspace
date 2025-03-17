@@ -2,6 +2,9 @@
 	"folders": [
 		{
 			"path": "."
+		},
+		{
+			"path": "Bank_MTLT_20241115"
 		}
 	],
 	"settings": {}

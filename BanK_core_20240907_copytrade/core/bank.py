@@ -14,6 +14,7 @@ from funcs.public.indicator_ import *
 from funcs.public.broker import *
 
 
+import os
 
 import pandas as pd
 import numpy as np
@@ -26,6 +27,8 @@ import re
 
 
 import hashlib
+import uuid
+import io
 from psycopg2 import sql
 from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import execute_values
@@ -34,10 +37,9 @@ from psycopg2.extras import execute_values
 import pickle
 import logging
 from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
-import gzip
-import os
-# import logging.config
 
+import gzip
+from pathlib import Path
 from easydict import EasyDict
 import json
 from ast import literal_eval
@@ -74,13 +76,18 @@ class DatabaseManager:
             use path_dir_table
         - update
             fetch_table_trade v0.5
+            add fetch_partition
+            add insert_table
+            add create_table
+            add load_partition
+            db_usage
     
-    Last confirmed, 20240929 1439.
+    20241107 1658.
     """
     
     def __init__(self, dbname, user, password, host, port, path_dir_table):
         self.pool = SimpleConnectionPool(1,   # min thread
-                                         10,  # max thread
+                                         20,  # max thread
                                          dbname=dbname, 
                                          user=user, 
                                          password=password,
@@ -89,244 +96,281 @@ class DatabaseManager:
         self.path_dir_table = path_dir_table
         self.file_hashes = {}
         
+        
+    @staticmethod
+    def get_table_name(config):
+        # Extract values from the config dictionary
+        priceBox_indicator = config.get("priceBox_indicator")
+        point_mode = config.get("point_mode")
+        point_indicator = config.get("point_indicator")
+        zone_indicator = config.get("zone_indicator")
+
+        # Concatenate the values to form the table name
+        table_name = f"{priceBox_indicator}_{point_mode}_{point_indicator}_{zone_indicator}"
+        
+        return table_name
+    
+    
+    @staticmethod
+    def load_df_res(interval, start_year_month, end_year_month, base_directory=r'D:\Project\SystemTrading\Project\JnQ\anal\df_res'):
+        """
+        Load df_res data from Feather files for the specified symbol, interval, and date range.
+        
+        Args:
+            symbol (str): The symbol for which to load data.
+            interval (str): The interval of the data.
+            start_year_month (str): The start date in 'YYYY-MM' format.
+            end_year_month (str): The end date in 'YYYY-MM' format.
+            base_directory (str): The base directory where the Feather files are stored.
+
+        Returns:
+            pd.DataFrame: A DataFrame containing the loaded and filtered data.
+        """
+        # 시작 및 끝 연월을 datetime으로 변환
+        start_date = pd.to_datetime(start_year_month, format='%Y-%m')
+        end_date = pd.to_datetime(end_year_month, format='%Y-%m')
+        
+        # 저장된 Feather 파일이 있는 디렉토리 경로 설정
+        data_dir = Path(base_directory) / interval
+        
+        # 통합할 데이터프레임 리스트
+        dataframes = []
+        
+        # 디렉토리 내의 모든 Feather 파일 확인
+        for file in data_dir.glob(f"{interval}_*.ftr"):
+            # 파일 이름에서 연-월 정보 추출, 'YYYY-MM' 형식에만 매칭
+            year_month_str = file.stem.split('_')[-1]        
+            
+            # 'YYYY-MM' 형식의 파일만 처리
+            if '-' in year_month_str and len(year_month_str) == 7:
+                try:
+                    file_date = pd.to_datetime(year_month_str, format='%Y-%m')
+                    
+                    # 시작 연월과 끝 연월 사이에 있는 파일만 로드
+                    if start_date <= file_date <= end_date:
+                        df = pd.read_feather(file)
+                        
+                        if not df.empty:
+                            dataframes.append(df)
+                            print(f"Loaded and filtered {file.name}")
+                except ValueError:
+                    # 파일 이름 형식이 잘못된 경우 건너뜁니다.
+                    continue
+        
+        # 모든 파일을 하나의 데이터프레임으로 통합
+        if dataframes:
+            combined_df = pd.concat(dataframes, ignore_index=True)
+            print("All relevant files have been loaded, filtered, and concatenated.")
+            return combined_df
+        else:
+            print("No files found within the specified date range.")
+            return pd.DataFrame()  # 빈 데이터프레임 반환
+
+               
+    def load_partition(self, config, start_year_month, end_year_month, base_directory=r'D:\Project\SystemTrading\Project\JnQ\anal\table_trade_result'):
+        # 필터링 조건 설정
+        priceBox_value = config.get('priceBox_value')
+        point_value = config.get('point_value')
+        zone_value = config.get('zone_value')
+        interval = config.get('interval')
+        
+        # 테이블 이름 설정
+        table_name = self.get_table_name(config)
+        
+        # 저장된 Feather 파일이 있는 디렉토리 경로 설정
+        data_dir = Path(base_directory) / table_name
+        
+        # 시작 및 끝 연월을 datetime으로 변환하여 비교할 수 있게 함
+        start_date = pd.to_datetime(start_year_month, format='%Y-%m')
+        end_date = pd.to_datetime(end_year_month, format='%Y-%m')
+        
+        # 통합할 데이터프레임 리스트
+        dataframes = []
+        
+        # 디렉토리 내의 모든 Feather 파일을 확인
+        for file in data_dir.glob(f"{table_name}_*.ftr"):
+            # 파일 이름에서 연-월 정보 추출, 'YYYY-MM' 형식에만 매칭
+            year_month_str = file.stem.split('_')[-1]
+            
+            # 'YYYY-MM' 형식의 파일만 처리
+            if '-' in year_month_str and len(year_month_str) == 7:
+                try:
+                    file_date = pd.to_datetime(year_month_str, format='%Y-%m')
+                    
+                    # 시작 연월과 끝 연월 사이에 있는 파일만 로드
+                    if start_date <= file_date <= end_date:
+                        df = pd.read_feather(file)
+                        
+                        # 조건에 맞는 행만 필터링
+                        filtered_df = df[
+                            (df["priceBox_value"] == priceBox_value) &
+                            (df["point_value"] == point_value) &
+                            (df["zone_value"] == zone_value) &
+                            (df["interval"] == interval)
+                        ]
+                        
+                        # 필터링된 데이터프레임을 리스트에 추가
+                        dataframes.append(filtered_df)
+                        # print(f"Loaded and filtered {file.name}")
+                except ValueError:
+                    # 파일 이름 형식이 잘못된 경우 건너뜁니다.
+                    continue
+        
+        # 모든 파일을 하나의 데이터프레임으로 통합
+        if dataframes:
+            combined_df = pd.concat(dataframes, ignore_index=True)
+            print("All relevant files have been loaded, filtered, and concatenated.")
+            return combined_df
+        else:
+            print("No files found within the specified date range.")
+            return pd.DataFrame()  # 빈 데이터프레임 반환
+        
+
+    def create_table(self, schema, config):
+            """
+            v0.1
+                - init
+                
+            20241101 1023.
+            """
+            conn = self.pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    # Get the dynamic table name using the get_table_name function
+                    table_name = self.get_table_name(config)
+
+                    # Use psycopg2.sql to safely create identifiers for table and schema
+                    create_table_sql = sql.SQL('''
+                        CREATE TABLE IF NOT EXISTS {}.{} (
+                            symbol varchar(50) NOT NULL,
+                            "position" varchar(10) NOT NULL,
+                            status varchar(10) NOT NULL,
+                            idx_entry int4 NOT NULL,
+                            idx_exit int4 NOT NULL,
+                            price_take_profit float8 NOT NULL,
+                            price_entry float8 NOT NULL,
+                            price_stop_loss float8 NOT NULL,
+                            price_exit float8 NOT NULL,
+                            timestamp_entry int8 NOT NULL,
+                            timestamp_exit int8 NOT NULL,
+                            "priceBox_value" float4 NOT NULL,
+                            point_value float4 NOT NULL,
+                            zone_value float4 DEFAULT '-1'::integer NOT NULL,
+                            "interval" varchar(10) NOT NULL,
+                            CONSTRAINT {} PRIMARY KEY (symbol, timestamp_entry, "priceBox_value", point_value, zone_value, interval)
+                        ) PARTITION BY RANGE (timestamp_entry);
+                    ''').format(
+                        sql.Identifier(schema),           # Schema name
+                        sql.Identifier(table_name),       # Dynamic table name
+                        sql.Identifier(f"{table_name}_pkey")  # Primary key constraint name
+                    )
+                    
+                    # Execute the table creation query
+                    cur.execute(create_table_sql.as_string(conn))
+                    
+                    # Partition creation DO block
+                    partition_creation_sql = sql.SQL('''
+                        DO $$
+                        DECLARE
+                            year INT := 2018;
+                            month INT := 1;
+                            start_ts BIGINT;
+                            end_ts BIGINT;
+                            partition_name TEXT;
+                        BEGIN
+                            WHILE year < 2026 LOOP
+                                start_ts := EXTRACT(EPOCH FROM TO_TIMESTAMP(year || '-' || month || '-01', 'YYYY-MM-DD'));
+                                end_ts := EXTRACT(EPOCH FROM (TO_TIMESTAMP(year || '-' || month || '-01', 'YYYY-MM-DD') + INTERVAL '1 month'));
+
+                                partition_name := {} || '_'  || year || '_' || LPAD(month::TEXT, 2, '0');
+
+                                EXECUTE format('
+                                    CREATE TABLE IF NOT EXISTS {}.%I PARTITION OF {}.{}
+                                    FOR VALUES FROM (%L) TO (%L);',
+                                    partition_name, start_ts, end_ts);
+
+                                month := month + 1;
+                                IF month > 12 THEN
+                                    month := 1;
+                                    year := year + 1;
+                                END IF;
+                            END LOOP;
+                        END $$;
+                    ''').format(
+                        sql.Literal(table_name),
+                        sql.Identifier(schema),
+                        sql.Identifier(schema),
+                        sql.Identifier(table_name),
+                    )
+
+                    # Execute the partition creation query
+                    cur.execute(partition_creation_sql.as_string(conn))
+                    conn.commit()
+                    print(f"Table {schema}.{table_name} created successfully with default partitions.")
+
+            except Exception as e:
+                if conn:
+                    conn.rollback()
+                print(f"Error occurred in create_table: {e}")
+            finally:
+                self.pool.putconn(conn)
+
+        
     def insert_table(self, schema, table_name, df, conflict_columns):
         """
-        Generalized function: Insert DataFrame into table
-            use for table_result, df_res.
+        v1.1    
+            - update
+                use COPY.
+            - modify
+                use temp table for conflicts.
+        
+        20241031 1400.    
         """
         conn = self.pool.getconn()
         try:
+            # Create an in-memory buffer
+            buffer = io.StringIO()
+            df.to_csv(buffer, index=False, header=False)
+            buffer.seek(0)
+
             with conn.cursor() as cur:
-                # Convert each row of the DataFrame to a tuple
-                values = [tuple(row) for row in df.itertuples(index=False, name=None)]
+                # Create a temporary table for data import
+                temp_table_name = f"{table_name}_temp_{uuid.uuid4().hex}"
                 
-                # Safely format column names
-                columns = [sql.Identifier(col) for col in df.columns]
-                
-                # Construct query
-                query = sql.SQL("""
-                    INSERT INTO {}.{} ({})
-                    VALUES %s
+                cur.execute(sql.SQL("CREATE TEMP TABLE {} (LIKE {} INCLUDING ALL)")
+                            .format(sql.Identifier(temp_table_name),
+                                    sql.Identifier(schema, table_name)))
+
+                # COPY data into the temporary table
+                cur.copy_expert(
+                    sql.SQL("COPY {} FROM STDIN WITH CSV").format(sql.Identifier(temp_table_name)),
+                    buffer
+                )
+
+                # Insert from the temporary table into the target table with conflict handling
+                insert_query = sql.SQL("""
+                    INSERT INTO {}.{} 
+                    SELECT * FROM {}
                     ON CONFLICT ({}) DO NOTHING
                 """).format(
                     sql.Identifier(schema),
                     sql.Identifier(table_name),
-                    sql.SQL(', ').join(columns),
+                    sql.Identifier(temp_table_name),
                     sql.SQL(', ').join(map(sql.Identifier, conflict_columns))
                 )
-                
-                # Use execute_values to insert multiple rows
-                execute_values(cur, query, values)
+
+                cur.execute(insert_query)
                 conn.commit()
+
         except Exception as e:
             if conn:
                 conn.rollback()
             print(f"Error occurred: {e}")
-        finally:
-            self.pool.putconn(conn)      
 
-    def fetch_trade_result(self, schema_name, config, datetime_before=None):
-        """
-        v0.3
-            - update
-                Added datetime_before parameter as a string to filter rows based on timestamp.
-                datetime_before is converted to Unix timestamp to match the int type of the timestamp column.
-        v0.4
-            - update
-                Added schema_name parameter to allow specifying a schema.
-                Added datetime_before parameter as a string to filter rows based on timestamp.
-                datetime_before is converted to Unix timestamp to match the int type of the timestamp column.
-        v0.5
-            - update
-                table name.
-
-        Last confirmed: 20240928 1750.
-        """
-
-        conn = self.pool.getconn()
-        try:
-            cursor = conn.cursor()
-
-            # Construct the dynamic table name based on the partitioned columns
-            table_name = f"{config['priceBox_indicator']}_{config['point_mode']}_{config['point_indicator']}_{config['zone_indicator']}"
-
-            # Start constructing the query
-            query = sql.SQL("""
-                SELECT * FROM {schema_name}.{table_name}
-                WHERE "priceBox_value" = {priceBox_value}
-                    AND "point_value" = {point_value}
-                    AND "zone_value" = {zone_value}
-                    AND "interval" = {interval}
-            """)
-
-            # Finalize query formatting
-            query = query.format(
-                schema_name=sql.Identifier(schema_name),
-                table_name=sql.Identifier(table_name),
-                priceBox_value=sql.Literal(config['priceBox_value']),
-                point_value=sql.Literal(config['point_value']),
-                zone_value=sql.Literal(config['zone_value']),
-                interval=sql.Literal(config['interval'])
-            )
-
-            # Convert datetime_before string to Unix timestamp if provided
-            if datetime_before is not None:
-                datetime_obj = datetime.strptime(datetime_before, '%Y-%m-%d %H:%M:%S')
-                datetime_before_ts = int(time.mktime(datetime_obj.timetuple()))
-            else:
-                datetime_before_ts = None
-
-            # Add datetime_before condition if provided
-            if datetime_before_ts is not None:
-                query = query + sql.SQL(" AND timestamp_entry <= {datetime_before_ts}").format(
-                    datetime_before_ts=sql.Literal(datetime_before_ts)
-                )
-
-            cursor.execute(query)
-            rows = cursor.fetchall()
-
-            if rows:
-                columns = [desc[0] for desc in cursor.description]
-                result_df = pd.DataFrame(rows, columns=columns)
-            else:
-                result_df = pd.DataFrame()
-
-            cursor.close()
-            return result_df
-        except Exception as e:
-            print(f"Error: {e}")
-            return pd.DataFrame()
-        finally:
-            self.pool.putconn(conn)
-
-    def distinct_symbol_from_table(self, schema, table_name):
-        
-        conn = self.pool.getconn()
-        try:
-            with conn.cursor() as cur:
-                
-                cur.execute(sql.SQL("""
-                    SELECT DISTINCT symbol FROM {}.{}
-                """).format(
-                    sql.Identifier(schema), 
-                    sql.Identifier(table_name)
-                ))
-                
-                result = cur.fetchall()
-                unique_symbols = [row[0] for row in result]
-                return unique_symbols
-        except Exception as e:
-            print(f"Error get_symbol_from_table {table_name}: {e}")
-            return []
-        finally:
-            self.pool.putconn(conn)        
-
-    def fetch_df_res(self, schema, table_name, symbol, limit=None, datetime_after=None, datetime_before=None):
-        """
-        v0.1
-            315 ms ± 4.23 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
-            - add
-                order by.
-                limit parameter to fetch limited rows.
-            - modify
-                fetch the last 'limit' rows from the sorted table.
-        v0.2
-            - update
-                Added datetime_after parameter to filter rows based on timestamp.
-        v0.3
-            - update
-                Added datetime_before parameter to filter rows based on timestamp.
-
-        Last confirmed: 20240825 2127.
-        """
-        
-        conn = self.pool.getconn()
-        try:
-            with conn.cursor() as cur:
-                # Build the WHERE clause
-                where_clause = sql.SQL("WHERE symbol = {}").format(sql.Literal(symbol))
-                
-                # Add datetime_after condition if provided
-                if datetime_after is not None:
-                    where_clause = where_clause + sql.SQL(" AND datetime >= {}").format(sql.Literal(datetime_after))
-                
-                # Add datetime_before condition if provided
-                if datetime_before is not None:
-                    where_clause = where_clause + sql.SQL(" AND datetime <= {}").format(sql.Literal(datetime_before))
-                
-                # Construct the full query
-                query = sql.SQL("""
-                    SELECT * FROM (
-                        SELECT * FROM {}.{} {} ORDER BY timestamp DESC
-                        {}
-                    ) subquery ORDER BY timestamp
-                """).format(
-                    sql.Identifier(schema), 
-                    sql.Identifier(table_name), 
-                    where_clause,
-                    sql.SQL('LIMIT {}').format(sql.Literal(limit)) if limit is not None else sql.SQL('')
-                )
-                
-                cur.execute(query)
-                result = cur.fetchall()
-                columns = [desc[0] for desc in cur.description]
-                return pd.DataFrame(result, columns=columns).set_index('datetime')
-        except Exception as e:
-            print(f"Error fetching data from {table_name}: {e}")
-            return pd.DataFrame()
-        finally:
-            self.pool.putconn(conn)
-
-    
-    def calculate_file_hash(self, file_path):
-        """Calculate the hash of a file."""
-        hasher = hashlib.sha256()
-        with open(file_path, 'rb') as f:
-            buf = f.read()
-            hasher.update(buf)
-        return hasher.hexdigest()
-
-    def fetch_table(self, table_name, limit=None, primary_key='id'):
-        """
-        v1.1 - using engine, much faster.
-        v1.2 - replace engine with psycopg2.
-        v1.2.1 - update using pkey for ordering.
-
-        Last confirmed: 2024-07-24 10:02
-        """
-        
-        conn = self.pool.getconn()
-        try:
-            with conn.cursor() as cur:
-                query = f"SELECT * FROM {table_name}"
-                if primary_key:
-                    query += f" ORDER BY {primary_key}"
-                if limit:
-                    query += f" LIMIT {limit}"
-                cur.execute(query)
-                result = cur.fetchall()
-                columns = [desc[0] for desc in cur.description]
-                return pd.DataFrame(result, columns=columns)
-        except Exception as e:
-            print(f"error fetching data from {table_name}: {e}")
-            return pd.DataFrame()
         finally:
             self.pool.putconn(conn)
             
-    def fill_missing_ids(self, df, id_column='id'):
-        # Find the maximum id value
-        max_id = df[id_column].max()
-        if pd.isna(max_id):
-            max_id = 0
-        else:
-            max_id = int(max_id)
-
-        # Identify missing id values and fill them
-        missing_idx = df[df[id_column].isna() | (df[id_column] == 0)].index
-        df.loc[missing_idx, id_column] = range(max_id + 1, max_id + len(missing_idx) + 1)
-
-        return df     
-          
+            
     def replace_table(self, df, table_name, send=False, mode=['UPDATE'], primary_keys=['id'], batch_size=1000):
         """
         v1.1 using engine, much faster.
@@ -408,6 +452,294 @@ class DatabaseManager:
                     print(f"Error occurred: {e}")
                 finally:
                     self.pool.putconn(conn)
+                       
+
+    def fetch_partition(bank, schema_name, config, start_partition, end_partition, limit=None):
+        """
+        v0.2.2
+            - modify
+                    use condition.
+                    
+        20241101 1007
+        """
+        conn = bank.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                # Generate the range of partitions between start_partition and end_partition
+                start_year, start_month = map(int, start_partition.split('_'))
+                end_year, end_month = map(int, end_partition.split('_'))
+
+                # Construct the dynamic table name based on the partitioned columns
+                table_name = f"{config['priceBox_indicator']}_{config['point_mode']}_{config['point_indicator']}_{config['zone_indicator']}"
+            
+                # Create a list to store all partition names between start and end
+                partition_names = []
+                year, month = start_year, start_month
+                while (year < end_year) or (year == end_year and month <= end_month):
+                    partition_names.append(f"{table_name}_{year:04d}_{month:02d}")
+                    # Move to the next month
+                    if month == 12:
+                        year += 1
+                        month = 1
+                    else:
+                        month += 1                 
+
+                # Construct a query to fetch data from all relevant partitions
+                query_parts = []
+                for partition in partition_names:
+                    
+                    query = sql.SQL("""
+                        SELECT * FROM {schema_name}.{table_name}
+                        WHERE "priceBox_value" = {priceBox_value}
+                            AND "point_value" = {point_value}
+                            AND "zone_value" = {zone_value}
+                            AND "interval" = {interval}
+                    """).format(
+                        schema_name=sql.Identifier(schema_name),
+                        table_name=sql.Identifier(partition),  # 수정된 부분
+                        priceBox_value=sql.Literal(config['priceBox_value']),
+                        point_value=sql.Literal(config['point_value']),
+                        zone_value=sql.Literal(config['zone_value']),
+                        interval=sql.Literal(config['interval'])
+                    )
+                    
+                    query_parts.append(query)                
+                    # print(f"partition appended: {partition}")   
+                    
+                full_query = sql.SQL(" UNION ALL ").join(query_parts)
+
+                if limit:
+                    full_query += sql.SQL(" LIMIT {}").format(sql.Literal(limit))
+                
+                # Execute the combined query
+                cur.execute(full_query)
+                result = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+
+                # Return the result as a pandas DataFrame
+                return pd.DataFrame(result, columns=columns)
+        except Exception as e:
+            print(f"Error fetching data from partitions: {e}")
+            return pd.DataFrame()
+        finally:
+            bank.pool.putconn(conn)
+
+
+
+    def fetch_trade_result(self, schema_name, config, datetime_before=None):
+        """
+        v0.3
+            - update
+                Added datetime_before parameter as a string to filter rows based on timestamp.
+                datetime_before is converted to Unix timestamp to match the int type of the timestamp column.
+        v0.4
+            - update
+                Added schema_name parameter to allow specifying a schema.
+                Added datetime_before parameter as a string to filter rows based on timestamp.
+                datetime_before is converted to Unix timestamp to match the int type of the timestamp column.
+        v0.5
+            - update
+                table name.
+
+        Last confirmed: 20240928 1750.
+        """
+
+        conn = self.pool.getconn()
+        try:
+            cursor = conn.cursor()
+
+            # Construct the dynamic table name based on the partitioned columns
+            table_name = f"{config['priceBox_indicator']}_{config['point_mode']}_{config['point_indicator']}_{config['zone_indicator']}"
+
+            # Start constructing the query
+            query = sql.SQL("""
+                SELECT * FROM {schema_name}.{table_name}
+                WHERE "priceBox_value" = {priceBox_value}
+                    AND "point_value" = {point_value}
+                    AND "zone_value" = {zone_value}
+                    AND "interval" = {interval}
+            """)
+
+            # Finalize query formatting
+            query = query.format(
+                schema_name=sql.Identifier(schema_name),
+                table_name=sql.Identifier(table_name),
+                priceBox_value=sql.Literal(config['priceBox_value']),
+                point_value=sql.Literal(config['point_value']),
+                zone_value=sql.Literal(config['zone_value']),
+                interval=sql.Literal(config['interval'])
+            )
+
+            # Convert datetime_before string to Unix timestamp if provided
+            if datetime_before is not None:
+                datetime_obj = datetime.strptime(datetime_before, '%Y-%m-%d %H:%M:%S')
+                datetime_before_ts = int(time.mktime(datetime_obj.timetuple()))
+            else:
+                datetime_before_ts = None
+
+            # Add datetime_before condition if provided
+            if datetime_before_ts is not None:
+                query = query + sql.SQL(" AND timestamp_entry <= {datetime_before_ts}").format(
+                    datetime_before_ts=sql.Literal(datetime_before_ts)
+                )
+
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+            if rows:
+                columns = [desc[0] for desc in cursor.description]
+                result_df = pd.DataFrame(rows, columns=columns)
+            else:
+                result_df = pd.DataFrame()
+
+            cursor.close()
+            return result_df
+        except Exception as e:
+            print(f"Error: {e}")
+            return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)
+
+
+    def fetch_df_res(self, schema, table_name, symbol, limit=None, datetime_after=None, datetime_before=None):
+        """
+        v0.1
+            315 ms ± 4.23 ms per loop (mean ± std. dev. of 7 runs, 1 loop each)
+            - add
+                order by.
+                limit parameter to fetch limited rows.
+            - modify
+                fetch the last 'limit' rows from the sorted table.
+        v0.2
+            - update
+                Added datetime_after parameter to filter rows based on timestamp.
+        v0.3
+            - update
+                Added datetime_before parameter to filter rows based on timestamp.
+
+        Last confirmed: 20240825 2127.
+        """
+        
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                # Build the WHERE clause
+                where_clause = sql.SQL("WHERE symbol = {}").format(sql.Literal(symbol))
+                
+                # Add datetime_after condition if provided
+                if datetime_after is not None:
+                    where_clause = where_clause + sql.SQL(" AND datetime >= {}").format(sql.Literal(datetime_after))
+                
+                # Add datetime_before condition if provided
+                if datetime_before is not None:
+                    where_clause = where_clause + sql.SQL(" AND datetime <= {}").format(sql.Literal(datetime_before))
+                
+                # Construct the full query
+                query = sql.SQL("""
+                    SELECT * FROM (
+                        SELECT * FROM {}.{} {} ORDER BY timestamp DESC
+                        {}
+                    ) subquery ORDER BY timestamp
+                """).format(
+                    sql.Identifier(schema), 
+                    sql.Identifier(table_name), 
+                    where_clause,
+                    sql.SQL('LIMIT {}').format(sql.Literal(limit)) if limit is not None else sql.SQL('')
+                )
+                
+                cur.execute(query)
+                result = cur.fetchall()
+                columns = [desc[0] for desc in cur.description]
+                return pd.DataFrame(result, columns=columns).set_index('datetime')
+        except Exception as e:
+            print(f"Error fetching data from {table_name}: {e}")
+            return pd.DataFrame()
+        finally:
+            self.pool.putconn(conn)
+
+
+    def fetch_table(self, table_name, usd_db=False, limit=None, primary_key=None):
+        """
+        v1.1 - using engine, much faster.
+        v1.2 - replace engine with psycopg2.
+        v1.2.1 - update using pkey for ordering.
+        v1.2.2 
+            - modify
+                use read_csv.
+
+        20241107 1642.
+        """
+        
+        if usd_db:
+            conn = self.pool.getconn()
+            try:
+                with conn.cursor() as cur:
+                    query = f"SELECT * FROM {table_name}"
+                    if primary_key:
+                        query += f" ORDER BY {primary_key}"
+                    if limit:
+                        query += f" LIMIT {limit}"
+                    cur.execute(query)
+                    result = cur.fetchall()
+                    columns = [desc[0] for desc in cur.description]
+                    return pd.DataFrame(result, columns=columns)
+            except Exception as e:
+                print(f"error fetching data from {table_name}: {e}")
+                return pd.DataFrame()
+            finally:
+                self.pool.putconn(conn)
+                
+        else:
+            return pd.read_csv(os.path.join(self.path_dir_table, f'{table_name}.csv'))
+                               
+    
+    def calculate_file_hash(self, file_path):
+        """Calculate the hash of a file."""
+        hasher = hashlib.sha256()
+        with open(file_path, 'rb') as f:
+            buf = f.read()
+            hasher.update(buf)
+        return hasher.hexdigest()
+
+
+            
+    def fill_missing_ids(self, df, id_column='id'):
+        # Find the maximum id value
+        max_id = df[id_column].max()
+        if pd.isna(max_id):
+            max_id = 0
+        else:
+            max_id = int(max_id)
+
+        # Identify missing id values and fill them
+        missing_idx = df[df[id_column].isna() | (df[id_column] == 0)].index
+        df.loc[missing_idx, id_column] = range(max_id + 1, max_id + len(missing_idx) + 1)
+
+        return df   
+    
+    def distinct_symbol_from_table(self, schema, table_name):
+        
+        conn = self.pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                
+                cur.execute(sql.SQL("""
+                    SELECT DISTINCT symbol FROM {}.{}
+                """).format(
+                    sql.Identifier(schema), 
+                    sql.Identifier(table_name)
+                ))
+                
+                result = cur.fetchall()
+                unique_symbols = [row[0] for row in result]
+                return unique_symbols
+        except Exception as e:
+            print(f"Error get_symbol_from_table {table_name}: {e}")
+            return []
+        finally:
+            self.pool.putconn(conn)        
+  
+          
 
 
 class TokenBucket:
@@ -521,8 +853,9 @@ class Bank(UMFutures):
     v0.4.1
         - modify
             to use config values.
+            log file name
 
-    Last confirmed, 20240907 2001.
+    Last confirmed, 20241017 1137.
     """
     
     def __init__(self, **kwargs):
@@ -535,7 +868,8 @@ class Bank(UMFutures):
         for path in ['path_dir_log', 'path_dir_table', 'path_dir_df_res']:
             os.makedirs(kwargs[path], exist_ok=True)
             
-        self.path_log = os.path.join(kwargs['path_dir_log'], "{}.log".format(datetime.now().strftime('%Y%m%d%H%M%S')))
+        self.path_log = os.path.join(kwargs['path_dir_log'], f"{self.config.bank.log_name}.log")
+        
         self.path_dir_df_res = kwargs['path_dir_df_res']  
         
             
@@ -575,10 +909,10 @@ class Bank(UMFutures):
         self.table_trade_name = self.config.database.table_trade_name
         self.table_log_name = self.config.database.table_log_name
         
-        self.table_account = self.db_manager.fetch_table(self.table_account_name)
-        self.table_condition = self.db_manager.fetch_table(self.table_condition_name)
-        self.table_trade = self.db_manager.fetch_table(self.table_trade_name)
-        self.table_log = self.db_manager.fetch_table(self.table_log_name)
+        self.table_account = self.db_manager.fetch_table(self.table_account_name, usd_db=self.config.database.usage)
+        self.table_condition = self.db_manager.fetch_table(self.table_condition_name, usd_db=self.config.database.usage)
+        self.table_trade = self.db_manager.fetch_table(self.table_trade_name, usd_db=self.config.database.usage)
+        self.table_log = self.db_manager.fetch_table(self.table_log_name, usd_db=self.config.database.usage)
         
         # update_balance with margin data info table_trade.
         self.table_account = self.update_balance()
@@ -939,22 +1273,6 @@ def get_df_new_by_streamer(self, ):
 
 def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep=None):
     """
-    v2.0 
-        - Add 
-            `self.config.trader_set.get_df_new_timeout`.
-        - Set 
-            `df_res = None` in all return phases.
-    v3.0 
-        - Replace 
-            `concat_candlestick` with v2.0 logic.
-    v3.1 
-        - Replace 
-            with `bank.concat_candlestick`.
-    v4.0 
-        - Integrate 
-            `concat_candlestick` logic directly into the function.
-        - Modify 
-            return behavior based on the presence of `df_list`.
     v4.1 
         - Add 
             token information.
@@ -995,7 +1313,7 @@ def get_df_new(self, interval='1m', days=2, end_date=None, limit=1500, timesleep
         if end_date is None:
             timestamp_end = time.time() * 1000
         else:
-            assert end_date != str(datetime.now()).split(' ')[0], "end_date shouldd not be today."
+            assert end_date != str(datetime.now()).split(' ')[0], "end_date should not be today."
             timestamp_end = int(datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59).timestamp() * 1000)
             
         timestamp_start = timestamp_end - days * 24 * 60 * 60 * 1000
@@ -1494,29 +1812,42 @@ def get_precision(self, symbol):
             time.sleep(self.config.term.precision)      
         
 
+
+
+def get_leverage_brackets(self):
+    """
+    Creates a mapping of symbol to its bracket data from the leverage_brackets API response.
+    
+    Returns:
+        data_by_symbol (dict): A dictionary mapping each symbol to its bracket information.
+    """
+    
+    # Get the current server time
+    server_time = self.time()['data']['serverTime']
+    
+    # Request leverage bracket information
+    response = self.leverage_brackets(
+        recvWindow=6000, 
+        timestamp=server_time
+    )
+
+    # Extract data from the API response
+    data = response['data']
+
+    # Create a mapping of symbol to its bracket data
+    data_by_symbol = {item['symbol']: item['brackets'] for item in data}
+    
+    return data_by_symbol
+
+
+
 def get_leverage_limit(self, 
                        symbol, 
+                       amount_entry,
+                       loss,
                        price_entry, 
-                       price_stop_loss,
-                       fee_entry, 
-                       fee_exit):
+                       ):
     """
-    v2.0
-        divide into server & user
-            compare which one is minimal.
-        leverage_limit is calculated by amount / target_loss    
-            quantity = target_loss / loss
-            amount = quantity * price_entry
-            
-            leverage_limit  = amount / target_loss
-                ex) amount_required = 150 USDT, target_loss = 15 USDT, leverage_limit = 10.
-            leverage_limit  = ((target_loss / loss) * price_entry) / target_loss
-            leverage_limit  = ((1 / loss) * price_entry)
-            
-            leverage_limit  = price_entry / loss
-            loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
-    v3.0
-        modify to vivid input & output.
     v3.1
         modify leverage_limit_user logic.
             more comprehensive.
@@ -1526,25 +1857,40 @@ def get_leverage_limit(self,
         show_header=True.
     v3.4
         while loop completion.
+    v3.5
+        - update
+            leverage_limit use amount_entry.
 
-    Last confirmed: 2024-07-21 22:49
+    Last confirmed, 20241012 1425.
     """
       
-    while True:
+    while 1:
         try:
-            self.token_bucket.wait_for_tokens()            
-            server_time = self.token_bucket.server_time
+            leverage_brackets = get_leverage_brackets(self)
             
-            response = self.leverage_brackets(symbol=symbol, recvWindow=6000, timestamp=server_time)                        
-            leverage_limit_server = response['data'][0]['brackets'][0]['initialLeverage']    
+            # Find the appropriate bracket for the given symbol and amount_entry
+            if symbol in leverage_brackets:
+                brackets = leverage_brackets[symbol]
+                
+                # Use a list comprehension and min function to find the correct bracket quickly
+                leverage_limit_server = min(
+                    (bracket['initialLeverage'] for bracket in brackets 
+                    if bracket['notionalFloor'] <= amount_entry <= bracket['notionalCap']),
+                    default=np.inf
+                )
+            else:
+                leverage_limit_server = np.inf  # If the symbol is not found, default to infinity or any other value
+
             
-            loss = abs(price_entry - price_stop_loss) + (price_entry * fee_entry + price_stop_loss * fee_exit)
             loss_pct = loss / price_entry * 100
             leverage_limit_user = np.maximum(1, np.floor(100 / loss_pct).astype(int))
 
             leverage_limit = min(leverage_limit_user, leverage_limit_server)
+                        
+            self.sys_log.debug(f"leverage_limit_server: {leverage_limit_server}")
+            self.sys_log.debug(f"leverage_limit_user: {leverage_limit_user}")
 
-            return loss, leverage_limit_user, leverage_limit_server, leverage_limit
+            return leverage_limit_user, leverage_limit_server, leverage_limit
             
         except Exception as e:
             msg = "error in get_leverage_limit : {}".format(e)
@@ -1877,6 +2223,7 @@ def order_limit(self,
     Last confirmed, 20241012 1248.
     """
     
+    loop_cnt  = 0
     while 1:
         
         # init.  
@@ -1884,7 +2231,9 @@ def order_limit(self,
         error_code = 0
         
         try:        
-            server_time = self.time()['data']['serverTime']
+            self.token_bucket.wait_for_tokens() 
+
+            server_time = self.token_bucket.server_time
             response = self.new_order(timeInForce=TimeInForce.GTC,
                                             symbol=symbol,
                                             side=side_order,
@@ -1894,11 +2243,8 @@ def order_limit(self,
                                             price=str(price),
                                             timestamp=server_time)
             
-            tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M'))
-            self.token_bucket.wait_for_token_consume(tokens_used) 
-
             order_result = response['data']        
-            self.sys_log.info("order_limit succeed. order_result : {}".format(order_result))
+            self.sys_log.info("order_limit succeed: {}".format(order_result))
             
         except Exception as e:
             msg = "error in order_limit : {}".format(e)
@@ -1911,14 +2257,20 @@ def order_limit(self,
             if "-4014" in str(e):
                 price_precision_prev = self.get_precision_by_price(price)
                 self.sys_log.debug(f"price_precision_prev: {price_precision_prev}")
+                
                 if price_precision_prev == 0:
                     error_code = -4014
                 else:
-                    price_precision_new = price_precision_prev - 1
+                    price_precision_new = price_precision_prev + (-1 if loop_cnt == 0 else 1)                        
                     price = self.calc_with_precision(price, price_precision_new)
                     self.sys_log.debug(f"price_precision_new: {price_precision_new}")
                     self.sys_log.debug(f"price: {price}")
-                    continue
+                    
+                    loop_cnt += 1
+                    if loop_cnt < 3:
+                        continue
+                    else:
+                        error_code = -4014
                             
             
             # -4003, 'quantity less than zero.'
@@ -1929,6 +2281,82 @@ def order_limit(self,
                 error_code = 'Unknown'
 
         return order_result, error_code
+    
+    
+def order_stop_market(self, 
+                symbol,
+                side_order, 
+                side_position, 
+                price, 
+                quantity):
+    
+    """
+    v0.1
+        - init
+            
+    20241101 0727.
+    """
+    
+    loop_cnt  = 0
+    while 1:
+        
+        # init.  
+        order_result = None
+        error_code = 0
+        
+        try:        
+            self.token_bucket.wait_for_tokens() 
+            server_time = self.token_bucket.server_time
+            
+            response = self.new_order(timeInForce=TimeInForce.GTC,
+                                        symbol=symbol,
+                                        side=side_order,
+                                        positionSide=side_position,
+                                        type=OrderType.STOP_MARKET,
+                                        quantity=str(quantity),
+                                        stopPrice=str(price), 
+                                        timestamp=server_time
+                                        )
+            
+            order_result = response['data']        
+            self.sys_log.info("order_stop_market succeed: {}".format(order_result))
+            
+        except Exception as e:
+            msg = "error in order_limit : {}".format(e)
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+            time.sleep(self.config.term.order_stop_market)      
+
+            # error casing. (later)
+            # -4014, 'Price not increased by tick size.',
+            if "-4014" in str(e):
+                price_precision_prev = self.get_precision_by_price(price)
+                self.sys_log.debug(f"price_precision_prev: {price_precision_prev}")
+                
+                if price_precision_prev == 0:
+                    error_code = -4014
+                else:
+                    price_precision_new = price_precision_prev + (-1 if loop_cnt == 0 else 1)                        
+                    price = self.calc_with_precision(price, price_precision_new)
+                    self.sys_log.debug(f"price_precision_new: {price_precision_new}")
+                    self.sys_log.debug(f"price: {price}")
+                    
+                    loop_cnt += 1
+                    if loop_cnt < 3:
+                        continue
+                    else:
+                        error_code = -4014
+                            
+            
+            # -4003, 'quantity less than zero.'
+                # if error cannot be solved in this loop, return
+            elif "-4003" in str(e):
+                error_code = -4003
+            else:
+                error_code = 'Unknown'
+
+        return order_result, error_code
+
 
 
 
@@ -1956,10 +2384,6 @@ def order_market(self,
     
     while 1:
 
-        # quantity_unexecuted = get_quantity_unexecuted(self, 
-        #                                             symbol,
-        #                                             orderId)
-
         # order_market
         order_result = None
         error_code = 0
@@ -1977,7 +2401,7 @@ def order_market(self,
                                         timestamp=server_time)
             
             order_result = response['data']            
-            self.sys_log.info("order_market succeed. : {}".format(order_result))
+            self.sys_log.info("order_market succeed: {}".format(order_result))
             
         except Exception as e:
             msg = "error in order_market : {}".format(e)

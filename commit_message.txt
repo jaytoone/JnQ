@@ -1,7 +1,6 @@
-JnQ - TheBank_v2.7.1
+JnQ - TheBank_v3.0
 
-- modify
 	
 - update
-	leverage_limit considering amount_entry
-	price_precision updating modules.
+	adj. Anchoring concept
+		update IDEP & Bank method
