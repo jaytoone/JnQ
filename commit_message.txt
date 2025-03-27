@@ -1,6 +1,6 @@
-JnQ - TheBank_v3.0
+JnQ - TheBank_v3.1_20250327 2140
 
 	
 - update
-	adj. Anchoring concept
-		update IDEP & Bank method
+	adj. Asynco
+	Real-Trading available.

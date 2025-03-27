@@ -7,10 +7,7 @@ from funcs.binance.websocket.um_futures.websocket_client import UMFuturesWebsock
 
 
 # Library for Bank.
-# from funcs.binance.shield_module_v4_1 import ShieldModule
 from funcs.public.constant import *
-# from funcs.public.indicator import *
-# from funcs.public.indicator_ import *
 from funcs.public.broker import *
 
 
@@ -20,11 +17,13 @@ import pandas as pd
 import numpy as np
 import math
 import threading
+
 import asyncio
 
 import time
 from datetime import datetime, timedelta
 import re
+import random
 
 
 import hashlib
@@ -835,19 +834,6 @@ class TokenBucket:
 class Bank(UMFutures):
 
     """
-    v0.1
-        follow up server's api used-weight (tokens_used).
-    v0.2
-        using pool for sql.
-    v0.3
-        use DatabaseManager.
-    v0.3.1
-        - update
-            use while loop.
-            get_messenger_bot v3.1
-    v0.3.2
-        - update
-            use log_name.   
     v0.4 
         - update
             use TokenBucket v0.3
@@ -855,8 +841,8 @@ class Bank(UMFutures):
         - modify
             to use config values.
             log file name
-
-    Last confirmed, 20241017 1137.
+    v0.4.3
+        - add asyncio.lock 20250321 2108.
     """
     
     def __init__(self, **kwargs):
@@ -882,13 +868,17 @@ class Bank(UMFutures):
         self.price_market = {}
         
         
-        # logger.
+        # logger
         self.set_logger(self.config.bank.log_name)            
         
-        # token.    
+        # token
         self.token_bucket = TokenBucket(sys_log=self.sys_log,
                                         server_timer=self.time,
                                         capacity=kwargs['api_rate_limit'])
+                
+        # asyncio.Lock
+        self.lock_condition = asyncio.Lock()
+        self.lock_trade = asyncio.Lock()
 
       
         # load_table 
@@ -1150,7 +1140,7 @@ class Bank(UMFutures):
                 return
                 
             except Exception as e:
-                msg = "Error in change_initial_leverage : {}".format(e)
+                msg = "error in change_initial_leverage : {}".format(e)
                 self.sys_log.error(msg)
                 self.push_msg(msg)
                 time.sleep(self.config.term.symbolic)
@@ -1185,7 +1175,7 @@ class Bank(UMFutures):
             except Exception as e:
                 if '-4059' in str(e): # 'No need to change position side.'
                     return
-                msg = "Error in set_position_mode : {}".format(e)
+                msg = "error in set_position_mode : {}".format(e)
                 self.sys_log.error(msg)
                 self.push_msg(msg)
                 time.sleep(self.config.term.symbolic)
@@ -1220,11 +1210,11 @@ class Bank(UMFutures):
             except Exception as e:
                 if '-4046' in str(e): # 'No need to change margin type.'
                     return
-                msg = "Error in set_margin_type : {}".format(e)
+                msg = "error in set_margin_type : {}".format(e)
                 self.sys_log.error(msg)
                 self.push_msg(msg)
                 time.sleep(self.config.term.symbolic)
-     
+      
             
 def get_tickers(self, ):  
     return [info['symbol'] for info in self.exchange_info()['data']['symbols']]  
@@ -1309,7 +1299,8 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
 
         for idx, (time_start, time_end) in enumerate(zip(reversed(time_arr_start), reversed(time_arr_end))):
             try:
-                self.sys_log.debug(f"{datetime.fromtimestamp(time_start / 1000)} - {datetime.fromtimestamp(time_end / 1000)}")
+                self.sys_log.debug(f"time_start : {datetime.fromtimestamp(time_start / 1000)}")
+                self.sys_log.debug(f"time_end : {datetime.fromtimestamp(time_end / 1000)}")
                     
                 self.token_bucket.wait_for_tokens()
                 server_time = self.token_bucket.server_time
@@ -1365,7 +1356,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
                     df = df.astype(float)
 
                     df_list.append(df)
-                    self.sys_log.debug(f"{symbol} {df.index[0]} - {df.index[-1]}")
+                    self.sys_log.debug(f"df.index range : {symbol} {df.index[0]} - {df.index[-1]}")
                     
 
                     # Check Realtime df sync. by lastest row's timestamp.
@@ -1409,7 +1400,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
 
         if df_list:
             sum_df = pd.concat(df_list).sort_index()
-            return sum_df[~sum_df.index.duplicated(keep='last')]     
+            return sum_df[~sum_df.index.duplicated(keep='last')]
 
         
 def __________________0():
@@ -1799,7 +1790,7 @@ def get_price_realtime(self, symbol):
     """
     
     try:
-        price_realtime =  self.price_market[symbol]
+        price_realtime = self.price_market[symbol]
     except Exception as e:
         price_realtime = np.nan   
         
@@ -1909,7 +1900,7 @@ def check_closer(self,
         - init. 20250317 1044.
     """
     
-    order_market_on = False
+    closer_on = False
     
     if ncandle_game: 
         itv_number = itv_to_number(interval)
@@ -1918,15 +1909,15 @@ def check_closer(self,
          # if ncandle_game == 2, 04:30:01 기준, 
             # 진입바의 timeIndex = 04:15:00, expiry 는 04:45:00 timeIndex 에 일어난다.         
         if time.time() - entry_timestamp > itv_number * 60 * ncandle_game:            
-            order_market_on = True
+            closer_on = True
             
     # 필요한 파라미터와 결과를 로그에 출력
     self.sys_log.info(
-        "check_closer: order_market_on=%s | interval=%s | entry_timeIndex=%s | ncandle_game=%s",
-        order_market_on, interval, entry_timeIndex, ncandle_game
+        "check_closer: closer_on=%s | interval=%s | entry_timeIndex=%s | ncandle_game=%s",
+        closer_on, interval, entry_timeIndex, ncandle_game
     )    
     
-    return order_market_on
+    return closer_on
 
 
 def wait_barClosed(self, interval, entry_timeIndex):
@@ -1978,6 +1969,7 @@ def order_cancel(self,
         - -2011, 'Unknown order sent.' 다룬다. 20250321 1843.
     """
     
+    orderId = int(orderId)
     canceled = True
     
     try:     
@@ -2062,10 +2054,14 @@ def order_limit(self,
     v4.2.1
         - adj. loop_cnt_max. 20250319 0645.
         - add error msg 'symbol' 20250319 1906.
+    v4.2.2
+        - adj. hoga unit to retry -4003. 20250325 2104.
     """
     
     loop_cnt  = 0
     loop_cnt_max  = 3
+    price_orig = price
+    price_precision_orig = self.get_precision_by_price(price_orig) # price already get_precision.
     
     while 1:
         
@@ -2103,20 +2099,25 @@ def order_limit(self,
             # -4014 : 'Price not increased by tick size.',
                 # get_precision doesn't work.
             if "-4014" in str(e):
-                price_precision_prev = self.get_precision_by_price(price)
-                self.sys_log.debug(f"price_precision_prev: {price_precision_prev}")
+                self.sys_log.debug(f"price_precision_orig: {price_precision_orig}")
                 
-                if price_precision_prev == 0:
+                if price_precision_orig == 0:
                     error_code = -4014
                 else:
-                     # 첫 번째 루프(0), 두 번째 루프(-1), 세 번째 루프(-2)
-                    price_precision_new = price_precision_prev - loop_cnt
-                    price = self.calc_with_precision(price, price_precision_new)
+                    loop_cnt += 1  # loop_cnt 증가
+                    
+                     # 첫 번째 루프(-1), 두 번째 루프(-2), 세 번째 루프(-3)
+                    price_precision_new = price_precision_orig - loop_cnt
+                    
+                    # side_position 은 고정, open / close 에 따라 변동 없다.
+                    if side_position == 'LONG':
+                        price = self.calc_with_precision(price, price_precision_new)
+                    else:
+                        price = self.calc_with_precision(price, price_precision_new, def_type='ceil')                        
                     
                     self.sys_log.debug(f"price_precision_new: {price_precision_new}")
                     self.sys_log.debug(f"price: {price}")
                     
-                    loop_cnt += 1  # loop_cnt 증가
 
                     # 최대 3회 재시도 후 실패하면 오류 반환
                     if loop_cnt <= loop_cnt_max:
@@ -2312,80 +2313,94 @@ def get_income_info(self,
                     income_accumulated,
                     profit_accumulated,
                     currency="USDT"):
-    
     """
-    v4.3 - table_log 직접 사용하도록 수정 20250319 2139.
+    v4.3.1 
+        - 전체 업데이트 및 누적 손익 계산 방식 변경 20250322 2211.
+        - add drop_duplicated. 20250323 2044.
+            replace boolean indexing instead query. Faster !
+    v4.3.2
+        - hotfix : replace table_log to _valid. 20250324 0327. 
     """
-    
+
     # 유효한 데이터 필터링
-    table_log_valid = table_log.astype({'cumQuote': 'float'}).query('code == @code and cumQuote != 0')
+        # 원본 테이블 (self.table_log) 은 변형시키지 않는다.
+    table_log = table_log.drop_duplicates(subset=['code', 'orderId', 'order_way'], keep='last')
     
-    # 'OPEN' & 'PARTIALLY_FILLED' 상태의 주문 처리
-    open_partial_row = table_log_valid.query("order_way == 'OPEN' and status == 'PARTIALLY_FILLED'")
-    
-    for idx, row in open_partial_row.iterrows():
+    # latency  boolean is beter.
+    # table_log_valid = table_log.astype({'cumQuote': 'float'}).query('code == @code and cumQuote != 0')
+    table_log['cumQuote'] = table_log['cumQuote'].astype(float)
+    table_log_valid = table_log[(table_log['code'] == code) & (table_log['cumQuote'] != 0)]
+    self.sys_log.info(f"table_log_valid {table_log_valid}")
+
+
+    # status != 'NEW'인 경우 order_info로 업데이트
+        # table_log_valid, NEW status has 0 cumQuote !
+    for idx, row in table_log_valid.iterrows():
         order_info = get_order_info(self, row.symbol, row.orderId)
         if order_info:
             start_time = time.time()
-            table_log.loc[idx, order_info.keys()] = order_info.values()
-            self.sys_log.debug(f"LoopTableTrade : update table_log elapsed time: {time.time() - start_time:.4f}s")
+            table_log_valid.loc[idx, order_info.keys()] = order_info.values()
+            self.sys_log.debug(f"get_income_info : elapsed time, get_order_info : {time.time() - start_time:.4f}s")
+
+    # 다시 type cast.
+        # get_order_info()로 table_log 내용을 최신화했기 때문
+    table_log_valid['cumQuote'] = table_log_valid['cumQuote'].astype(float)    
+    self.sys_log.info(f"table_log_valid {table_log_valid}")
     
-    # 다시 필터링 (업데이트된 데이터 반영)
-    if not open_partial_row.empty:
-        table_log_valid = table_log.astype({'cumQuote': 'float'}).query('code == @code and cumQuote != 0')
-    
+
     # 수수료 계산
     fee_limit = self.config.broker.fee_limit
     fee_market = self.config.broker.fee_market
     table_log_valid['fee_ratio'] = np.where(table_log_valid['type'] == 'LIMIT', fee_limit, fee_market)
     table_log_valid['fee'] = table_log_valid['cumQuote'] * table_log_valid['fee_ratio']
-    
-    # OPEN과 CLOSE 주문 분리
-    table_log_valid_open = table_log_valid.query("order_way == 'OPEN'")
-    table_log_valid_close = table_log_valid.query("order_way == 'CLOSE'")
-    
-    if table_log_valid_open.empty or table_log_valid_close.empty:
+
+    # OPEN, CLOSE 나누기
+    table_open = table_log_valid.query("order_way == 'OPEN'")
+    table_close = table_log_valid.query("order_way == 'CLOSE'")
+
+    if table_open.empty or table_close.empty:
         self.sys_log.info(f"table_log_valid length insufficient: {table_log_valid}")
         return 0, income_accumulated, 0, profit_accumulated
-    
-    # 가장 최근 OPEN과 CLOSE 주문의 금액 및 수수료
-    last_open = table_log_valid_open.iloc[-1]
-    last_close = table_log_valid_close.iloc[-1]
-    
-    cumQuote_open = last_open.cumQuote
-    cumQuote_close = last_close.cumQuote
-    fee_open = last_open.fee
-    fee_close = last_close.fee
-    
-    self.sys_log.info(f"cumQuote_open: {cumQuote_open}")
-    self.sys_log.info(f"cumQuote_close: {cumQuote_close}")
-    self.sys_log.info(f"fee_open: {fee_open}")
-    self.sys_log.info(f"fee_close: {fee_close}")
-    
+
+    # cumQuote, fee 합산
+    cumQuote_open = table_open['cumQuote'].sum()
+    cumQuote_close = table_close['cumQuote'].sum()
+    fee_open = table_open['fee'].sum()
+    fee_close = table_close['fee'].sum()
+
+    self.sys_log.info(f"cumQuote_open (sum): {cumQuote_open}")
+    self.sys_log.info(f"cumQuote_close (sum): {cumQuote_close}")
+    self.sys_log.info(f"fee_open (sum): {fee_open}")
+    self.sys_log.info(f"fee_close (sum): {fee_close}")
+
     # 손익 계산
-    income = (cumQuote_close - cumQuote_open if side_position == 'LONG' else cumQuote_open - cumQuote_close) - (fee_open + fee_close)
+    if side_position == 'LONG':
+        income = cumQuote_close - cumQuote_open
+    else:  # SHORT
+        income = cumQuote_open - cumQuote_close
+    income -= (fee_open + fee_close)
     income_accumulated += income
-    
+
     self.sys_log.info(f"income: {income:.4f} {currency}")
     self.sys_log.info(f"income_accumulated: {income_accumulated:.4f} {currency}")
-    
-    # 수익률 계산 (수동 거래 개입 방지)
+
+    # 수익률 계산
     profit = (income / cumQuote_open * leverage) if cumQuote_open != 0 else 0.0
     profit_accumulated += profit
-    
-    self.sys_log.info(f"profit: {profit:.4f}")
-    
+
+    self.sys_log.info(f"profit: {profit:.4f}, profit_accumulated: {profit_accumulated:.4f}")
+
     # 메시지 푸시
-    msg = (f"cumQuote_open : {cumQuote_open:.4f}\n"
-           f"cumQuote_close : {cumQuote_close:.4f}\n"
-           f"fee_open : {fee_open:.4f}\n"
-           f"fee_close : {fee_close:.4f}\n"
-           f"income : {income:.4f}\n"
-           f"income_accumulated : {income_accumulated:.4f}\n"
-           f"profit : {profit:.4f}\n"
-           f"profit_accumulated : {profit_accumulated:.4f}\n")
+    msg = (f"cumQuote_open (sum): {cumQuote_open:.4f}\n"
+           f"cumQuote_close (sum): {cumQuote_close:.4f}\n"
+           f"fee_open (sum): {fee_open:.4f}\n"
+           f"fee_close (sum): {fee_close:.4f}\n"
+           f"income: {income:.4f}\n"
+           f"income_accumulated: {income_accumulated:.4f}\n"
+           f"profit: {profit:.4f}\n"
+           f"profit_accumulated: {profit_accumulated:.4f}\n")
     self.push_msg(msg)
-    
+
     return income, income_accumulated, profit, profit_accumulated
 
     
