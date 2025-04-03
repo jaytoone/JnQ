@@ -1,6 +1,8 @@
 """
 v0.4.1
   - sync. vars name to PineScript. 20250317 1008.
+v0.4.2
+    - divide to long & short. 20250327.
 """
 
 params = {
@@ -88,10 +90,10 @@ params = {
     'BBW_const': 0.9,
 
     ###### Momentum ######
-    'DCmmt_const_long_min': 1,
     'DCmmt_const_long_max': 8,
-    'DCmmt_const_short_min': 1,
+    'DCmmt_const_long_min': 1,
     'DCmmt_const_short_max': 10,
+    'DCmmt_const_short_min': 1,
     
 
 
@@ -99,7 +101,7 @@ params = {
     'entry_gap_multi': 0,  # 
     'take_profit_gap_multi': 2,  # 익절 기준 배율
     'stop_loss_gap_multi': 2,  # 손절 기준 배율
-    'expiry_gap_multi': 2,  # 만료 기준 배율 (Bank 는 take_profit 과 동일 사용 가능)
+    'expiry_gap_multi': 2.1,  # 만료 기준 배율 (Bank 는 take_profit 과 동일 사용 가능)
     
     
     'use_limit': True,

@@ -1219,6 +1219,10 @@ class Bank(UMFutures):
 def get_tickers(self, ):  
     return [info['symbol'] for info in self.exchange_info()['data']['symbols']]  
   
+
+def __________________0():
+    pass
+
     
 def get_streamer(self):
     
@@ -1270,6 +1274,8 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
         - df phase modified  20250312 0830.
     v4.2.4
         - add 'symbol' param for asyncio. 20250318 2009.
+    v4.2.5
+        - modify time_gap validation phase. replace to 2 min --> 2 bar. 20250327 2243.
     """
     
     # print(f"limit : {limit}, {type(limit)}")
@@ -1359,25 +1365,32 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
                     self.sys_log.debug(f"df.index range : {symbol} {df.index[0]} - {df.index[-1]}")
                     
 
-                    # Check Realtime df sync. by lastest row's timestamp.
+                    # 현재 시각이 22:30 이상인데, df_res.index.iloc[-1] 가 22:30 (정상) 이 아닌 22:15 (비정상) / 22:10 (비비정상)를 가리키고 있는 상황.                        
                     if idx == 0:
-                        time_gap = time.time() - datetime.timestamp(df.index[-1])
+                        latest_index = df.index[-1].replace(second=0, microsecond=0)
+                        now_rounded = datetime.now().replace(second=0, microsecond=0)
+                        minute_gap = int((now_rounded - latest_index).total_seconds() // 60)
                         itv_number = itv_to_number(interval)
-                        self.sys_log.debug(f"itv_number: {itv_number}")
-                        
-                        # we don't need data exceeded 2 min.
-                        if time_gap > (itv_number + 1) * 60:
-                            msg = f"Error in in get_df_new : time_gap {time_gap} exceeded ({itv_number} + 1) * 60"
-                            self.sys_log.warning(msg)
+
+                        self.sys_log.debug(f"Current time: {now_rounded}, Last data (df.index[-1]): {latest_index}")
+                        self.sys_log.debug(f"Assert minute_gap < itv_number : {minute_gap} < {itv_number} ?")
+
+                        # Critical delay: 2 or more bars behind
+                        if minute_gap >= itv_number * 2:
+                            msg = f"[Critical Delay] {minute_gap} > {itv_number} * 2"
+                            self.sys_log.debug(msg)
+                            # self.push_msg(msg)
                             return
-                        
-                        # give one more chance over 1 min.
-                        elif time_gap > itv_number * 60:
-                            df_list = []  # Reset until valid time comes.
-                            msg = f"Warning in get_df_new : time_gap {time_gap}"
-                            self.sys_log.warning(msg)
+
+                        # Minor delay: 1 bar behind
+                        elif minute_gap >= itv_number:
+                            msg = f"[Minor Delay] {minute_gap} >= {itv_number}"
+                            self.sys_log.debug(msg)
+                            # self.push_msg(msg)
+                            df_list = []
                             time.sleep(self.config.term.df_new)
-                            break  # Start from the beginning.
+                            break
+
 
             except Exception as e:
                 msg = f"Error in klines : {e}"
@@ -1403,7 +1416,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
             return sum_df[~sum_df.index.duplicated(keep='last')]
 
         
-def __________________0():
+def __________________1():
     pass
 
 
@@ -1700,7 +1713,7 @@ def get_price_liquidation(side_open, price_entry, fee_limit, fee_market, leverag
 
 
         
-def __________________1():
+def __________________2():
     pass
 
 
@@ -1745,7 +1758,14 @@ def get_order_info(self, symbol, orderId):
         - update
             add exception for Token error.
         - add orderId in error msg. 20250320 2158.
+        - add prevention nan. 20250331 0656.
     """
+    
+    if pd.isnull(orderId):
+        msg = f"Warning in get_order_info, {symbol} {orderId}"
+        self.sys_log.warning(msg)
+        self.push_msg(msg)
+        return None
  
     orderId = int(orderId)
     
@@ -1809,12 +1829,15 @@ def check_expiration(self,
                     entry_timeIndex,
                     side_position,
                     price_realtime, 
+                    price_historical,
                     price_expiration,
                     ncandle_game=None):
     """
     v0.2
         - Expired_x: 가격 조건에 따른 만료 (LONG: 현재가 >= 만료가, SHORT: 현재가 <= 만료가)
         - Expired_y: ncandle_game 값에 따른 만료. (예: ncandle_game == 2이면, 진입 시각 + (interval*2) 이후 만료)
+    v0.2.1
+        - add historical_data 20250328 2310.
     
     Returns:
         int: 만료 상태
@@ -1826,10 +1849,10 @@ def check_expiration(self,
 
     # 01 Expired_x: 가격 조건 검사
     if side_position == 'LONG':
-        if price_realtime >= price_expiration:
+        if price_realtime >= price_expiration or price_historical >= price_expiration:
             expired = 1
     else:  # SHORT인 경우
-        if price_realtime <= price_expiration:
+        if price_realtime <= price_expiration or price_historical <= price_expiration:
             expired = 1
 
     # 02 Expired_y: Candle Game 조건 검사
@@ -1844,8 +1867,8 @@ def check_expiration(self,
 
     # 필요한 입력 인자와 최종 expired 상태를 보기 좋게 로그로 남김.
     self.sys_log.info(
-        "check_expiration: side=%s | price_realtime=%.2f | price_expiration=%.2f | expired=%d | interval=%s | entry_timeIndex=%s | ncandle_game=%s",
-        side_position, price_realtime, price_expiration, expired, interval, entry_timeIndex, ncandle_game
+        "check_expiration | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%.2f | price_historical=%.2f | price_expiration=%.2f | ncandle_game=%s | expired=%d",
+        interval, entry_timeIndex, side_position, price_realtime, price_historical, price_expiration, ncandle_game, expired
     )
     
     return expired
@@ -1952,7 +1975,7 @@ def wait_barClosed(self, interval, entry_timeIndex):
 
 
         
-def __________________2():
+def __________________3():
     pass
 
 
@@ -2056,6 +2079,7 @@ def order_limit(self,
         - add error msg 'symbol' 20250319 1906.
     v4.2.2
         - adj. hoga unit to retry -4003. 20250325 2104.
+        - simplify error msg. 20250331 0729.
     """
     
     loop_cnt  = 0
@@ -2085,8 +2109,13 @@ def order_limit(self,
             order_result = response['data']        
             self.sys_log.info("order_limit succeed: {}".format(order_result))
             
-        except Exception as e:
-            msg = F"Error in order_limit : {symbol} {e}"
+        except Exception as e:                    
+            code = e.args[1] if len(e.args) > 1 else "Unknown"
+            reason = e.args[2] if len(e.args) > 2 else str(e)
+            
+            msg = f"Error in order_limit : {symbol} {code} {reason}"            
+            # msg = F"Error in order_limit : {symbol} {e}"
+            
             self.sys_log.error(msg)
             self.push_msg(msg)
             time.sleep(self.config.term.order_limit)      
@@ -2392,13 +2421,13 @@ def get_income_info(self,
 
     # 메시지 푸시
     msg = (f"cumQuote_open (sum): {cumQuote_open:.4f}\n"
-           f"cumQuote_close (sum): {cumQuote_close:.4f}\n"
-           f"fee_open (sum): {fee_open:.4f}\n"
-           f"fee_close (sum): {fee_close:.4f}\n"
-           f"income: {income:.4f}\n"
-           f"income_accumulated: {income_accumulated:.4f}\n"
-           f"profit: {profit:.4f}\n"
-           f"profit_accumulated: {profit_accumulated:.4f}\n")
+            f"cumQuote_close (sum): {cumQuote_close:.4f}\n"
+            f"fee_open (sum): {fee_open:.4f}\n"
+            f"fee_close (sum): {fee_close:.4f}\n"
+            f"income: {income:.4f} {currency}\n"
+            f"income_accumulated: {income_accumulated:.4f} {currency}\n"
+            f"profit: {profit:.4%}\n"
+            f"profit_accumulated: {profit_accumulated:.4%}\n")
     self.push_msg(msg)
 
     return income, income_accumulated, profit, profit_accumulated
