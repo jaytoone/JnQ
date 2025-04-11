@@ -101,7 +101,7 @@ params = {
     'entry_gap_multi': 0,  # 
     'take_profit_gap_multi': 2,  # 익절 기준 배율
     'stop_loss_gap_multi': 2,  # 손절 기준 배율
-    'expiry_gap_multi': 2.1,  # 만료 기준 배율 (Bank 는 take_profit 과 동일 사용 가능)
+    'expiry_gap_multi': 2,  # 만료 기준 배율 (Bank 는 take_profit 과 동일 사용 가능)
     
     
     'use_limit': True,

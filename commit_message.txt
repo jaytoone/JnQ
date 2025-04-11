@@ -1,6 +1,4 @@
-JnQ - TheBank_v3.1_20250327 2140
-
+JnQ - TheBank_v3.3_20250411 1030
 	
 - update
-	adj. Asynco
-	Real-Trading available.
+	optimize method and class to Async mode. 

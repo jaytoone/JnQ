@@ -16,9 +16,13 @@ import os
 import pandas as pd
 import numpy as np
 import math
-import threading
 
+import threading
 import asyncio
+from asyncio import as_completed
+import aiohttp
+from urllib.parse import urlencode
+
 
 import time
 from datetime import datetime, timedelta
@@ -57,16 +61,6 @@ pd.set_option('display.max_columns', 100)
 
 class DatabaseManager:
     """
-    v0.1 - Init.
-    v0.1.1 - update replace_table.      
-    v0.2
-        - add
-            IDEP monitor methodd. 
-            insert_table
-            fetch_trade_result
-         - update
-            replace_table v1.3.1
-            fetch_table_result v0.2
     v0.3
         - update
             fetch_table_result v0.4
@@ -80,19 +74,22 @@ class DatabaseManager:
             add insert_table
             add create_table
             add load_partition
-            db_usage
-    
-    20241107 1658.
+            db_usage 20241107 1658.
+        - add usd_db param to __init__. 20250411 0658.
     """
     
-    def __init__(self, dbname, user, password, host, port, path_dir_table):
-        self.pool = SimpleConnectionPool(1,   # min thread
-                                         20,  # max thread
-                                         dbname=dbname, 
-                                         user=user, 
-                                         password=password,
-                                         host=host, 
-                                         port=port)
+    def __init__(self, dbname, user, password, host, port, path_dir_table, use_db=False):
+        if use_db:
+            self.pool = SimpleConnectionPool(1,   # min thread
+                                            20,  # max thread
+                                            dbname=dbname, 
+                                            user=user, 
+                                            password=password,
+                                            host=host, 
+                                            port=port)
+        else:
+            self.pool = None
+            
         self.path_dir_table = path_dir_table
         self.file_hashes = {}
         
@@ -764,10 +761,11 @@ class TokenBucket:
         - update
             set retry-after
     v0.4
-        - optimization
-            simplified error handling, removed redundant loops, improved clarity.
+        - update
+            optimize, simplified error handling, removed redundant loops, improved clarity.
+            sys_log can be declared as internal obj.
    
-    Last confirmed at, 20240823 0743
+    20241105 0318.
     """
 
     def __init__(self, sys_log, server_timer, capacity):
@@ -843,6 +841,8 @@ class Bank(UMFutures):
             log file name
     v0.4.3
         - add asyncio.lock 20250321 2108.
+        - add asyncio.Queue() queue_trade_init 20250406 1936
+        - add asyncio.Queue() queue_df_res 20250410 1438
     """
     
     def __init__(self, **kwargs):
@@ -879,6 +879,8 @@ class Bank(UMFutures):
         # asyncio.Lock
         self.lock_condition = asyncio.Lock()
         self.lock_trade = asyncio.Lock()
+        self.queue_trade_init = asyncio.Queue()
+        self.queue_df_res = asyncio.Queue()
 
       
         # load_table 
@@ -1114,16 +1116,12 @@ class Bank(UMFutures):
                     leverage):
         
         """
-        v2.0
-            vivid mode.
-        v2.1
-            add token.
         v2.2
             show_header=True.
         v2.3
             while loop completion.
-
-        Last confirmed: 2024-07-21 22:49
+        v3.0
+            - adj. async wait_for_tokens. 20250410 2212.
         """
         
         while True:
@@ -1263,6 +1261,133 @@ def get_df_new_by_streamer(self, ):
         # return None, None   # output len 유지
     # else:
     #     return df_res
+    
+    
+async def klines_async(self, session, symbol: str, interval: str, **kwargs):
+    """
+    비동기 aiohttp 기반 Binance Futures klines 호출 (fapi/v1)
+    """
+    try:
+        base_url = "https://fapi.binance.com"
+        endpoint = "/fapi/v1/klines"
+        # check_required_parameters([[symbol, "symbol"], [interval, "interval"]])
+
+        params = {"symbol": symbol, "interval": interval, **kwargs}
+        url = f"{base_url}{endpoint}?{urlencode(params)}"
+
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        async with session.get(url, headers=headers, timeout=5) as resp:
+            if resp.status != 200:
+                msg = f"[klines_async] ERROR: {resp.status} | {symbol} {interval} | {await resp.text()}"
+                self.sys_log.warning(msg)
+                return None
+
+            data = await resp.json()
+            return {"data": data}
+
+    except Exception as e:
+        self.sys_log.error(f"[klines_async] Exception for {symbol}: {e}")
+        return None
+
+
+async def get_df_new_async(self, session, symbol, interval, days, end_date=None, limit=1500, retry=2):
+    """
+    v0.3
+        - async + 병렬 처리 구조 유지
+        - 4가지 반환 상태 도입 (df_total / None / '-1122' / 재시도 루프)
+        - 재귀 대신 retry 파라미터 활용한 루프 방식 적용. 20250411 1008.
+    """
+
+    assert limit <= 1500, f"limit({limit}) must be <= 1500"
+    assert days > 0, f"days must be positive"
+
+    if end_date is None:
+        timestamp_end = time.time() * 1000
+    else:
+        assert end_date != str(datetime.now()).split(' ')[0], "end_date should not be today."
+        timestamp_end = int(datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59).timestamp() * 1000)
+
+    timestamp_start = timestamp_end - days * 24 * 60 * 60 * 1000
+    timestamp_unit = itv_to_number(interval) * 60 * 1000 * limit
+
+    time_arr_start = np.arange(timestamp_start, timestamp_end, timestamp_unit)
+    time_arr_end = time_arr_start + timestamp_unit
+
+    # 요청 전송
+    tasks = [
+        klines_async(self, session, symbol, interval, startTime=int(start), endTime=int(end), limit=limit)
+        for start, end in zip(reversed(time_arr_start), reversed(time_arr_end))
+    ]
+    try:
+        results = await asyncio.gather(*tasks)
+    except Exception as e:
+        self.sys_log.error(f"[get_df_new_async] gather failed: {e}")
+        if retry > 0:
+            await asyncio.sleep(0.5)
+            return await self.get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
+        return '-1122'
+
+    df_list = []
+    res_error_flags = []
+
+    for res in results:
+        if not res or 'data' not in res or not res['data']:
+            res_error_flags.append(0)
+            continue
+
+        try:
+            df = pd.DataFrame(np.array(res['data'])).set_index(0).iloc[:, :5]
+            df.index = [datetime.fromtimestamp(int(x) / 1000) for x in df.index]
+            df.columns = ['open', 'high', 'low', 'close', 'volume']
+            df = df.astype(float)
+            df_list.append(df)
+            res_error_flags.append(1)
+        except Exception as e:
+            self.sys_log.error(f"[{symbol}] Error while processing df: {e}")
+            res_error_flags.append(0)
+
+    # 오류 패턴 검증
+    if res_error_flags[-2:] == [0, 0] and df_list:
+        df_total = pd.concat(df_list).sort_index()
+        return df_total[~df_total.index.duplicated(keep='last')]
+
+    if res_error_flags[-2:] == [0, 1]:  # sparse error
+        msg = f"Error in get_df_new_async, sparse data pattern detected: {res_error_flags[-2:]}"
+        self.sys_log.error(msg)
+        return None
+
+    if not df_list:
+        self.sys_log.warning(f"[{symbol} {interval}] All requests failed or empty, retry left: {retry}")
+        if retry > 0:
+            await asyncio.sleep(0.5)
+            return await self.get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
+        return '-1122'
+
+    # 정합성 검증 (마지막 bar 기준)
+    df_total = pd.concat(df_list).sort_index()
+    df_total = df_total[~df_total.index.duplicated(keep='last')]
+
+    latest_index = df_total.index[-1].replace(second=0, microsecond=0)
+    now_rounded = datetime.now().replace(second=0, microsecond=0)
+    minute_gap = int((now_rounded - latest_index).total_seconds() // 60)
+    itv_number = itv_to_number(interval)
+
+    self.sys_log.debug(f"[{symbol} {interval}] last index: {latest_index} / current: {now_rounded} / gap: {minute_gap}")
+
+    if minute_gap >= itv_number * 2:
+        self.sys_log.debug(f"[Critical Delay] {minute_gap} > {itv_number} * 2")
+        return None
+    elif minute_gap >= itv_number:
+        self.sys_log.debug(f"[Minor Delay] {minute_gap} >= {itv_number} → retry")
+        if retry > 0:
+            await asyncio.sleep(0.5)
+            return await self.get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
+        return None
+
+    return df_total
 
 
 def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timesleep=None):
@@ -1276,6 +1401,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
         - add 'symbol' param for asyncio. 20250318 2009.
     v4.2.5
         - modify time_gap validation phase. replace to 2 min --> 2 bar. 20250327 2243.
+        - days allows float type, cause calc. as timestamp (처음부터 그러하였다.) 20250407 1659.
     """
     
     # print(f"limit : {limit}, {type(limit)}")
@@ -1325,7 +1451,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
 
                 if not response:
                     res_error_list.append(0)     
-                    msg = f"Error in {symbol} get_df_new, res_error_list: {res_error_list}"                  
+                    msg = f"Error [Temporary] in {symbol} get_df_new, res_error_list: {res_error_list}"                  
                     self.sys_log.error(msg)                    
                     self.push_msg(msg)
                     
@@ -1499,77 +1625,42 @@ def get_account_normality(self,
                          ):
 
     """
-    v1.0 
-        - modify
-            derived after get_balance_info v2.0
-            modify to vivid mode.
-                compare margin & TableAccount.
-                Class mode remain, cause we are using core (public) object.
-                    like sys_log, tables, etc...
-    v1.1
-        - update
-            func1 : check account balance sum normality
-            func2 : account normality
-            return balance.
     v1.1.1
-        - modify
-            return balance_origin.     
-            not allow account = None
+        - modify return balance_origin, not allow account = None
     v1.1.2
-        - modify
-            calc. balance_insufficient
-            just warn, balance_account_total over case.
-           
-
-    Last confirmed: 20240926 0545.
+        - modify calc. balance_insufficient, just warn, balance_account_total over case.        
+    v1.2
+        - remove balance_insufficient. 20250409 0519.
+            - empty 가 아닌 이상 데이터 가져와라.
     """
 
     # init.
     consistency = True
-    balance = None
-    balance_origin = None
-
-    # # update self.table_account.balance_insufficient
-    self.table_account.balance_insufficient = self.table_account.balance < self.table_account.balance_min  
-    self.sys_log.debug("self.table_account : \n{}".format(self.table_account))  
-
-    # get balance_available
-    balance_account_total = self.table_account.balance.sum()
-    balance_available = get_balance_available(self)
-    self.sys_log.info('balance_account_total : {:.2f}'.format(balance_account_total))
-    self.sys_log.info('balance_available : {:.2f}'.format(balance_available))
+    balance = np.nan
+    balance_origin = np.nan    
+    balance_available = get_balance_available(self)    
     
-    # 1. reject balance_account_total over.
-    if balance_available < balance_account_total:
-        msg = "over balance : balance_available {:.2f} < balance_account_total {:.2f}".format(balance_available, balance_account_total)
-        self.sys_log.warning(msg)
-        self.push_msg(msg)
-        # consistency = False
-    
-    # get a row by account.
-    if account: # is not None.
+    # account selection, 
+    if account:
         table_account_row = self.table_account[self.table_account['account'] == account]
         self.sys_log.debug("table_account_row : \n{}".format(table_account_row))
 
-        # 2. account selection
-        # 3. check margin available
-        # 4. check min margin
+        # check empty
         if not table_account_row.empty:
-            if table_account_row.balance_insufficient.iloc[0]:
-                msg = f"balance_insufficient: \n{table_account_row}"
-                self.sys_log.warning(msg)
-                self.push_msg(msg)
-                consistency = False
-            else:                
-                balance = table_account_row.balance.iloc[0]     
-                balance_origin = table_account_row.balance_origin.iloc[0]       
+            # if table_account_row.balance_insufficient.iloc[0]:
+            #     msg = f"balance_insufficient: \n{table_account_row}"
+            #     self.sys_log.warning(msg)
+            #     self.push_msg(msg)
+            #     consistency = False
+            balance = table_account_row.balance.iloc[0]     
+            balance_origin = table_account_row.balance_origin.iloc[0]       
         else:
             msg = f"Empty row: \n{table_account_row}"
             self.sys_log.warning(msg)
             self.push_msg(msg)
             consistency = False
 
-    return consistency, balance, balance_origin
+    return consistency, balance, balance_origin, balance_available
             
             
                  
@@ -1654,8 +1745,7 @@ def get_leverage_limit(self,
     v3.5
         - update
             leverage_limit use amount_entry.
-
-    Last confirmed, 20241012 1425.
+        - leverage_limit_user means needed leverage to make loss_pct as 100 %. 20250406 2040.
     """
       
     while 1:
@@ -1674,15 +1764,11 @@ def get_leverage_limit(self,
                 )
             else:
                 leverage_limit_server = np.inf  # If the symbol is not found, default to infinity or any other value
-
             
             loss_pct = loss / price_entry * 100
             leverage_limit_user = np.maximum(1, np.floor(100 / loss_pct).astype(int))
 
             leverage_limit = min(leverage_limit_user, leverage_limit_server)
-                        
-            self.sys_log.debug(f"leverage_limit_server: {leverage_limit_server}")
-            self.sys_log.debug(f"leverage_limit_user: {leverage_limit_user}")
 
             return leverage_limit_user, leverage_limit_server, leverage_limit
             
@@ -1867,8 +1953,8 @@ def check_expiration(self,
 
     # 필요한 입력 인자와 최종 expired 상태를 보기 좋게 로그로 남김.
     self.sys_log.info(
-        "check_expiration | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%.2f | price_historical=%.2f | price_expiration=%.2f | ncandle_game=%s | expired=%d",
-        interval, entry_timeIndex, side_position, price_realtime, price_historical, price_expiration, ncandle_game, expired
+        "check_expiration: expired=%d | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%.2f | price_historical=%.2f | price_expiration=%.2f | ncandle_game=%s",
+        expired, interval, entry_timeIndex, side_position, price_realtime, price_historical, price_expiration, ncandle_game
     )
     
     return expired
@@ -1893,24 +1979,23 @@ def check_stop_loss(self,
     v4.1
         vivid mode.
             remove eval, considering security & debug future problem.
-        
-    last confirmed at, 20240701 2300.
+        - rename to stop_loss_on. 20250406 2313.
     """
 
-    order_market_on = False
+    stop_loss_on = False
             
     if side_open == 'SELL':
         if price_realtime >= price_stop_loss:
-            order_market_on = True
+            stop_loss_on = True
             self.sys_log.info("price_realtime {} >= price_stop_loss {}".format(price_realtime, price_stop_loss))
     else:
         if price_realtime <= price_stop_loss:
-            order_market_on = True
+            stop_loss_on = True
             self.sys_log.info("price_realtime {} <= price_stop_loss {}".format(price_realtime, price_stop_loss))
 
-    self.sys_log.info("order_market_on : {}".format(order_market_on))
+    self.sys_log.info(f"check_stop_loss: stop_loss_on={stop_loss_on}")
 
-    return order_market_on
+    return stop_loss_on
            
 
 
@@ -2080,6 +2165,7 @@ def order_limit(self,
     v4.2.2
         - adj. hoga unit to retry -4003. 20250325 2104.
         - simplify error msg. 20250331 0729.
+        - annot. term cause using push_msg. 20250410 2252.
     """
     
     loop_cnt  = 0
@@ -2111,15 +2197,8 @@ def order_limit(self,
             
         except Exception as e:                    
             code = e.args[1] if len(e.args) > 1 else "Unknown"
-            reason = e.args[2] if len(e.args) > 2 else str(e)
-            
-            msg = f"Error in order_limit : {symbol} {code} {reason}"            
-            # msg = F"Error in order_limit : {symbol} {e}"
-            
-            self.sys_log.error(msg)
-            self.push_msg(msg)
-            time.sleep(self.config.term.order_limit)      
-
+            reason = e.args[2] if len(e.args) > 2 else str(e)            
+            msg = f"Error in order_limit : {symbol} {code} {reason}"
 
             ################################
             # Todo) Error Case
@@ -2161,6 +2240,13 @@ def order_limit(self,
                 error_code = -4003
             else:
                 error_code = 'Unknown'
+        
+        # send last error msg. (for push_msg delay minimum)
+            # we don't need additional term, if use push_msg.
+        if error_code:            
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+            # time.sleep(self.config.term.order_limit)            
 
         return order_result, error_code
   
@@ -2177,6 +2263,7 @@ def order_stop_market(self,
         - init
     v0.2
         - adj. loop_cnt_max 20250321 1943.
+        - annot. push_msg. 20250410 2055.
     """
     
     loop_cnt  = 0
@@ -2190,8 +2277,8 @@ def order_stop_market(self,
         
         try:        
             self.token_bucket.wait_for_tokens() 
-            server_time = self.token_bucket.server_time
             
+            server_time = self.token_bucket.server_time            
             response = self.new_order(timeInForce=TimeInForce.GTC,
                                         symbol=symbol,
                                         side=side_order,
@@ -2206,10 +2293,9 @@ def order_stop_market(self,
             self.sys_log.info("order_stop_market succeed: {}".format(order_result))
             
         except Exception as e:
-            msg = "Error in order_limit : {}".format(e)
-            self.sys_log.error(msg)
-            self.push_msg(msg)
-            time.sleep(self.config.term.order_stop_market)      
+            code = e.args[1] if len(e.args) > 1 else "Unknown"
+            reason = e.args[2] if len(e.args) > 2 else str(e)            
+            msg = f"Error in order_stop_market : {symbol} {code} {reason}"  
 
             # error casing. (later)
             # -4014, 'Price not increased by tick size.',
@@ -2242,6 +2328,11 @@ def order_stop_market(self,
                 error_code = -4003
             else:
                 error_code = 'Unknown'
+                
+        if error_code:            
+            self.sys_log.error(msg)
+            self.push_msg(msg)
+            # time.sleep(self.config.term.order_stop_market)
 
         return order_result, error_code
 
@@ -2266,8 +2357,7 @@ def order_market(self,
         vivid mode.
     v4.1
         show_header=True.
-        
-    last confirmed at, 20240712 1030.
+        - simplify error msg. 20250406 0038.
     """
     
     while 1:
@@ -2291,11 +2381,14 @@ def order_market(self,
             order_result = response['data']            
             self.sys_log.info("order_market succeed: {}".format(order_result))
             
-        except Exception as e:
-            msg = "Error in order_market : {}".format(e)
+        except Exception as e:                    
+            code = e.args[1] if len(e.args) > 1 else "Unknown"
+            reason = e.args[2] if len(e.args) > 2 else str(e)            
+            msg = f"Error in order_market : {symbol} {code} {reason}"  
+            
             self.sys_log.error(msg)
             self.push_msg(msg)                
-            time.sleep(self.config.term.order_market)        
+            # time.sleep(self.config.term.order_market)        
 
             # # -2022 ReduceOnly Order is rejected
             # if '-2022' in str(e):
@@ -2326,10 +2419,10 @@ def order_market(self,
                                             order_result['orderId'])
             
                 if self.order_info['status'] == 'FILLED':
-                    self.sys_log.info("order_market filled.")
+                    self.sys_log.info("order_market succeed.")
                     return order_result, error_code
                 else:
-                    self.sys_log.info("order_market failed.")
+                    self.sys_log.info("order_market fail.")
                     continue
 
 
