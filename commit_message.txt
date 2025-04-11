@@ -1,4 +1,4 @@
-JnQ - TheBank_v3.3_20250411 1030
-	
-- update
-	optimize method and class to Async mode. 
+JnQ - TheBank_v3.3_20250411 1035
+
+- optimize method and class to Async mode. 
+- ignore params.py

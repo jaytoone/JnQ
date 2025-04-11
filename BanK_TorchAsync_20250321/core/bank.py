@@ -1327,7 +1327,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         self.sys_log.error(f"[get_df_new_async] gather failed: {e}")
         if retry > 0:
             await asyncio.sleep(0.5)
-            return await self.get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
+            return await get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
         return '-1122'
 
     df_list = []
@@ -1363,7 +1363,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         self.sys_log.warning(f"[{symbol} {interval}] All requests failed or empty, retry left: {retry}")
         if retry > 0:
             await asyncio.sleep(0.5)
-            return await self.get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
+            return await get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
         return '-1122'
 
     # 정합성 검증 (마지막 bar 기준)
@@ -1384,7 +1384,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         self.sys_log.debug(f"[Minor Delay] {minute_gap} >= {itv_number} → retry")
         if retry > 0:
             await asyncio.sleep(0.5)
-            return await self.get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
+            return await get_df_new_async(session, symbol, interval, days, end_date, limit, retry=retry - 1)
         return None
 
     return df_total

@@ -23,8 +23,6 @@ Bank_paperVersion_20240620
 # temporary except below files.
 **/main.py
 **/idep.py
-**/params.py
-
 
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
