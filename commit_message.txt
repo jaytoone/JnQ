@@ -1,4 +1,5 @@
-JnQ - TheBank_v3.3_20250411 1030
+JnQ - TheBank_v3.3_20250411 1213
 	
-- update
-	optimize method and class to Async mode. 
+- optimize method and class to Async mode.
+- modify get_df_new_async, allow retry.
+	
