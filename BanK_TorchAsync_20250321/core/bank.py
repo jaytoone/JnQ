@@ -1954,13 +1954,11 @@ def check_expiration(self,
 
     # 필요한 입력 인자와 최종 expired 상태를 보기 좋게 로그로 남김.
     self.sys_log.info(
-        "check_expiration: expired=%d | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%.2f | price_historical=%.2f | price_expiration=%.2f | ncandle_game=%s",
+        "check_expiration: expired=%d | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%.4f | price_historical=%.4f | price_expiration=%.4f | ncandle_game=%s",
         expired, interval, entry_timeIndex, side_position, price_realtime, price_historical, price_expiration, ncandle_game
     )
     
     return expired
-
-
 
 
 def check_stop_loss(self,
@@ -1981,6 +1979,7 @@ def check_stop_loss(self,
         vivid mode.
             remove eval, considering security & debug future problem.
         - rename to stop_loss_on. 20250406 2313.
+        - modify log format. 20250412 1012.
     """
 
     stop_loss_on = False
@@ -1988,17 +1987,17 @@ def check_stop_loss(self,
     if side_open == 'SELL':
         if price_realtime >= price_stop_loss:
             stop_loss_on = True
-            self.sys_log.info("price_realtime {} >= price_stop_loss {}".format(price_realtime, price_stop_loss))
     else:
         if price_realtime <= price_stop_loss:
             stop_loss_on = True
-            self.sys_log.info("price_realtime {} <= price_stop_loss {}".format(price_realtime, price_stop_loss))
 
-    self.sys_log.info(f"check_stop_loss: stop_loss_on={stop_loss_on}")
+    self.sys_log.debug(
+        "check_stop_loss: stop_loss_on=%s | side_open=%s | price_realtime=%.4f | price_stop_loss=%.4f | price_liquidation=%.4f",
+        stop_loss_on, side_open, price_realtime, price_stop_loss, price_liquidation
+    )
 
     return stop_loss_on
            
-
 
 def check_closer(self,
                 interval,
@@ -2065,10 +2064,7 @@ def __________________3():
     pass
 
 
-def order_cancel(self, 
-                symbol,
-                orderId):    
-    
+def order_cancel(self, symbol, orderId, max_retry=3):
     """
     v1.0
         add table_order logic.
@@ -2076,30 +2072,34 @@ def order_cancel(self,
         show_header=True.
     v2.2
         - -2011, 'Unknown order sent.' 다룬다. 20250321 1843.
+    v2.3
+        - add retry sequence. 20250412 1037.
     """
     
     orderId = int(orderId)
-    canceled = True
-    
-    try:     
-        self.token_bucket.wait_for_tokens() 
-        
-        server_time = self.token_bucket.server_time
-        response = self.cancel_order(symbol=symbol, 
-                              orderId=orderId, 
-                              timestamp=server_time)
-        
-    except Exception as e:        
-        msg = f"Error in order_cancel, {symbol} {orderId}: {e}"
-        self.sys_log.error(msg)
-        self.push_msg(msg)
-        canceled = False 
-    else:
-        self.sys_log.info("{} {} canceled.".format(symbol, orderId))
-        
-    return canceled
+    retry = 0
 
+    while retry < max_retry:
+        try:
+            self.token_bucket.wait_for_tokens()
+            server_time = self.token_bucket.server_time
+            self.cancel_order(symbol=symbol, orderId=orderId, timestamp=server_time)
+            self.sys_log.info(f"{symbol} {orderId} canceled.")
+            return True
+        
+        except Exception as e:
+            msg = f"Error in order_cancel, {symbol} {orderId}: {e}"
+            self.sys_log.error(msg)
+            self.push_msg(msg)
 
+            # -2011: Unknown order (이미 체결되었거나 존재하지 않는 주문)
+            if "-2011" in str(e):
+                return False  # 추가 시도 불필요
+
+            retry += 1
+            time.sleep(self.config.term.order_cancel)
+
+    return False
 
 
 def get_quantity_unexecuted(self, 
@@ -2443,6 +2443,7 @@ def get_income_info(self,
             replace boolean indexing instead query. Faster !
     v4.3.2
         - hotfix : replace table_log to _valid. 20250324 0327. 
+        - add coerce effect on 'cumQuote' col. 20250412 1044.
     """
 
     # 유효한 데이터 필터링
@@ -2451,7 +2452,8 @@ def get_income_info(self,
     
     # latency  boolean is beter.
     # table_log_valid = table_log.astype({'cumQuote': 'float'}).query('code == @code and cumQuote != 0')
-    table_log['cumQuote'] = table_log['cumQuote'].astype(float)
+    # table_log['cumQuote'] = table_log['cumQuote'].astype(float)
+    table_log['cumQuote'] = pd.to_numeric(table_log['cumQuote'], errors='coerce').fillna(0.0)
     table_log_valid = table_log[(table_log['code'] == code) & (table_log['cumQuote'] != 0)]
     self.sys_log.info(f"table_log_valid {table_log_valid}")
 
@@ -2467,7 +2469,8 @@ def get_income_info(self,
 
     # 다시 type cast.
         # get_order_info()로 table_log 내용을 최신화했기 때문
-    table_log_valid['cumQuote'] = table_log_valid['cumQuote'].astype(float)    
+    # table_log_valid['cumQuote'] = table_log_valid['cumQuote'].astype(float)
+    table_log_valid['cumQuote'] = pd.to_numeric(table_log_valid['cumQuote'], errors='coerce').fillna(0.0)
     self.sys_log.info(f"table_log_valid {table_log_valid}")
     
 

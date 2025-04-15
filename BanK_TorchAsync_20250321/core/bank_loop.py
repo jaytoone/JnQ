@@ -451,6 +451,8 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     v2.6.1
         - init margin as 0. 20250409 0554.
         - add balance_available. 20250409 0643.
+    v2.6.2
+        - adj. leverage_limit_const. 20250415 0038.
     """
     
     
@@ -642,8 +644,7 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     table_trade_new_row.margin = 0    # margin 은 balance 와 다시 합해지는 것을 고려해 0 으로 초기화.
     
     
-    if account_normality:  
-                
+    if account_normality:                  
     
         ##################################################
         # quantity.
@@ -697,40 +698,50 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
                                             price_entry,
                                             )
             
+            leverage_limit_const = leverage_limit_user / leverage_limit_server            
             margin = amount_entry / leverage            
                         
             self.sys_log.debug("leverage_limit_user : {}".format(leverage_limit_user))
-            self.sys_log.debug("leverage_limit_server : {}".format(leverage_limit_server))            
+            self.sys_log.debug("leverage_limit_server : {}".format(leverage_limit_server))      
+            self.sys_log.debug("leverage_limit_const : {}".format(leverage_limit_const))  # add      
             self.sys_log.debug("leverage : {}".format(leverage))
-            self.sys_log.debug("margin : {}".format(margin))
+            self.sys_log.debug("margin : {}".format(margin))            
             
             table_trade_new_row.leverage_limit_user = leverage_limit_user
+            table_trade_new_row.leverage_limit_server = leverage_limit_server     # add
+            table_trade_new_row.leverage_limit_const = leverage_limit_const       # add
             table_trade_new_row.leverage = leverage
             table_trade_new_row.margin = margin
-            
             
             self.sys_log.debug(f"InitTableTrade : elasped time, {code} get_leverage : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")
             
             
-            # check if total balance available for the margin.
-            if balance_available > margin:    
+            # check leverage_limit_const
+            leverage_limit_const_max = params.get('leverage_limit_const', 2)
+            if leverage_limit_const < leverage_limit_const_max:
                 
-                # set leverage
-                self.sys_log.debug("------------------------------------------------")
-                start_time = time.time()
-                                    
-                self.set_leverage(symbol, leverage)
+                # check if total balance available for the margin.
+                if balance_available > margin:    
                     
-                self.sys_log.debug(f"InitTableTrade : elasped time, {code} set_leverage : %.4fs" % (time.time() - start_time))
-                self.sys_log.debug("------------------------------------------------")
-                
-                
-                # func4 : subtract margin if normal on 'balance'.
-                self.table_account.loc[self.table_account['account'] == account, 'balance'] -= margin
-            else:
-                table_trade_new_row.status = 'ERROR : balance_available <= margin'    # added.
-                table_trade_new_row.remove_row = 1               
+                    # set leverage
+                    self.sys_log.debug("------------------------------------------------")
+                    start_time = time.time()
+                                        
+                    self.set_leverage(symbol, leverage)
+                        
+                    self.sys_log.debug(f"InitTableTrade : elasped time, {code} set_leverage : %.4fs" % (time.time() - start_time))
+                    self.sys_log.debug("------------------------------------------------")
+                    
+                    
+                    # func4 : subtract margin if normal on 'balance'.
+                    self.table_account.loc[self.table_account['account'] == account, 'balance'] -= margin
+                else:
+                    table_trade_new_row.status = 'ERROR : balance_available <= margin'    # added.
+                    table_trade_new_row.remove_row = 1              
+            else: 
+                table_trade_new_row.status = f"ERROR : leverage_limit_const > {leverage_limit_const_max}"
+                table_trade_new_row.remove_row = 1
             
         else:
             table_trade_new_row.status = 'ERROR : amount_entry <= amount_min'    # added.
@@ -801,6 +812,7 @@ async def loop_table_trade_async(self):
         - modify statusChangeTime format. 20250408 2300.
         - modify status_error logic, make it more clear. 20250409 0605.
         - table_trade update 는 해당 루프에만 존재하기 때문에, lock 이 반드시 필요하지는 않는다. 20250411 0644.
+        - modify await time by table_empty condition. 20250412 0912.
     """
     
     
@@ -815,7 +827,6 @@ async def loop_table_trade_async(self):
                 self.table_trade = pd.concat([self.table_trade, table_trade_new_row]).reset_index(drop=True)    
                 code = table_trade_new_row.code.values[0]
                 self.sys_log.debug(f"[QUEUE_CONSUMED] {code} row inserted into table_trade")    
-                # self.push_msg(f"{code} row inserted into table_trade.")
         
         async with self.lock_trade:
             # if self.table_trade.empty:
@@ -1001,6 +1012,11 @@ async def loop_table_trade_async(self):
                         
                         self.table_log = pd.concat([self.table_log, self.table_trade[self.table_trade['code'] == code]], ignore_index=True)
                         self.table_log['id'] = self.table_log.index + 1 # Update 'id' column to be the new index + 1
+                        
+                        # 추후 도입 예정
+                        if len(self.table_log) > 10000:
+                            self.table_log = self.table_log.iloc[-7000:].copy()
+                        
                         self.db_manager.replace_table(self.table_log, self.table_log_name)
                         
                         self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} replace_table table_log : %.4fs" % (time.time() - start_time)) 
@@ -1082,7 +1098,6 @@ async def loop_table_trade_async(self):
                                     # self.table_account.loc[self.table_account['account'] == account, 'balance'] +=(quantity_unexecuted * row.price_entry / leverage)
                                     
                                     # Todo, messeage alertion needed ?
-                                    # self.push_msg("{} has been expired.".format(code))
                                     # self.user_text = 'watch'  # allowing message.
                                     
                                 self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check expiration for order_open : %.4fs" % (time.time() - start_time)) 
@@ -1260,15 +1275,12 @@ async def loop_table_trade_async(self):
                                                        
                         self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} order_market : %.4fs" % (time.time() - start_time)) 
                         self.sys_log.debug("------------------------------------------------")
-            
-            else:
-                
+                           
             #############################################
             # 행 제거 & 수익 계산 : status Update 이후.
             #############################################
-            
-            # if self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'].values[0] == 1:
-                    
+            else:            
+            # if self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'].values[0] == 1:                    
                 # Drop rows
                     # this phase should be placed in the most below, else order_ will set value as np.nan in invalid rows. 
                         # 무슨 소린지 모르겠네.                  
@@ -1379,8 +1391,8 @@ async def loop_table_trade_async(self):
         loop_elapsed_time = time.time() - loop_start
         self.sys_log.debug(f"[loop_table_trade]     END   at {datetime.now().strftime('%H:%M:%S.%f')} (elapsed: {loop_elapsed_time:.2f}s)")
         
-        
-        await asyncio.sleep(max(0, 1 - loop_elapsed_time))
+        if self.table_trade.empty and self.queue_trade_init.empty():
+            await asyncio.sleep(max(0, 1 - loop_elapsed_time))
         # await asyncio.sleep(1)
 
 

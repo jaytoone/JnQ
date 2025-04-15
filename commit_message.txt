@@ -1,5 +1,12 @@
-JnQ - TheBank_v3.3_20250411 1213
-	
+TheBank
+
+v3.3 	20250411 1237
 - optimize method and class to Async mode.
 - modify get_df_new_async, allow retry.
+- ignore params.py
+
+v3.3.1  	20250415 2001
+- add leverage_limit_const on init_table_trade.
+	
+	
 	
