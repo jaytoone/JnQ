@@ -109,7 +109,7 @@ class DatabaseManager:
     
     
     @staticmethod
-    def load_df_res(interval, start_year_month, end_year_month, base_directory=r'D:\Project\SystemTrading\Project\JnQ\anal\df_res'):
+    def load_df_res(interval, start_year_month, end_year_month, base_directory):
         """
         Load df_res data from Feather files for the specified symbol, interval, and date range.
         
@@ -164,7 +164,7 @@ class DatabaseManager:
             return pd.DataFrame()  # 빈 데이터프레임 반환
 
                
-    def load_partition(self, config, start_year_month, end_year_month, base_directory=r'D:\Project\SystemTrading\Project\JnQ\anal\table_trade_result'):
+    def load_partition(self, config, start_year_month, end_year_month, base_directory):
         # 필터링 조건 설정
         priceBox_value = config.get('priceBox_value')
         point_value = config.get('point_value')
