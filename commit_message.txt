@@ -1,12 +1,15 @@
 TheBank
 
+v3.4 	20250419 1054
+- adj. loop_table_condition_async v2.4.1 (일괄 처리 대신 병렬 처리)
+
+v3.3.1  	20250415 2001
+- add leverage_limit_const on init_table_trade.
+
 v3.3 	20250411 1237
 - optimize method and class to Async mode.
 - modify get_df_new_async, allow retry.
 - ignore params.py
-
-v3.3.1  	20250415 2001
-- add leverage_limit_const on init_table_trade.
 	
 	
 	

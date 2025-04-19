@@ -908,7 +908,7 @@ class Bank(UMFutures):
         self.table_log = self.db_manager.fetch_table(self.table_log_name, usd_db=self.config.database.usage)
         
         # update_balance with margin data info table_trade.
-        self.table_account = self.update_balance()
+        # self.table_account = self.update_balance()
 
         
         # messegner
@@ -1299,6 +1299,8 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         - async + 병렬 처리 구조 유지
         - 4가지 반환 상태 도입 (df_total / None / '-1122' / 재시도 루프)
         - 재귀 대신 retry 파라미터 활용한 루프 방식 적용. 20250411 1008.
+        - 무조건 완결성을 위해 retry 를 주지 않았다. 20250419 0940.
+            - 다른 error 발생을 고려해 retry = np.inf 는 사용 불가하다.
     """
 
     assert limit <= 1500, f"limit({limit}) must be <= 1500"
@@ -1383,10 +1385,10 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         return None
     elif minute_gap >= itv_number:
         self.sys_log.debug(f"[Minor Delay] {minute_gap} >= {itv_number}, retry left: {retry}")
-        if retry > 0:
-            await asyncio.sleep(0.5)
-            return await get_df_new_async(self, session, symbol, interval, days, end_date, limit, retry=retry - 1)
-        return None
+        # if retry > 0:
+        await asyncio.sleep(0.5)
+        return await get_df_new_async(self, session, symbol, interval, days, end_date, limit)
+        # return None
 
     return df_total
 

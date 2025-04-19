@@ -123,6 +123,13 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
     v2.1.5
         - reorder save df_res phase. 20250410 1638.
         - adj. get_trade_info_sync v0.2.2
+    v2.4
+        - Refactored to use as_completed for faster per-symbol processing. 20250419
+    v2.4.1
+        - ClientSession delayed until job_list confirmed, 20250419 1023
+        - row caching applied, 
+        - batch init/enqueue maintained. 
+        - 2000 row 기준 5초를 더 허용하되, 일괄보다 낫겠다 이거야.
     """
 
     data_len = 100
@@ -132,26 +139,18 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
         loop_start = time.time()
         self.sys_log.debug(f"[loop_table_condition] START at {datetime.now().strftime('%H:%M:%S.%f')}")
 
-        # Check available tokens before proceeding
-        # tokens_required = len(self.table_condition)
-        # self.sys_log.debug(f"[loop_table_condition] Tokens needed: {tokens_required}")
-        # self.token_bucket.wait_for_tokens(tokens_required)  # BLOCKS until enough tokens are available
-        
         if self.table_condition.empty:
             await asyncio.sleep(1)
             continue
 
-
         # STEP 1: 수집 대상 필터링 및 fetch_df 준비
         semaphore = asyncio.Semaphore(32)  # API 제한 고려
-        tasks_step1 = []
         job_list = []  # 유효한 작업 후보 저장
-        
+
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()
-        
+
         for idx, row in self.table_condition.iterrows():
-            # symbol = row.symbol
             interval = row.interval
             interval_number = itv_to_number(interval)
             timestamp_current = int(time.time())
@@ -168,129 +167,84 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
                 days = data_len / (60 * 24 / interval_number)
                 job_list.append((idx, row, days))
 
-        # STEP 2-1: df 수집 (get_df_new_async)
-        async with aiohttp.ClientSession() as session:
-            async def fetch_task(idx_, symbol_, interval_, days_):
-                async with semaphore:
-                    return idx_, await get_df_new_async(self, session, symbol_, interval_, days_, limit=kilne_limit)
 
-            tasks_step1 = [
-                fetch_task(idx, row.symbol, row.interval, days)
-                for idx, row, days in job_list
-            ]
-            df_results = await asyncio.gather(*tasks_step1)
-        
-        self.sys_log.debug(f"LoopTableCondition : elasped time, get_df_new_async : %.4fs" % (time.time() - start_time))
-        self.sys_log.debug("------------------------------------------------")
+        if job_list:
+                        
+            # row 캐시 (pandas loc 제거 목적)
+            job_dict = {idx: row for idx, row, _ in job_list}
 
+            # STEP 2-1: df 수집 (get_df_new_async)
+            async with aiohttp.ClientSession() as session:
+                async def fetch_task(idx_, symbol_, interval_, days_):
+                    async with semaphore:
+                        return idx_, await get_df_new_async(self, session, symbol_, interval_, days_, limit=kilne_limit)
 
-        # STEP 2-2: 조건 분석 (get_trade_info_sync → run_in_executor 사용한 병렬 처리)
-        self.sys_log.debug("------------------------------------------------")
-        start_time = time.time()
-        
-        loop = asyncio.get_running_loop()
-        tasks_step2 = [
-            loop.run_in_executor(
-                executor,              # ThreadPoolExecutor 또는 ProcessPoolExecutor
-                get_trade_info_sync,   # 동기화된 조건 분석 함수
-                self,                  # 클래스 인스턴스 (context)
-                idx,                   # 조건 테이블 인덱스
-                df_res,                # 수집된 df 결과
-                row.symbol,            # 종목
-                row.position,          # 포지션
-                row.interval,          # 인터벌
-                row.divider,           # 분할 비율
-                row.account,           # 계좌
-                row.side_open,         # 진입 방향
-                debugging              # 디버깅 플래그
-            )
-            for (idx, df_res), (idx_, row, _) in zip(df_results, job_list)
-            if isinstance(df_res, pd.DataFrame) and not df_res.empty
-        ]
-        
-        # tasks_step2 = [
-        #     get_trade_info_async(
-        #         self,                  # 클래스 인스턴스 (context)
-        #         idx,                   # 조건 테이블 인덱스
-        #         df_res,                # 수집된 df 결과
-        #         row.symbol,            # 종목
-        #         row.position,          # 포지션
-        #         row.interval,          # 인터벌
-        #         row.divider,           # 분할 비율
-        #         row.account,           # 계좌
-        #         row.side_open,         # 진입 방향
-        #         debugging              # 디버깅 플래그
-        #     )
-        #     for (idx, df_res), (idx_, row, _) in zip(df_results, job_list)
-        #     if isinstance(df_res, pd.DataFrame) and not df_res.empty
-        # ]
+                tasks_step1 = [
+                    fetch_task(idx, row.symbol, row.interval, days)
+                    for idx, row, days in job_list
+                ]
 
-        trade_infos = await asyncio.gather(*tasks_step2)        
-        
-        self.sys_log.debug(f"LoopTableCondition : elasped time, get_trade_info_async : %.4fs" % (time.time() - start_time))
-        self.sys_log.debug("------------------------------------------------")
+                # STEP 2-2: 조건 분석 및 테이블 초기화 병렬 수행
+                loop = asyncio.get_running_loop()
+                tasks_init, tasks_enqueue = [], []
 
+                for completed in asyncio.as_completed(tasks_step1):
+                    idx, df_res = await completed
+                    row = job_dict[idx]
 
-        # self.sys_log.debug("------------------------------------------------")
-        # start_time = time.time()
-        
-        # async for completed in as_completed(tasks_step2):
-        #     trade_info = await completed
-        #     # trade_infos.append(trade_info)
+                    if not isinstance(df_res, pd.DataFrame) or df_res.empty:
+                        continue
 
-        #     if trade_info.position:
-        #         await init_table_trade_async(self, trade_info)
-            
-        #     if isinstance(trade_info.df_res, pd.DataFrame):
-        #         await enqueue_df_res_async(self, trade_info.df_res, trade_info.symbol, trade_info.interval)
+                    # 조건 분석 (get_trade_info_sync → run_in_executor 사용)
+                    trade_info = await loop.run_in_executor(
+                        executor,
+                        get_trade_info_sync,
+                        self,
+                        idx,
+                        df_res,
+                        row.symbol,
+                        row.position,
+                        row.interval,
+                        row.divider,
+                        row.account,
+                        row.side_open,
+                        debugging
+                    )
 
-        # self.sys_log.debug(f"LoopTableCondition : elapsed time (as_completed): %.4fs" % (time.time() - start_time))
-        # self.sys_log.debug("------------------------------------------------")
-        
-        
-        # STEP 3: 테이블 초기화 (position 존재하는 경우만)
-        self.sys_log.debug("------------------------------------------------")
-        start_time = time.time()
-        
-        tasks_step3 = [
-            init_table_trade_async(self, trade_info)
-            for trade_info in trade_infos if trade_info.position
-        ]
-        await asyncio.gather(*tasks_step3)
-        
-        self.sys_log.debug(f"LoopTableCondition : elasped time, init_table_trade_async : %.4fs" % (time.time() - start_time))
-        self.sys_log.debug("------------------------------------------------")        
-        
-        
-        self.sys_log.debug("------------------------------------------------")
-        start_time = time.time()
-        
-        for ti in trade_infos:
-            if ti and isinstance(ti.df_res, pd.DataFrame):
-                await enqueue_df_res_async(self, ti.df_res, ti.symbol, ti.interval)
-                
-        self.sys_log.debug(f"LoopTableCondition : elasped time, enqueue_df_res_async : %.4fs" % (time.time() - start_time))
-        self.sys_log.debug("------------------------------------------------")
+                    # 테이블 초기화
+                    if trade_info.position:
+                        tasks_init.append(init_table_trade_async(self, trade_info))
+
+                    # df_res enqueue
+                    if isinstance(trade_info.df_res, pd.DataFrame):
+                        tasks_enqueue.append(enqueue_df_res_async(self, trade_info.df_res, trade_info.symbol, trade_info.interval))
+
+                # STEP 3: 테이블 초기화 및 df_res enqueue 병렬 처리
+                await asyncio.gather(*tasks_init)
+                await asyncio.gather(*tasks_enqueue)
+
+                self.sys_log.debug(f"LoopTableCondition : elapsed time (total loop): %.4fs" % (time.time() - start_time))
+                self.sys_log.debug("------------------------------------------------")
 
 
         # STEP 4: DB 반영
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()
-        
+
         async with self.lock_trade:
             self.db_manager.replace_table(
                 self.table_condition,
                 self.table_condition_name,
                 send=self.config.database.usage
             )
-            
+
         self.sys_log.debug(f"LoopTableCondition : elasped time, replace_table condition (send={self.config.database.usage}) : %.4fs" % (time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")
 
         loop_elapsed_time = time.time() - loop_start
         self.sys_log.debug(f"[loop_table_condition] END   at {datetime.now().strftime('%H:%M:%S.%f')} (elapsed: {loop_elapsed_time:.2f}s)")
         await asyncio.sleep(max(0, 1 - loop_elapsed_time))
-          
+        
         
 def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, account, side_open, debugging):
     
@@ -428,22 +382,6 @@ def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, 
 async def init_table_trade_async(self, trade_info: TradeInfo):
     
     """    
-    v2.4
-        - adj, Anchor Concept. 20250314 2146.
-            price_expiration excluded.
-        - position 추적, balance > balance_orig error 수정 완료. 20250321 0540.
-    v2.5.1
-        - self. manual 수정. 20250321 0540.
-        - add code to time log phase. 20250323 2101.
-        - add def_type to calc_with_precision 20250325 2136.
-        - modify side_open --> position in get precision. 20250326 2028.
-    v2.5.2
-        - add historical high / low. 20250328 2304.
-        - modify path_df_res .ftr --> csv. 20250330 0939.
-    v2.5.3
-        - reconstruct code phase.
-            init table_trade_new_row above to nan. 20250401 2150.
-                init all cases.
     v2.6
         - adj. asyncio queue. 20250406 1941.
         - add row.leverage_limit_user 20250406 2058.
@@ -453,15 +391,18 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
         - add balance_available. 20250409 0643.
     v2.6.2
         - adj. leverage_limit_const. 20250415 0038.
+        - modify historical_high / low slicing. 20250417 0825.
+        - modify margin phase. (if margin calculated, subtract from balance) 20250417 2033.
+            - if error, margin = 0. 20250418 0032.
     """
     
     
     loop_start = time.time()
     self.sys_log.debug(f"[init_table_trade] START at {datetime.now().strftime('%H:%M:%S.%f')}")
            
-    ##################################################
+    # ──────────────────────────────────────────────
     # INIT
-    ##################################################
+    # ──────────────────────────────────────────────
     
     symbol = trade_info.symbol
     side_open = trade_info.side_open
@@ -482,9 +423,9 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     amount_min = 5
     
     
-    ##################################################
+    # ──────────────────────────────────────────────
     # Get side.
-    ##################################################
+    # ──────────────────────────────────────────────
     
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()   
@@ -497,9 +438,9 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     self.sys_log.debug("------------------------------------------------")
      
     
-    ##################################################
+    # ──────────────────────────────────────────────
     # Pricing
-    ##################################################
+    # ──────────────────────────────────────────────
     
     self.sys_log.debug("------------------------------------------------")
     start_time = time.time()   
@@ -566,9 +507,9 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     self.sys_log.debug("------------------------------------------------")
 
     
-    ##################################################
+    # ──────────────────────────────────────────────
     # balance.
-    ##################################################
+    # ──────────────────────────────────────────────
     
     # get balance
         # Stock 특성상, balance_min = price_entry 로 설정함.
@@ -594,9 +535,9 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     
     
     
-    ##################################################
+    # ──────────────────────────────────────────────
     # add to TableTrade
-    ##################################################
+    # ──────────────────────────────────────────────
     
     # self.sys_log.debug("------------------------------------------------")
     # start_time = time.time()  
@@ -627,15 +568,9 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     table_trade_new_row.price_stop_loss = price_stop_loss 
     table_trade_new_row.price_liquidation = price_liquidation 
     table_trade_new_row.price_expiration = price_expiration 
-    
-    complete_index = self.config.bank.complete_index
-    latest_index = self.config.bank.latest_index
 
-    historical_high = df_res['high'].iloc[complete_index:latest_index + 1].max()
-    historical_low = df_res['low'].iloc[complete_index:latest_index + 1].min()
-
-    table_trade_new_row.historical_high = historical_high   # added.  
-    table_trade_new_row.historical_low = historical_low     # added.  
+    table_trade_new_row.historical_high = df_res['high'].iloc[self.config.bank.complete_index:].max()   # added. * [-2 : 0] doesn't work.
+    table_trade_new_row.historical_low = df_res['low'].iloc[self.config.bank.complete_index:].min()     # added.  
     
     table_trade_new_row.account = account
     table_trade_new_row.balance = balance_                 # added.  
@@ -646,9 +581,9 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     
     if account_normality:                  
     
-        ##################################################
+        # ──────────────────────────────────────────────
         # quantity.
-        ##################################################
+        # ──────────────────────────────────────────────
         
         # get quantity_open   
         self.sys_log.debug("------------------------------------------------")
@@ -711,7 +646,6 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
             table_trade_new_row.leverage_limit_server = leverage_limit_server     # add
             table_trade_new_row.leverage_limit_const = leverage_limit_const       # add
             table_trade_new_row.leverage = leverage
-            table_trade_new_row.margin = margin
             
             self.sys_log.debug(f"InitTableTrade : elasped time, {code} get_leverage : %.4fs" % (time.time() - start_time)) 
             self.sys_log.debug("------------------------------------------------")
@@ -721,8 +655,8 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
             leverage_limit_const_max = params.get('leverage_limit_const', 2)
             if leverage_limit_const < leverage_limit_const_max:
                 
-                # check if total balance available for the margin.
-                if balance_available > margin:    
+                # balance_ 와 margin 비교시 병렬 처리 중 margin 소모 대응 가능해진다.
+                if balance_ > margin:    
                     
                     # set leverage
                     self.sys_log.debug("------------------------------------------------")
@@ -734,11 +668,15 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
                     self.sys_log.debug("------------------------------------------------")
                     
                     
-                    # func4 : subtract margin if normal on 'balance'.
+                    # 거래 진행 시에만 margin 차감 (에러 발생 시 margin = 0)
+                        # 종료 시 margin은 balance에 복구됨
+                    table_trade_new_row.margin = margin                        
                     self.table_account.loc[self.table_account['account'] == account, 'balance'] -= margin
+                    
                 else:
-                    table_trade_new_row.status = 'ERROR : balance_available <= margin'    # added.
-                    table_trade_new_row.remove_row = 1              
+                    table_trade_new_row.status = 'ERROR : balance_ <= margin'    # added.
+                    table_trade_new_row.remove_row = 1         
+                       
             else: 
                 table_trade_new_row.status = f"ERROR : leverage_limit_const > {leverage_limit_const_max}"
                 table_trade_new_row.remove_row = 1
@@ -792,16 +730,6 @@ async def enqueue_df_res_async(self, df_res, symbol, interval):
 async def loop_table_trade_async(self):
     
     """
-    v2.1
-        - v1.3.1's asyncio version. 20250323 2125.
-    v2.1.1
-        - add historical expiry. 20250328 2307.
-    v2.1.2  
-        - replace .at indexing, use .loc with code unique, preventing async data interruption. 20250330 2216.
-        - add table_loggigng to remove_row = 1 phase.
-    v2.1.3
-        - reconstruct code phase for status 'Error'. 20250401 2215.
-        - add table_snapshot for race_condition. 20250406 0031.
     v2.1.4
         - update status. 20250406 1934.
     v2.2
@@ -813,6 +741,11 @@ async def loop_table_trade_async(self):
         - modify status_error logic, make it more clear. 20250409 0605.
         - table_trade update 는 해당 루프에만 존재하기 때문에, lock 이 반드시 필요하지는 않는다. 20250411 0644.
         - modify await time by table_empty condition. 20250412 0912.
+        - rewrite json. 20250417 2044.
+    v2.3
+        - reorder phase. 20250417 2221.
+        - log status_error state. 20250418 0018
+        - remove stop_market annot. (expiry check 로 price_realtime 이 필요하기 때문에 사용하지 않습니다.) 20250418 1652.
     """
     
     
@@ -873,16 +806,8 @@ async def loop_table_trade_async(self):
             leverage_limit_user = row.leverage_limit_user
             margin = row.margin
             account = row.account
-                            
-            # status_error = 1 if 'ERROR' in str(status_prev) else 0
-            status_error = remove_row == 1 and pd.isnull(order_way)
-            self.sys_log.debug(f"status_error : {status_error}")
             
-            self.table_trade.loc[self.table_trade['code'] == code, 'order'] = 0 # init as 0.
-
-            self.sys_log.debug("row : \n{}".format(row))
-            self.sys_log.debug("row.dtypes : {}".format(row.dtypes))
-            
+            self.table_trade.loc[self.table_trade['code'] == code, 'order'] = 0 # init as 0.            
             
             try:
                 # 코드 형식이 {symbol}_{interval}_{entry_timeIndex}라고 가정합니다.
@@ -893,15 +818,31 @@ async def loop_table_trade_async(self):
                 self.push_msg(msg)                
                 continue # hard assertion.
             
-            
-            #############################################
-            # Set Broker-Ticker option.
-                # orderId 가 있더라고, price_market 가 없는 경우 가능 (프로그램 재시작 등.)
-            #############################################
 
-            if symbol not in self.price_market.keys() or pd.isnull(orderId): # initial (do only once.)
-                if not status_error:
-                
+            # self.sys_log.debug("row : \n{}".format(row))
+            # self.sys_log.debug("row.dtypes : {}".format(row.dtypes))            
+            
+                            
+            # status_error = 1 if 'ERROR' in str(status_prev) else 0
+            status_error = remove_row == 1 and pd.isnull(order_way)
+            self.sys_log.debug(f"status_error : {status_error}")
+            
+            if status_error:
+                # remove_row == 1로 실제로 거래가 종료되어 드롭되기 직전에 로깅
+                self.table_log = pd.concat([self.table_log, self.table_trade[self.table_trade['code'] == code]], ignore_index=True)
+                self.table_log['id'] = self.table_log.index + 1 # Update 'id' column to be the new index + 1                    
+                self.db_manager.replace_table(self.table_log, self.table_log_name)
+            
+            
+            # ──────────────────────────────────────────────
+            # Broker 설정 & 초기 주문 처리
+            # ──────────────────────────────────────────────
+
+            is_null_id  = pd.isnull(orderId)
+            need_broker_init = symbol not in self.price_market or is_null_id 
+
+            if not status_error:
+                if need_broker_init:
                     self.sys_log.debug("------------------------------------------------")
                     start_time = time.time()
                     
@@ -911,16 +852,8 @@ async def loop_table_trade_async(self):
                     
                     self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} set Broker-Ticker option : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")
-            
-        
-            
-            #############################################
-            # set order, order_way (OPEN) (order not exists)
-            #############################################
-            
-            if pd.isnull(orderId):
-                if not status_error:
-                
+
+                if is_null_id :
                     self.sys_log.debug("------------------------------------------------")
                     start_time = time.time()
                     
@@ -930,16 +863,15 @@ async def loop_table_trade_async(self):
                     self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} set order, order_way (OPEN) : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")
 
-            #  orderId exists.
-            else:
-                # get_order_info. (update order_info)
-                    # get_order_info should have valid symbol & orderId.                      
+
+            if not is_null_id:
+                
+                # get_order_info. (update order_info)                   
                 order_info = get_order_info(self, 
                                         symbol,
                                         orderId)
                 
                 if order_info:
-                # if order_info is not None:
                     # order 이 있는 경우에만 진행하는 것들
                         # 1 update table_trade 
                         # 3 update remove_row, status
@@ -948,9 +880,9 @@ async def loop_table_trade_async(self):
                         # 5 check Expiry / Stop Loss / Closer (OPEN / CLOSE order 있는 경우에만 진행하는 것들)
                     
 
-                    #############################################
+                    # ──────────────────────────────────────────────
                     # update table_trade
-                    #############################################
+                    # ──────────────────────────────────────────────
                     
                     self.sys_log.debug("------------------------------------------------")
                     start_time = time.time()
@@ -964,21 +896,30 @@ async def loop_table_trade_async(self):
                        
                         
                     
-                    #############################################
-                    # check status
-                        # set remove_row, status
-                            # regardless status updated. just check realtime status.
-                    #############################################                      
                     self.sys_log.debug(f"status_prev : {status_prev}, order_info['status'] : {order_info['status']}")
                     
+                    # ──────────────────────────────────────────────
+                    # set remove_row
+                        # go to drop row & get_income_info status
+                    # ──────────────────────────────────────────────
                     if (order_info['status'] in ['CANCELED', 'EXPIRED', 'REJECTED']) or (row.order_way == 'CLOSE' and order_info['status'] == 'FILLED'):
+                    
                         self.sys_log.debug("------------------------------------------------")
-                        start_time = time.time()
+                        start_time = time.time()       
                         
-                        self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'] = 1 # 아래에 로깅 구간이 있기 때문에, 로깅 불필요하다.
+                        # 부분 체결 후 취소된 경우는 제외하고, 나머지는 제거 플래그 설정 (remove_row)
+                            # 1 CLOSE order_way 로 교체.
+                            # 2 즉시 체결 안된 partial filled --> closer 처리, 이미 status_2 = expired 상태.
+                        if (order_info['status'] == 'CANCELED' and float(order_info['executedQty']) > 0):
+                            self.table_trade.loc[self.table_trade['code'] == code, 'order_way'] = 'CLOSE' 
+                            closer_on = True                                                               
+                        else:                        
+                            self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'] = 1 # 아래에 로깅 구간이 있기 때문에, 로깅 불필요하다.
+                        
                         
                         if order_info['status'] == 'FILLED' and order_info['type'] == 'LIMIT':
                             self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = 'TP'    
+                            
                         
                         self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} set remove_row : %.4fs" % (time.time() - start_time)) 
                         self.sys_log.debug("------------------------------------------------")
@@ -986,17 +927,16 @@ async def loop_table_trade_async(self):
                     
                     
                     
-                    #############################################
+                    # ──────────────────────────────────────────────
                     # set statusChangeTime & table_logging.
-                    #############################################
+                    # ──────────────────────────────────────────────
                     if status_prev != order_info['status']:                    
                     
-                        # set statusChangeTime 
+                        # Set statusChangeTime 
                             # check if status has been changed.
                         self.sys_log.debug("------------------------------------------------")
                         start_time = time.time()
                         
-                        # self.table_trade.loc[self.table_trade['code'] == code, 'statusChangeTime'] = datetime.now().strftime('%Y%m%d%H%M%S%f')
                         self.table_trade.loc[self.table_trade['code'] == code, 'statusChangeTime'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")                                                
                         self.push_msg("{} status has been changed. {} {}".format(code, row.order_way, order_info['status']))
                         
@@ -1006,7 +946,7 @@ async def loop_table_trade_async(self):
                             
                             
                         
-                        # logging : transfer rows to Table - log.   
+                        # Send row to table_log.
                         self.sys_log.debug("------------------------------------------------")
                         start_time = time.time()
                         
@@ -1025,18 +965,27 @@ async def loop_table_trade_async(self):
                         
 
                     
-                    #############################################
+                    # ──────────────────────────────────────────────
                     # set order, order_way (for CLOSE)
-                    #############################################
+                    # ──────────────────────────────────────────────
                     
                     if row.order_way == 'OPEN':         
-                        if (abs(float(order_info['executedQty']) / float(order_info['origQty'])) >= self.config.bank.quantity_open_exec_ratio) or order_info['status'] == 'FILLED':           
+                        
+                        if (abs(float(order_info['executedQty']) / float(order_info['origQty'])) >= self.config.bank.quantity_open_exec_ratio) or order_info['status'] == 'FILLED':
                             
                             self.sys_log.debug("------------------------------------------------")
                             start_time = time.time()
                             
+                            # LIMIT CLOSE 진행.
                             self.table_trade.loc[self.table_trade['code'] == code, 'order'] = 1
                             self.table_trade.loc[self.table_trade['code'] == code, 'order_way'] = 'CLOSE'
+                            
+                            # 미체결 잔량 존재 시 해당 주문 취소 후 진행.
+                            if order_info['status'] != 'FILLED':                                 
+                                quantity_unexecuted = get_quantity_unexecuted(self, 
+                                                                            symbol,
+                                                                            orderId)  
+                                self.sys_log.debug(f"{code} {orderId} quantity_unexecuted : {quantity_unexecuted}")                            
                             
                             self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} set order, order_way (CLOSE) : %.4fs" % (time.time() - start_time)) 
                             self.sys_log.debug("------------------------------------------------")
@@ -1044,246 +993,205 @@ async def loop_table_trade_async(self):
                     
                     
 
-                    #############################################
-                    # Expiry / Stop Loss / Closer
-                    #############################################
-                    
-                    price_realtime = get_price_realtime(self, symbol)
-                    self.sys_log.debug(f"symbol : {symbol}")
-                    self.sys_log.debug(f"price_realtime : {price_realtime}")
+                    # ──────────────────────────────────────────────
+                    # PHASE SUMMARY (order == 0 일 때)
+                    # 1. 실시간 가격 조회 및 슬리피지 확인
+                    # 2. Expiry 체크 (OPEN 상태 + 실시간 가격 정상 + order_info 있음)
+                    # 3. Stop Loss 체크 (CLOSE 상태 + 가격 정상)
+                    # 4. Closer 체크 (CLOSE 상태, 가격 무관)
+                    # 5. MARKET 주문 실행 (Stop Loss 또는 Closer 조건 발생 시)
+                    #  ──────────────────────────────────────────────
+                    if self.table_trade.loc[self.table_trade['code'] == code, 'order'].values[0] == 0:
 
-                    if not pd.isnull(price_realtime):
-                        
-                        price_realtime_prev = self.table_trade.loc[self.table_trade['code'] == code, 'price_realtime'].values[0]
-                        
-                        slippage_margin = 0.1 # 10 %
-                        lower_bound = price_realtime_prev * (1 - slippage_margin)
-                        upper_bound = price_realtime_prev * (1 + slippage_margin)                                        
-                        self.sys_log.debug(f"price_realtime_prev: {price_realtime_prev:.6f}, lower_bound: {lower_bound:.6f}, upper_bound: {upper_bound:.6f}")
-                                                                                    
-                        
-                        # price_realtime 정상 범위
-                        if pd.isnull(price_realtime_prev) or (lower_bound <= price_realtime <= upper_bound):  
-                            
-                            self.table_trade.loc[self.table_trade['code'] == code, 'price_realtime'] = price_realtime                    
-                    
-                            # 01 Check Expiry
-                            if row.order_way == 'OPEN' and order_info['status'] in ['NEW', 'PARTIALLY_FILLED']:
-                                self.sys_log.debug("------------------------------------------------")
-                                start_time = time.time()  
-                                
-                                if side_position == 'LONG':
-                                    price_historical = historical_high
-                                else:
-                                    price_historical = historical_low      
-                                
-                                expired = check_expiration(self,
-                                                        interval,
-                                                        entry_timeIndex,
-                                                        side_position,
-                                                        price_realtime,
-                                                        price_historical,
-                                                        price_expiration,
-                                                        ncandle_game=params.get('ncandle_game', 2))
-                                    
-                                if expired:
-                                    self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = f"Expired_{'x' if expired == 1 else 'y'}"
-                                    
-                                    # we need this, cause order should be canceled !                                            
-                                    quantity_unexecuted = get_quantity_unexecuted(self, 
-                                                                                symbol,
-                                                                                orderId)  
-                                    
-                                    # 어차피, get_income_info phase 에서 margin 내부에 (executed & unexecuted Margin 이 있다.)
-                                    # self.table_account.loc[self.table_account['account'] == account, 'balance'] +=(quantity_unexecuted * row.price_entry / leverage)
-                                    
-                                    # Todo, messeage alertion needed ?
-                                    # self.user_text = 'watch'  # allowing message.
-                                    
-                                self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check expiration for order_open : %.4fs" % (time.time() - start_time)) 
-                                self.sys_log.debug("------------------------------------------------")
-            
-                        
-                        
-                            # 02 Check Stop Loss
-                                # get stop_loss_on
-                                # order_way == 'CLOSE' : Stop Loss or Liquidation
-                            elif row.order_way == 'CLOSE':
-                                self.sys_log.debug("------------------------------------------------")
-                                start_time = time.time()
-                                
-                                if params.get('use_stop_loss', True) or params.get('use_stop_loss_barclose', False):                                
-                                    stop_loss_on = check_stop_loss(self,
-                                                                        side_open,
-                                                                        price_realtime,
-                                                                        price_liquidation,
-                                                                        price_stop_loss)
-                                    
-                                    if stop_loss_on:
-                                        self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = 'SL'
-                                
-                                # if params.get('use_stop_loss_barclose', False) and stop_loss_on:
-                                #     wait_barClosed(self, interval, entry_timeIndex)                                
-                                
-                                self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check_stop_loss : %.4fs" % (time.time() - start_time)) 
-                                self.sys_log.debug("------------------------------------------------")
-                                
-                               
-                                
-                    # 03 Check Closer
-                        # Closer 시그널 발생 시, 해당 interval의 종료 시각까지 대기 후 Market 주문으로 포지션 종료
-                    if row.order_way == 'CLOSE':
-                        
-                        self.sys_log.debug("------------------------------------------------")
-                        start_time = time.time()  
-                        
-                        closer_on = check_closer(self, 
-                                                    interval, 
-                                                    entry_timeIndex,
-                                                    ncandle_game=params.get('ncandle_game', 2))
-                                
-                        if closer_on:
-                            self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = 'Closer'
-                        
-                        # if params.get('use_closer', False) and closer_on:
-                        #     wait_barClosed(self, interval, entry_timeIndex)
-                        
-                        self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check_closer : %.4fs" % (time.time() - start_time)) 
-                        self.sys_log.debug("------------------------------------------------")
+                        order_way_current = row.order_way
+
+                        # ──────────────────────────────────────────────
+                        # 1 실시간 가격 조회 및 슬리피지 확인
+                        # ──────────────────────────────────────────────
+                        price_realtime = get_price_realtime(self, symbol)
+                        self.sys_log.debug(f"{symbol} price_realtime : {price_realtime}")
+
+                        price_ok = False
+                        if not pd.isnull(price_realtime):
+                            price_realtime_prev = self.table_trade.loc[self.table_trade['code'] == code, 'price_realtime'].values[0]
+                            slippage_margin = 0.1
+                            lower_bound = price_realtime_prev * (1 - slippage_margin)
+                            upper_bound = price_realtime_prev * (1 + slippage_margin)
+
+                            self.sys_log.debug(f"price_realtime_prev: {price_realtime_prev:.6f}, lower_bound: {lower_bound:.6f}, upper_bound: {upper_bound:.6f}")
+
+                            if pd.isnull(price_realtime_prev) or (lower_bound <= price_realtime <= upper_bound):
+                                price_ok = True
+                                self.table_trade.loc[self.table_trade['code'] == code, 'price_realtime'] = price_realtime
+
+
+                        # ────────────────────────────────────────────── 
+                        # 2 Expiry 체크 (OPEN 상태 + 실시간 가격 정상 + order_info 있음)
+                        # ──────────────────────────────────────────────
+                        if order_way_current == 'OPEN' and price_ok and order_info and order_info['status'] in ['NEW', 'PARTIALLY_FILLED']:
+                            self.sys_log.debug("------------------------------------------------")
+                            start_time = time.time()
+
+                            price_historical = historical_high if side_position == 'LONG' else historical_low
+                            expired = check_expiration(
+                                self,
+                                interval,
+                                entry_timeIndex,
+                                side_position,
+                                price_realtime,
+                                price_historical,
+                                price_expiration,
+                                ncandle_game=params.get('ncandle_game', 2)
+                            )
+
+                            if expired:
+                                self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = f"Expired_{'x' if expired == 1 else 'y'}"
+                                quantity_unexecuted = get_quantity_unexecuted(self, symbol, orderId)
+
+                            self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check expiration for order_open : %.4fs" % (time.time() - start_time))
+                            self.sys_log.debug("------------------------------------------------")
+
+
+                        # ──────────────────────────────────────────────
+                        # 3 Stop Loss 체크 (CLOSE 상태 + 가격 정상)
+                        # ──────────────────────────────────────────────
+                        if order_way_current == 'CLOSE' and price_ok and (params.get('use_stop_loss', True) or params.get('use_stop_loss_barclose', True)):
+                            self.sys_log.debug("------------------------------------------------")
+                            start_time = time.time()
+
+                            stop_loss_on = check_stop_loss(
+                                self,
+                                side_open,
+                                price_realtime,
+                                price_liquidation,
+                                price_stop_loss
+                            )
+
+                            if stop_loss_on:
+                                self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = 'SL'
+
+                            self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check_stop_loss : %.4fs" % (time.time() - start_time))
+                            self.sys_log.debug("------------------------------------------------")
+
+
+                        # ──────────────────────────────────────────────
+                        # 4 Closer 체크 (CLOSE 상태, 가격 무관)
+                        # ──────────────────────────────────────────────
+                        if order_way_current == 'CLOSE' and params.get('use_closer', True):
+                            self.sys_log.debug("------------------------------------------------")
+                            start_time = time.time()
+
+                            closer_on = check_closer(
+                                self,
+                                interval,
+                                entry_timeIndex,
+                                ncandle_game=params.get('ncandle_game', 2)
+                            )
+
+                            if closer_on:
+                                self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = 'Closer'
+
+                            self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} check_closer : %.4fs" % (time.time() - start_time))
+                            self.sys_log.debug("------------------------------------------------")
+
+
+                        # ──────────────────────────────────────────────
+                        # 5 MARKET 주문 실행 (Stop Loss 또는 Closer 조건 발생 시)
+                        # ──────────────────────────────────────────────
+                        if stop_loss_on or closer_on:
+                            self.sys_log.debug("------------------------------------------------")
+                            start_time = time.time()
+
+                            quantity_unexecuted = get_quantity_unexecuted(self, symbol, orderId)
+                            if quantity_unexecuted:
+                                order_result, error_code = order_market(
+                                    self,
+                                    symbol,
+                                    side_close,
+                                    side_position,
+                                    quantity_unexecuted
+                                )
+                                if not error_code:
+                                    self.table_trade.loc[self.table_trade['code'] == code, 'orderId'] = order_result['orderId']
+
+                            self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} order_market : %.4fs" % (time.time() - start_time))
+                            self.sys_log.debug("------------------------------------------------")
+
                 
                 
                 
-            # ORDER 조건 확인
-            # if not self.config.bank.backtrade and not order_motion:
+            # order_info 가 꼭 유효하지 않아도 되는 구간.   
+                
+            # ──────────────────────────────────────────────
+            # LIMIT 주문 실행 (OPEN / CLOSE 구분 처리)
+            # ──────────────────────────────────────────────
             if self.table_trade.loc[self.table_trade['code'] == code, 'order'].values[0] == 1:
 
-                ####################################
-                # 전처리 : 가격 & 거래량 수집.                      
-                ####################################   
-                
-                    # public set.
-                order_type = 'LIMIT' # fixed for order_limit.
-                side_position = side_position                
-                                
-                    # OPEN condition
-                if self.table_trade.loc[self.table_trade['code'] == code, 'order_way'].values[0] == 'OPEN':
-                                    
+                order_way_current = self.table_trade.loc[self.table_trade['code'] == code, 'order_way'].values[0]
+                side_position = row.side_position
+
+                # === OPEN: order_info 불필요 ===
+                if order_way_current == 'OPEN':
                     side_order = row.side_open
                     price = row.price_entry
                     quantity = row.quantity_open
-    
-                    # CLOSE condition
-                else: #  self.table_trade.at[idx, 'order_way'] == 'CLOSE': # upper phase's condition use 'order' = 1                                
-                    # we don't do partial like this anymore.
-                        # each price info will be adjusted order by order.
-                                        
+
+                # === CLOSE: order_info 반드시 필요 ===
+                elif order_way_current == 'CLOSE':
+                    if order_info is None:
+                        self.sys_log.error(f"[{code}] CLOSE 주문 실행 실패: order_info 없음")
+                        continue  # 또는 적절한 fallback 처리
+
                     side_order = row.side_close
                     price = row.price_take_profit
-                    quantity = order_info['executedQty'] # OPEN's qty.      
-            
-            
-                
+                    quantity = order_info['executedQty']
+
+                else:
+                    self.sys_log.error(f"[{code}] 알 수 없는 order_way: {order_way_current}")
+                    continue
+
+                # === 주문 실행 ===
                 self.sys_log.debug("------------------------------------------------")
-                start_time = time.time()                               
-                                
-                # 01 LIMIT
-                order_result, \
-                error_code = order_limit(self, 
-                                        symbol,
-                                        side_order, 
-                                        side_position, 
-                                        price, 
-                                        quantity)
-            
-                # normal state : error_code = 0
+                start_time = time.time()
+
+                order_result, error_code = order_limit(
+                    self,
+                    symbol,
+                    side_order,
+                    side_position,
+                    price,
+                    quantity
+                )
+
                 if not error_code:
                     self.table_trade.loc[self.table_trade['code'] == code, 'orderId'] = order_result['orderId']
-                    
                 else:
-                    # CLOSE order_error should be cared more strictly.                        
                     self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'] = 1
-                    self.table_trade.loc[self.table_trade['code'] == code, 'status'] =f"ERROR : order_limit {error_code}"
-                    
-                    # remove_row == 1로 실제로 거래가 종료되어 드롭되기 직전에 로깅
+                    self.table_trade.loc[self.table_trade['code'] == code, 'status'] = f"ERROR : order_limit {error_code}"
+
+                    # 오류 row → 로그 테이블로 이동
                     self.table_log = pd.concat([self.table_log, self.table_trade[self.table_trade['code'] == code]], ignore_index=True)
-                    self.table_log['id'] = self.table_log.index + 1 # Update 'id' column to be the new index + 1                    
+                    self.table_log['id'] = self.table_log.index + 1
                     self.db_manager.replace_table(self.table_log, self.table_log_name)
-                    
-                    self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} replace_table table_log : %.4fs" % (time.time() - start_time)) 
-                    
-                    
-                self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} order_limit : %.4fs" % (time.time() - start_time)) 
+
+                    self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} replace_table table_log : %.4fs" % (time.time() - start_time))
+
+                self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} order_limit : %.4fs" % (time.time() - start_time))
                 self.sys_log.debug("------------------------------------------------")
-                
-                
-                
-                # 02 STOP MARKET
-                # if self.table_trade.at[idx, 'order_way'] == 'CLOSE':                    
                     
-                #     self.sys_log.debug("------------------------------------------------")
-                #     start_time = time.time()
-                                
-                #     order_result, \
-                #     error_code = order_stop_market(self, 
-                #                                 symbol,
-                #                                 side_order,
-                #                                 side_position,
-                #                                 row.price_stop_loss,
-                #                                 quantity)
-                    
-                #     # normal state : error_code = 0
-                #     if not error_code:                        
-                #         new_row = self.table_trade.loc[idx].copy()
-                #         new_row['id'] = np.nan # set as a missing_id for "fill_missing_ids"
-                #         new_row['orderId'] = order_result['orderId'] # this is key for updating order_info (change to CLOSE orderId)
-                #         new_rows.append(new_row)
-                                                
-                #     self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} order_market : %.4fs" % (time.time() - start_time)) 
-                #     self.sys_log.debug("------------------------------------------------")
                         
-                        
-           
-            # 02 MARKET
-                # prevent order_market duplication.
-                    # order_way == 'CLOSE' : stop_loss / liquidation condition.
-                        # repflect updated row.
-            if self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'].values[0] != 1: # if not trade is done, it has np.nan or 1.
-                if self.table_trade.loc[self.table_trade['code'] == code, 'order_way'].values[0] == 'CLOSE':
-                    if stop_loss_on or closer_on:
-                        
-                        self.sys_log.debug("------------------------------------------------")
-                        start_time = time.time()
-                                    
-                        quantity_unexecuted = get_quantity_unexecuted(self, 
-                                                                    symbol,
-                                                                    orderId)          
-                        
-                        if quantity_unexecuted:
-                            
-                            order_result, \
-                            error_code = order_market(self, 
-                                                    symbol,
-                                                    side_close,
-                                                    side_position,
-                                                    quantity_unexecuted)
-                            
-                            # normal state : error_code = 0
-                                # this is key for updating order_info (change to CLOSE orderId)
-                                    # order_info update 이후에 status 가 바뀌고, remove_row 진행하게 된다.
-                            if not error_code:
-                                self.table_trade.loc[self.table_trade['code'] == code, 'orderId'] = order_result['orderId']
-                                                       
-                        self.sys_log.debug(f"LoopTableTrade : elasped time, {code} {orderId} order_market : %.4fs" % (time.time() - start_time)) 
-                        self.sys_log.debug("------------------------------------------------")
                            
-            #############################################
-            # 행 제거 & 수익 계산 : status Update 이후.
-            #############################################
-            else:            
-            # if self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'].values[0] == 1:                    
-                # Drop rows
-                    # this phase should be placed in the most below, else order_ will set value as np.nan in invalid rows. 
-                        # 무슨 소린지 모르겠네.                  
+            # ──────────────────────────────────────────────
+            # DROP ROW & GET INCOME INFO
+                # status_error case 를 고려해서 indent level 유지.
+            # ──────────────────────────────────────────────
+            
+            if self.table_trade.loc[self.table_trade['code'] == code, 'remove_row'].values[0] == 1:         
+                           
+                # 01 DROP ROW
+                    # 이 drop 단계는 가장 마지막에 실행해야 합니다.
+                    # 먼저 실행할 경우, 위쪽 phase에서 해당 row를 접근할 수 없고,
+                    # orderId나 기타 필드가 NaN으로 설정되거나 오류가 발생할 수 있습니다.             
                 self.sys_log.debug("------------------------------------------------")
                 start_time = time.time()
                 
@@ -1303,9 +1211,9 @@ async def loop_table_trade_async(self):
 
 
 
-                # 수익 계산.
-                    # except canceled open order.
-                        # 해당 루프는 비동기화 상태에서 loop_condition 과 별도로 동작하기에, 클래스 인스턴스로 접근해도 되지 않나.
+                # 02 GET INCOME INFO
+                    # 취소된 OPEN 주문은 계산에 해당되지 않습니다.
+                        # --> 해당 루프는 비동기화 상태에서 loop_condition 과 별도로 동작하기에, 클래스 인스턴스 ( self.table_log ? ) 로 접근해도 되지 않나.
                 self.sys_log.debug("------------------------------------------------")
                 start_time = time.time()
                 
@@ -1335,23 +1243,8 @@ async def loop_table_trade_async(self):
                 # display(self.table_trade)
                 
                 
-                
-                # # add profit result by condition.
-                # code_split = code.split('_')
-                # condition = code_split[1]
-
-                # if len(code_split) == 3 and len(condition) > 5: # reject idx placed instead conndition.
-                    
-                #     self.config.bank.condition_res.setdefault(condition, {
-                #         'income_accumulated': 0,
-                #         'profit_accumulated': 0
-                #     })
-                    
-                #     self.config.bank.condition_res[condition]['income_accumulated'] += income
-                #     self.config.bank.condition_res[condition]['profit_accumulated'] += profit 
-                
-                # with open(self.path_config, 'w') as f:
-                #     json.dump(self.config, f, indent=4)                
+                with open(self.path_config, 'w') as f:
+                    json.dump(self.config, f, indent=4)                
                 
 
 
