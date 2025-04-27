@@ -1301,6 +1301,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         - 재귀 대신 retry 파라미터 활용한 루프 방식 적용. 20250411 1008.
         - 무조건 완결성을 위해 retry 를 주지 않았다. 20250419 0940.
             - 다른 error 발생을 고려해 retry = np.inf 는 사용 불가하다.
+        - add end_date == None condition to realtime datetime validation. 20250426 2151.
     """
 
     assert limit <= 1500, f"limit({limit}) must be <= 1500"
@@ -1368,6 +1369,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
             return await get_df_new_async(self, session, symbol, interval, days, end_date, limit, retry=retry - 1)
         return '-1122'
 
+
     # 정합성 검증 (마지막 bar 기준)
     df_total = pd.concat(df_list).sort_index()
     df_total = df_total[~df_total.index.duplicated(keep='last')]
@@ -1379,16 +1381,19 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
 
     self.sys_log.debug(f"[{symbol} {interval}] last index: {latest_index} / current: {now_rounded} / gap: {minute_gap}")
     
-    # 현재 시각이 22:30 이상인데, df_res.index.iloc[-1] 가 22:30 (정상) 이 아닌 22:15 (비정상) / 22:10 (비비정상)를 가리키고 있는 상황
-    if minute_gap >= itv_number * 2:
-        self.sys_log.debug(f"[Critical Delay] {minute_gap} >= {itv_number} * 2")
-        return None
-    elif minute_gap >= itv_number:
-        self.sys_log.debug(f"[Minor Delay] {minute_gap} >= {itv_number}, retry left: {retry}")
-        # if retry > 0:
-        await asyncio.sleep(0.5)
-        return await get_df_new_async(self, session, symbol, interval, days, end_date, limit)
-        # return None
+    
+    if end_date is None:
+        
+        # 현재 시각이 22:30 이상인데, df_res.index.iloc[-1] 가 22:30 (정상) 이 아닌 22:15 (비정상) / 22:10 (비비정상)를 가리키고 있는 상황
+        if minute_gap >= itv_number * 2:
+            self.sys_log.debug(f"[Critical Delay] {minute_gap} >= {itv_number} * 2")
+            return None
+        elif minute_gap >= itv_number:
+            self.sys_log.debug(f"[Minor Delay] {minute_gap} >= {itv_number}, retry left: {retry}")
+            # if retry > 0:
+            await asyncio.sleep(0.5)
+            return await get_df_new_async(self, session, symbol, interval, days, end_date, limit)
+            # return None
 
     return df_total
 
@@ -1405,6 +1410,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
     v4.2.5
         - modify time_gap validation phase. replace to 2 min --> 2 bar. 20250327 2243.
         - days allows float type, cause calc. as timestamp (처음부터 그러하였다.) 20250407 1659.
+        - add end_date == None to realtime datetime validation. 20250426 2148.
     """
     
     # print(f"limit : {limit}, {type(limit)}")
@@ -1419,7 +1425,7 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
         if end_date is None:
             timestamp_end = time.time() * 1000
         else:
-            assert end_date != str(datetime.now()).split(' ')[0], "end_date shouldd not be today."
+            assert end_date != str(datetime.now()).split(' ')[0], "end_date should not be today."
             timestamp_end = int(datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59).timestamp() * 1000)
             
         timestamp_start = timestamp_end - days * 24 * 60 * 60 * 1000
@@ -1493,32 +1499,34 @@ def get_df_new(self, symbol, interval, days, end_date=None, limit=1500, timeslee
                     df_list.append(df)
                     self.sys_log.debug(f"df.index range : {symbol} {df.index[0]} - {df.index[-1]}")
                     
+                    
+                    if end_date is None:
+                        
+                        # 현재 시각이 22:30 이상인데, df_res.index.iloc[-1] 가 22:30 (정상) 이 아닌 22:15 (비정상) / 22:10 (비비정상)를 가리키고 있는 상황.                        
+                        if idx == 0:
+                            latest_index = df.index[-1].replace(second=0, microsecond=0)
+                            now_rounded = datetime.now().replace(second=0, microsecond=0)
+                            minute_gap = int((now_rounded - latest_index).total_seconds() // 60)
+                            itv_number = itv_to_number(interval)
 
-                    # 현재 시각이 22:30 이상인데, df_res.index.iloc[-1] 가 22:30 (정상) 이 아닌 22:15 (비정상) / 22:10 (비비정상)를 가리키고 있는 상황.                        
-                    if idx == 0:
-                        latest_index = df.index[-1].replace(second=0, microsecond=0)
-                        now_rounded = datetime.now().replace(second=0, microsecond=0)
-                        minute_gap = int((now_rounded - latest_index).total_seconds() // 60)
-                        itv_number = itv_to_number(interval)
+                            self.sys_log.debug(f"Current time: {now_rounded}, Last data (df.index[-1]): {latest_index}")
+                            self.sys_log.debug(f"Assert minute_gap < itv_number : {minute_gap} < {itv_number} ?")
 
-                        self.sys_log.debug(f"Current time: {now_rounded}, Last data (df.index[-1]): {latest_index}")
-                        self.sys_log.debug(f"Assert minute_gap < itv_number : {minute_gap} < {itv_number} ?")
+                            # Critical delay: 2 or more bars behind
+                            if minute_gap >= itv_number * 2:
+                                msg = f"[Critical Delay] {minute_gap} > {itv_number} * 2"
+                                self.sys_log.debug(msg)
+                                # self.push_msg(msg)
+                                return
 
-                        # Critical delay: 2 or more bars behind
-                        if minute_gap >= itv_number * 2:
-                            msg = f"[Critical Delay] {minute_gap} > {itv_number} * 2"
-                            self.sys_log.debug(msg)
-                            # self.push_msg(msg)
-                            return
-
-                        # Minor delay: 1 bar behind
-                        elif minute_gap >= itv_number:
-                            msg = f"[Minor Delay] {minute_gap} >= {itv_number}"
-                            self.sys_log.debug(msg)
-                            # self.push_msg(msg)
-                            df_list = []
-                            time.sleep(self.config.term.df_new)
-                            break
+                            # Minor delay: 1 bar behind
+                            elif minute_gap >= itv_number:
+                                msg = f"[Minor Delay] {minute_gap} >= {itv_number}"
+                                self.sys_log.debug(msg)
+                                # self.push_msg(msg)
+                                df_list = []
+                                time.sleep(self.config.term.df_new)
+                                break
 
 
             except Exception as e:

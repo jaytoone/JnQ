@@ -1,3 +1,7 @@
+v3.4.1	20250427 1427
+- remove Open Expired_x in InitTableTrade
+- log realtime statusChangeTime.
+
 v3.4 	20250419 1054
 - adj. loop_table_condition_async v2.4.1 (일괄 처리 대신 병렬 처리)
 - remove hard-coding on base_directiory
