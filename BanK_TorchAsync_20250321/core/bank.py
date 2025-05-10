@@ -1,14 +1,14 @@
 
 # Library for Futures.
-from funcs.binance_f.model import *
+from funcs.binance_f.model import * # const 말고 사용안하는거 아닌가 ?
 from funcs.binance.um_futures import UMFutures
 from funcs.binance.websocket.um_futures.websocket_client import UMFuturesWebsocketClient
 # from funcs.binance.error import ClientError
 
 
 # Library for Bank.
-from funcs.public.constant import *
-from funcs.public.broker import *
+from funcs.public.constant import * # f_model 내부 const 랑 완전 중복
+from funcs.public.broker import *   # 실질적으로 사용되는 함수 bank 내부 메소드로 이동시켰다. (itv_to_number 만 사용하는 것으로 추정)
 
 
 import os
@@ -738,7 +738,6 @@ class DatabaseManager:
   
           
 
-
 class TokenBucket:
     """
     v0.1
@@ -957,19 +956,92 @@ class Bank(UMFutures):
                 data = int(data)
 
         return data
+    
+    
+    def kline_message_handler(self, message):
+        """
+        v0.2 - 20250502 1118
+            - 실시간 Kline 메시지를 받아 open/high/low/close 저장
+            - interval 구분하여 저장
+            - 1m vs 15m 실시간 high/low 비교 포함
+        """
+        try:
+            kline = message.get("k", {})
+            symbol = kline["s"]
+            interval = kline["i"]           # "1m", "15m" 등
+            timestamp = kline["t"] // 1000
+            is_closed = kline["x"]
+
+            # 가격 정보
+            open_ = float(kline["o"])
+            high = float(kline["h"])
+            low = float(kline["l"])
+            close = float(kline["c"])
+
+            # 캐시 구조 초기화
+            if not hasattr(self, "candle_cache"):
+                self.candle_cache = {}
+
+            if symbol not in self.candle_cache:
+                self.candle_cache[symbol] = {}
+
+            # 저장
+            self.candle_cache[symbol][interval] = {
+                "timestamp": timestamp,
+                "interval": interval,
+                "open": open_,
+                "high": high,
+                "low": low,
+                "close": close,
+                "is_closed": is_closed
+            }
+
+        except Exception as e:
+            self.sys_log.warning(f"[kline_handler] Error: {e} | raw: {json.dumps(message, indent=2, default=str)}")
 
 
     def agg_trade_message_handler(self, message):
-        
         """
-        websocket streaming method 를 이용한 get_price_realtime method.
-            try --> received data = None 일 경우를 대비한다.
+        v0.2
+            - WebSocket streaming handler: 20250501 1801.
+            - Updates latest trade price (`price_market`)
+            - Builds 1-minute candle snapshot (open/high/low/close)
         """
-        
+
         try:
-            self.price_market[message['s']] = float(message['p'])
+            symbol = message['s']
+            price = float(message['p'])
+            ts = int(message['T']) // 1000  # ms to seconds
+            minute = ts - (ts % 60)  # e.g., 12:15:22 -> 12:15:00 기준
+
+            # Update latest trade price
+            self.price_market[symbol] = price
+
+            # Initialize cache if not exists
+            if not hasattr(self, 'candle_1m_cache'):
+                self.candle_1m_cache = {}
+
+            # Get current candle
+            candle = self.candle_1m_cache.get(symbol)
+
+            if candle is None or candle['timestamp'] != minute:
+                # 새 1분봉 시작
+                self.candle_1m_cache[symbol] = {
+                    'timestamp': minute,
+                    'open': price,
+                    'high': price,
+                    'low': price,
+                    'close': price,
+                }
+            else:
+                # 기존 캔들 업데이트
+                candle['high'] = max(candle['high'], price)
+                candle['low'] = min(candle['low'], price)
+                candle['close'] = price
+
         except Exception as e:
-            pass
+            self.sys_log.warning(f"[agg_trade_handler] Error: {e}")
+
 
     def namer(self, name):
         return name + ".gz"
@@ -1302,6 +1374,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         - 무조건 완결성을 위해 retry 를 주지 않았다. 20250419 0940.
             - 다른 error 발생을 고려해 retry = np.inf 는 사용 불가하다.
         - add end_date == None condition to realtime datetime validation. 20250426 2151.
+        - limit 100 기준, token usage = 1 recheck 완료. 20250510 1643.
     """
 
     assert limit <= 1500, f"limit({limit}) must be <= 1500"
@@ -1318,6 +1391,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
 
     time_arr_start = np.arange(timestamp_start, timestamp_end, timestamp_unit)
     time_arr_end = time_arr_start + timestamp_unit
+    
 
     # 요청 전송
     tasks = [
@@ -1351,6 +1425,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         except Exception as e:
             self.sys_log.error(f"[{symbol}] Error while processing df: {e}")
             res_error_flags.append(0)
+            
 
     # 오류 패턴 검증
     if res_error_flags[-2:] == [0, 0] and df_list:
@@ -1379,7 +1454,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
     minute_gap = int((now_rounded - latest_index).total_seconds() // 60)
     itv_number = itv_to_number(interval)
 
-    self.sys_log.debug(f"[{symbol} {interval}] last index: {latest_index} / current: {now_rounded} / gap: {minute_gap}")
+    self.sys_log.debug(f"[{symbol} {interval}] last index: {latest_index} | current: {now_rounded} | gap: {minute_gap}")
     
     
     if end_date is None:
@@ -1886,39 +1961,17 @@ def get_order_info(self, symbol, orderId):
             time.sleep(self.config.term.order_info)
                                      
 
-def get_price_realtime(self, symbol):
-    
+def get_price_realtime(self, symbol, interval):
     """
-    v3.0
-        get price_market by self.price_market
-        add non-error solution.
-    v3.1
-        remove loop & agg_trade
-    v3.2
-        restore agg_trade
-    v3.3
-        vivid mode.        
-        access to self.price_market by symbol.
-            we don't need token for it.     
-        - modify
-            wrap with float.
-    
-    Last confirmed: 2024-07-22 10:54
+    v4.0
+        - Retrieve price from self.candle_cache instead of self.price_market. 20250502 2104.
     """
-    
     try:
-        price_realtime = self.price_market[symbol]
+        candle = self.candle_cache[symbol][interval]
+        return float(candle["high"]), float(candle["low"])
     except Exception as e:
-        price_realtime = np.nan   
-        
-        if symbol not in self.price_market.keys():
-            self.websocket_client.agg_trade(symbol=symbol, id=1, callback=self.agg_trade_message_handler)
-            msg = "Error in get_price_realtime : {} added to websocket_client.agg_trade".format(symbol)
-        else:                
-            msg = "Error in get_price_realtime : {}".format(e)
-        self.sys_log.error(msg)
-    
-    return float(price_realtime)
+        self.sys_log.error(f"[get_price_realtime] Error: {e}")
+        return np.nan, np.nan
 
 
 def check_expiration(self, 
@@ -1926,15 +1979,13 @@ def check_expiration(self,
                     entry_timeIndex,
                     side_position,
                     price_realtime, 
-                    price_historical,
                     price_expiration,
                     ncandle_game=None):
     """
     v0.2
-        - Expired_x: 가격 조건에 따른 만료 (LONG: 현재가 >= 만료가, SHORT: 현재가 <= 만료가)
+        - Expired_x: 가격 조건에 따른 만료 (LONG: 현재가 >= 만료가, SHORT: 현재가 <= 만료가) 
         - Expired_y: ncandle_game 값에 따른 만료. (예: ncandle_game == 2이면, 진입 시각 + (interval*2) 이후 만료)
-    v0.2.1
-        - add historical_data 20250328 2310.
+        - remove %.6f.  20250502 2130
     
     Returns:
         int: 만료 상태
@@ -1946,10 +1997,10 @@ def check_expiration(self,
 
     # 01 Expired_x: 가격 조건 검사
     if side_position == 'LONG':
-        if price_realtime >= price_expiration or price_historical >= price_expiration:
+        if price_realtime >= price_expiration:
             expired = 1
     else:  # SHORT인 경우
-        if price_realtime <= price_expiration or price_historical <= price_expiration:
+        if price_realtime <= price_expiration:
             expired = 1
 
     # 02 Expired_y: Candle Game 조건 검사
@@ -1963,9 +2014,9 @@ def check_expiration(self,
             expired = 2
 
     # 필요한 입력 인자와 최종 expired 상태를 보기 좋게 로그로 남김.
-    self.sys_log.info(
-        "check_expiration: expired=%d | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%.4f | price_historical=%.4f | price_expiration=%.4f | ncandle_game=%s",
-        expired, interval, entry_timeIndex, side_position, price_realtime, price_historical, price_expiration, ncandle_game
+    self.sys_log.debug(
+        "check_expiration: expired=%d | interval=%s | entry_timeIndex=%s | side=%s | price_realtime=%s | price_expiration=%s | ncandle_game=%s",
+        expired, interval, entry_timeIndex, side_position, price_realtime, price_expiration, ncandle_game
     )
     
     return expired
@@ -2002,7 +2053,7 @@ def check_stop_loss(self,
             stop_loss_on = True
 
     self.sys_log.debug(
-        "check_stop_loss: stop_loss_on=%s | side_open=%s | price_realtime=%.4f | price_stop_loss=%.4f | price_liquidation=%.4f",
+        "check_stop_loss: stop_loss_on=%s | side_open=%s | price_realtime=%.6f | price_stop_loss=%.6f | price_liquidation=%.6f",
         stop_loss_on, side_open, price_realtime, price_stop_loss, price_liquidation
     )
 
@@ -2030,7 +2081,7 @@ def check_closer(self,
             closer_on = True
             
     # 필요한 파라미터와 결과를 로그에 출력
-    self.sys_log.info(
+    self.sys_log.debug(
         "check_closer: closer_on=%s | interval=%s | entry_timeIndex=%s | ncandle_game=%s",
         closer_on, interval, entry_timeIndex, ncandle_game
     )    
@@ -2084,6 +2135,9 @@ def order_cancel(self, symbol, orderId, max_retry=3):
         - -2011, 'Unknown order sent.' 다룬다. 20250321 1843.
     v2.3
         - add retry sequence. 20250412 1037.
+        - modify error -2011 return True. 20250503 1346.
+            - status CANCELED / FILLED 로 간주.
+            - 신경 쓰지 말고, 다음 프로세스 진행하라는 의미.
     """
     
     orderId = int(orderId)
@@ -2104,7 +2158,7 @@ def order_cancel(self, symbol, orderId, max_retry=3):
 
             # -2011: Unknown order (이미 체결되었거나 존재하지 않는 주문)
             if "-2011" in str(e):
-                return False  # 추가 시도 불필요
+                return True  # 추가 시도 불필요
 
             retry += 1
             time.sleep(self.config.term.order_cancel)

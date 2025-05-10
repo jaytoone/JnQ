@@ -1,3 +1,6 @@
+v3.5	20250510 1729
+- commit before wait_for_token asyncionize.
+
 v3.4.1	20250427 1427
 - remove Open Expired_x in InitTableTrade
 - log realtime statusChangeTime.
