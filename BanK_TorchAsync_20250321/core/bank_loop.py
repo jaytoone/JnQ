@@ -68,7 +68,7 @@ async def loop_save_df_res_async(self):
         - modify time logging. 20250503 2053
     """
     batch_start_time = None
-    saving_count = 0
+    # saving_count = 0
 
     # self.sys_log.debug(f"LoopSaveDfRes : START at {datetime.now().strftime('%H:%M:%S.%f')}")
 
@@ -76,7 +76,7 @@ async def loop_save_df_res_async(self):
         try:
             if self.queue_df_res.qsize() > 0 and batch_start_time is None:
                 batch_start_time = time.time()
-                saving_count = self.queue_df_res.qsize()
+                # saving_count = self.queue_df_res.qsize()
 
             try:
                 item = await self.queue_df_res.get()
@@ -100,9 +100,7 @@ async def loop_save_df_res_async(self):
 
                         path_df_res = f"{path_dir_df_res}\\{symbol}_{interval}.csv"
                         df_res.to_csv(path_df_res, index=True)
-
-                        self.sys_log.debug(f"LoopSaveDfRes : Saved {symbol} {interval} "
-                                           f"(elapsed : {time.time() - start_time:.4f}s)")
+                        
                     except Exception as io_err:
                         self.sys_log.error(f"LoopSaveDfRes : File I/O error: {io_err}")
                 else:
@@ -111,13 +109,11 @@ async def loop_save_df_res_async(self):
             finally:
                 self.queue_df_res.task_done()
 
-            if self.queue_df_res.empty() and batch_start_time is not None:
+            if self.queue_df_res.empty() and batch_start_time is not None:                
                 batch_elapsed = time.time() - batch_start_time
-                if saving_count > 0:
-                    self.sys_log.debug(f"[loop_save_df_res_async] elapsed : {batch_elapsed / saving_count:.2f}s")
-
                 batch_start_time = None
-                saving_count = 0
+                # saving_count = 0
+                self.sys_log.debug(f"[loop_save_df_res_async] elapsed : {batch_elapsed:.4f}s")
 
         except asyncio.CancelledError:
             self.sys_log.warning("LoopSaveDfRes : CancelledError outer loop, continue loop")
@@ -223,23 +219,6 @@ async def update_table_condition_async(self,):
         
 async def loop_table_condition_async(self, drop=False, debugging=False):
     """
-    v2.1.4
-        - Async Full Refactor. 20250410 1214.
-    v2.1.5
-        - reorder save df_res phase. 20250410 1638.
-        - adj. get_trade_info_sync v0.2.2
-    v2.4
-        - Refactored to use as_completed for faster per-symbol processing. 20250419
-    v2.4.1
-        - ClientSession delayed until job_list confirmed, 20250419 1023
-        - row caching applied, 
-        - batch init/enqueue maintained. 
-        - 2000 row 기준 5초를 더 허용하되, 일괄 (v2.1.5) 보다 낫겠다 이거야.
-    v2.4.2
-        - adj. reatlime-ticker. 20250421 1807.
-            - add len(df_res) > 2. 20250421 2222.
-        - modify to use await not append. on init & enqqueue. 20250503 0138.
-            - append 로 진행하게 되면 주문 등록까지 너무 오래걸린다. risky.
     v2.4.3
         - adj. v2.1.5, 해당 버전은 OPEN 하고 save_df_res 하니까. 20250503 2151.
             - init 까지는 빠르게 진행. 20250503 2237.
@@ -248,6 +227,8 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
             - 1h 까지 36초.
             - 15m 까지 20초
         - add len(df) > 2 condition. 20250509 2321.
+    v3.0
+        - adj. asyncio funcs. 20250510 2031.
     """
 
     data_len = 100
@@ -261,6 +242,16 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
         
         loop_start = time.time()
         # self.sys_log.debug(f"[loop_table_condition] START at {datetime.now().strftime('%H:%M:%S.%f')}")
+        
+        
+        # STEP 0: 실시간 ticker 기반으로 table_condition 갱신
+        self.sys_log.debug("------------------------------------------------")
+        start_time = time.time()
+        
+        self.table_condition = await update_table_condition_async(self)
+    
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, update_table_condition_async : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug("------------------------------------------------")
         
 
         # STEP 1: 수집 대상 필터링 및 fetch_df 준비        
@@ -290,7 +281,7 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
                 days = data_len / (60 * 24 / interval_number)
                 job_list.append((idx, row, days))
                 
-        self.sys_log.debug(f"LoopTableCondition : elasped time, check timestampLastUsed : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, check timestampLastUsed : %.4fs" % (time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")
                 
  
@@ -301,7 +292,7 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
         semaphore = asyncio.Semaphore(32)  # API 제한 고려
         tasks_step1 = []
         
-        self.token_bucket.wait_for_tokens(len(job_list))
+        await self.token_bucket.wait_for_tokens(len(job_list))
         
         async with aiohttp.ClientSession() as session:
             async def fetch_task(idx_, symbol_, interval_, days_):
@@ -315,7 +306,7 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
             ]
             df_results = await asyncio.gather(*tasks_step1)
         
-        self.sys_log.debug(f"LoopTableCondition : elasped time, get_df_new_async : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, get_df_new_async : %.4fs" % (time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")
 
 
@@ -346,7 +337,7 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
 
         trade_infos = await asyncio.gather(*tasks_step2)        
         
-        self.sys_log.debug(f"LoopTableCondition : elasped time, get_trade_info_async : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, get_trade_info_async : %.4fs" % (time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")
         
         
@@ -360,21 +351,23 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
         ]
         await asyncio.gather(*tasks_step3)
         
-        self.sys_log.debug(f"LoopTableCondition : elasped time, init_table_trade_async : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, init_table_trade_async : %.4fs" % (time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")      
         
+                
+        # STEP 5: enqueue_df_res_async
+            # enqueue_df_res_async 는 consumer 가 따라오지 못할 가능성 때문에 직렬로 설정.
+        self.sys_log.debug("------------------------------------------------")
+        start_time = time.time()
         
-        # STEP 5: 실시간 ticker 기반으로 table_condition 갱신
-        if job_list:
-            self.sys_log.debug("------------------------------------------------")
-            start_time = time.time()
-            
-            self.table_condition = await update_table_condition_async(self)
+        for ti in trade_infos:
+            if ti and isinstance(ti.df_res, pd.DataFrame):
+                await enqueue_df_res_async(self, ti.df_res, ti.symbol, ti.interval)
+                
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, enqueue_df_res_async : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug("------------------------------------------------")
         
-            self.sys_log.debug(f"LoopTableCondition : elapsed time, update_table_condition_async : %.4fs" % (time.time() - start_time))
-            self.sys_log.debug("------------------------------------------------")
-
-
+        
         # STEP 6: DB 반영
         self.sys_log.debug("------------------------------------------------")
         start_time = time.time()
@@ -386,25 +379,12 @@ async def loop_table_condition_async(self, drop=False, debugging=False):
                 send=self.config.database.usage
             )
             
-        self.sys_log.debug(f"LoopTableCondition : elasped time, replace_table condition (send={self.config.database.usage}) : %.4fs" % (time.time() - start_time))
-        self.sys_log.debug("------------------------------------------------")  
-        
-        
-        # STEP 7: enqueue_df_res_async
-            # enqueue_df_res_async 는 consumer 가 따라오지 못할 가능성 때문에 직렬로 설정.
-        self.sys_log.debug("------------------------------------------------")
-        start_time = time.time()
-        
-        for ti in trade_infos:
-            if ti and isinstance(ti.df_res, pd.DataFrame):
-                await enqueue_df_res_async(self, ti.df_res, ti.symbol, ti.interval)
-                
-        self.sys_log.debug(f"LoopTableCondition : elasped time, enqueue_df_res_async : %.4fs" % (time.time() - start_time))
+        self.sys_log.debug(f"LoopTableCondition : elapsed time, replace_table condition (send={self.config.database.usage}) : %.4fs" % (time.time() - start_time))
         self.sys_log.debug("------------------------------------------------")
         
 
         loop_elapsed_time = time.time() - loop_start
-        self.sys_log.debug(f"[loop_table_condition] elapsed : {loop_elapsed_time:.2f}s")
+        self.sys_log.debug(f"[loop_table_condition] elapsed : {loop_elapsed_time:.4f}s")
         await asyncio.sleep(max(0, 1 - loop_elapsed_time))
        
         
@@ -460,7 +440,7 @@ def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, 
             .pipe(get_SAR, params.get("SAR_start", 0.02), params.get("SAR_increment", 0.02), params.get("SAR_maximum", 0.2))
         )
 
-        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} elapsed time: get_indicators = {time.time() - start_time:.4f}s")
+        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} get_indicators : {time.time() - start_time:.4f}s")
         self.sys_log.debug("------------------------------------------------")
 
 
@@ -477,7 +457,7 @@ def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, 
         row = df_res.iloc[c_index]
         opener_long, opener_short = row['OpenerLong'], row['OpenerShort']
         self.sys_log.debug(f"Opener status: Long = {opener_long}, Short = {opener_short}")
-        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} elapsed time: get_price_channel & opener = {time.time() - start_time:.4f}s")
+        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} get_price_channel & opener : {time.time() - start_time:.4f}s")
         self.sys_log.debug("------------------------------------------------")
 
         if not (opener_long or opener_short or debugging):            
@@ -510,7 +490,7 @@ def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, 
         df_res['long'] = df_res['OpenerLong'] & df_res['StarterLong'] & df_res['AnchorLong'] & df_res['SRLong'] & df_res['MomentumLong'] & df_res['DirectionLong']
         df_res['short'] = df_res['OpenerShort'] & df_res['StarterShort'] & df_res['AnchorShort'] & df_res['SRShort'] & df_res['MomentumShort'] & df_res['DirectionShort']
 
-        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} elapsed time: get_signal = {time.time() - start_time:.4f}s")
+        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} get_signal : {time.time() - start_time:.4f}s")
         self.sys_log.debug("------------------------------------------------")
 
 
@@ -530,7 +510,7 @@ def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, 
             price_entry        = row[f'price_entry_{side_col}']
             price_stop_loss    = row[f'price_stop_loss_{side_col}']
 
-        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} elapsed time: get_price_box = {time.time() - start_time:.4f}s")
+        self.sys_log.debug(f"GetTradeInfo : elapsed time, {symbol} {interval} get_price_box : {time.time() - start_time:.4f}s")
         self.sys_log.debug("------------------------------------------------")
 
     except Exception as e:
@@ -548,24 +528,11 @@ def get_trade_info_sync(self, idx, df_res, symbol, position, interval, divider, 
 async def init_table_trade_async(self, trade_info: TradeInfo):
     
     """    
-    v2.6
-        - adj. asyncio queue. 20250406 1941.
-        - add row.leverage_limit_user 20250406 2058.
-        - modify historical_high / low 20250407 1209.
-    v2.6.1
-        - init margin as 0. 20250409 0554.
-        - add balance_available. 20250409 0643.
-    v2.6.2
-        - adj. leverage_limit_const. 20250415 0038.
-        - modify historical_high / low slicing. 20250417 0825.
-        - modify margin phase. (if margin calculated, subtract from balance) 20250417 2033.
-            - if error, margin = 0. 20250418 0032.
-            - 고의적으로, margin = np.nan 으로 초기화, status_error 가 아닐 경우 margin 은 balance 에 합쳐진다. 20250426 2031.
-                case 가 세는 경우 error 발생하게 된다.
-        - init statusChangeTime for time sync with sys_log. 20250426 2124.
     v2.6.3
         - ban Open Expired_x. 20250427 1352.
         - rollback to use latest_index in historical high / low . 20250501 1851.
+    v3.0
+        - adj. asyncio funcs. 20250510 1801.
     """
     
     
@@ -654,7 +621,7 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     start_time = time.time()    
         
     precision_price, \
-    precision_quantity = get_precision(self, 
+    precision_quantity = await get_precision(self, 
                                         symbol)
     
     def_type = 'floor' if position == 'LONG' else 'ceil'
@@ -694,8 +661,7 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
     account_normality, \
     balance_, \
     balance_origin, \
-    balance_available = get_account_normality(self, 
-                                            account)
+    balance_available = await get_account_normality(self, account)
     
     self.sys_log.debug("account_normality : {}".format(account_normality))
     self.sys_log.debug("balance_ : {}".format(balance_))
@@ -849,7 +815,7 @@ async def init_table_trade_async(self, trade_info: TradeInfo):
                         self.sys_log.debug("------------------------------------------------")
                         start_time = time.time()
                                             
-                        self.set_leverage(symbol, leverage)
+                        await self.set_leverage(symbol, leverage)
                             
                         self.sys_log.debug(f"InitTableTrade : elapsed time, {code} set_leverage : %.4fs" % (time.time() - start_time))
                         self.sys_log.debug("------------------------------------------------")
@@ -1066,8 +1032,8 @@ async def loop_table_trade_async(self):
                     
                     # self.websocket_client.agg_trade(symbol=symbol, id=1, callback=self.agg_trade_message_handler)
                     self.websocket_client.kline(symbol=symbol, id=idx + 1, interval=interval, callback=self.kline_message_handler)
-                    self.set_position_mode(dualSidePosition='true')
-                    self.set_margin_type(symbol=symbol)
+                    await self.set_position_mode(dualSidePosition='true')
+                    await self.set_margin_type(symbol=symbol)
                     
                     self.sys_log.debug(f"LoopTableTrade : elapsed time, {code} {orderId} set Broker-Ticker option : %.4fs" % (time.time() - start_time)) 
                     self.sys_log.debug("------------------------------------------------")
@@ -1086,9 +1052,7 @@ async def loop_table_trade_async(self):
             if not is_null_id:
                 
                 # get_order_info. (update order_info)                   
-                order_info = get_order_info(self, 
-                                        symbol,
-                                        orderId)
+                order_info = await get_order_info(self, symbol, orderId)
                 
                 if order_info:
                     # order 이 있는 경우에만 진행하는 것들
@@ -1200,8 +1164,8 @@ async def loop_table_trade_async(self):
                             
                             # 주문 실패 - 미체결 잔량 존재 시 해당 주문 취소 후 CLOSE LIMIT 진행.
                             if order_info['status'] != 'FILLED':  # = PARTIALLY_FILLED          
-                                if order_cancel(self, symbol, orderId):                                
-                                    order_info = get_order_info(self, symbol, orderId) # update order_info for executedQty on CLOSE LIMIT.
+                                if await order_cancel(self, symbol, orderId):                                
+                                    order_info = await get_order_info(self, symbol, orderId) # update order_info for executedQty on CLOSE LIMIT.
                                     self.sys_log.debug(f"{code} {orderId} order_info['executedQty'] : {order_info['executedQty']}")         
                             
                             self.sys_log.debug(f"LoopTableTrade : elapsed time, {code} {orderId} check CLOSE LIMIT : %.4fs" % (time.time() - start_time)) 
@@ -1262,7 +1226,7 @@ async def loop_table_trade_async(self):
                             )
                             
                             if expired:
-                                _ = order_cancel(self, symbol, orderId) # just cancel. no need for quantity_unexecuted
+                                await order_cancel(self, symbol, orderId) # just cancel. no need for quantity_unexecuted
                                 # _ = get_quantity_unexecuted(self, symbol, orderId)
                                 self.table_trade.loc[self.table_trade['code'] == code, 'status_2'] = f"Expired_{'x' if expired == 1 else 'y'}"
 
@@ -1324,11 +1288,11 @@ async def loop_table_trade_async(self):
                                 self.sys_log.debug("------------------------------------------------")
                                 start_time = time.time()
 
-                                quantity_unexecuted = get_quantity_unexecuted(self, symbol, orderId)
+                                quantity_unexecuted = await get_quantity_unexecuted(self, symbol, orderId)
                                 
                                 # 잔여 미체결랑 처리
                                 if quantity_unexecuted:
-                                    order_result, error_code = order_market(
+                                    order_result, error_code = await order_market(
                                         self,
                                         symbol,
                                         side_close,
@@ -1378,7 +1342,7 @@ async def loop_table_trade_async(self):
                     self.sys_log.error(f"[{code}] order_way = {order_way_current}")
                     continue
 
-                order_result, error_code = order_limit(
+                order_result, error_code = await order_limit(
                     self,
                     symbol,
                     side_order,
@@ -1399,8 +1363,6 @@ async def loop_table_trade_async(self):
                     self.table_log = self.table_log.sort_values('statusChangeTime').reset_index(drop=True)      # 추가: statusChangeTime 기준 정렬
                     self.table_log['id'] = self.table_log.index + 1
                     self.db_manager.replace_table(self.table_log, self.table_log_name)
-
-                    self.sys_log.debug(f"LoopTableTrade : elapsed time, {code} {orderId} replace_table table_log : %.4fs" % (time.time() - start_time))
 
                 self.sys_log.debug(f"LoopTableTrade : elapsed time, {code} {orderId} order_limit : %.4fs" % (time.time() - start_time))
                 self.sys_log.debug("------------------------------------------------")
@@ -1447,7 +1409,7 @@ async def loop_table_trade_async(self):
                     income, \
                     self.income_accumulated, \
                     profit, \
-                    self.profit_accumulated = get_income_info(self, 
+                    self.profit_accumulated = await get_income_info(self, 
                                                             self.table_log,
                                                             code,
                                                             side_position,
@@ -1509,7 +1471,7 @@ async def loop_table_trade_async(self):
         # self.sys_log.debug("------------------------------------------------")
         
         loop_elapsed_time = time.time() - loop_start
-        self.sys_log.debug(f"[loop_table_trade] elapsed : {loop_elapsed_time:.2f}s")
+        self.sys_log.debug(f"[loop_table_trade] elapsed : {loop_elapsed_time:.4f}s")
         
         if self.table_trade.empty and self.queue_trade_init.empty():
             await asyncio.sleep(max(0, 1 - loop_elapsed_time))

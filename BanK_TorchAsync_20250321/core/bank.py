@@ -740,92 +740,86 @@ class DatabaseManager:
 
 class TokenBucket:
     """
-    v0.1
-        follow up server's api used-weight (tokens_used).
-    v0.2
-        - update
-            simplify.
-    v0.3
-        - update
-            refill based on tokens_used reset.
-        - deprecate
-            we cannot know reset 'tokens_used' info.
-    v0.3.1
-        - update
-            removed unnecessary tokens_used parameter from wait_for_token_consume.
-    v0.3.2
-        - update
-            divide try / exception on refill().
-    v0.3.3
-        - update
-            set retry-after
-    v0.4
-        - update
-            optimize, simplified error handling, removed redundant loops, improved clarity.
-            sys_log can be declared as internal obj.
-   
-    20241105 0318.
+    v1.0
+        - (async compatible) 기존 코드와 호환되는 이름 유지. 20250410 2201.
+        - 내부 로직만 asyncio 기반으로 비동기화
+        - 사용 시 반드시 await 필요
     """
 
     def __init__(self, sys_log, server_timer, capacity):
-        self.server_timer = server_timer
-        self.server_time = int(time.time() * 1000)  # Initialize with local time
-        self.capacity = capacity  # Maximum number of tokens the bucket can handle per minute
+        # self.server_timer = server_timer
+        self.server_time = int(time.time() * 1000)
+        self.capacity = capacity
         self.tokens_used = 0
-        self.lock = threading.Lock()
-        self.sys_log = sys_log
         self.last_tokens_used = 0
+        self.lock = asyncio.Lock()
+        self.sys_log = sys_log
         
-    def refill(self):
+
+    async def server_timer_async(self):
+        """
+        비동기 방식으로 바이낸스 서버 시간 및 헤더 정보 반환
+        """
+        url = "https://api.binance.com/api/v3/time"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
+                headers = response.headers
+                return {
+                    'data': data,
+                    'header': headers
+                }
+                
+
+    async def refill(self):
         try:
-            response = self.server_timer()
+            response = await self.server_timer_async()  # async server_timer 함수 필요
             self.server_time = response['data']['serverTime']
-            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M', 0))  # Default to 0 if not found
+            self.tokens_used = int(response['header'].get('X-MBX-USED-WEIGHT-1M', 0))
             
-            # Reset tokens_used if it's less than last_tokens_used, indicating a reset
             if self.tokens_used < self.last_tokens_used:
                 self.tokens_used = 0
-                
+
+            self.last_tokens_used = self.tokens_used
+
         except Exception as e:
-            self.sys_log.error(f"Error in TokenBucket.refill(): {e}")
-            self.handle_refill_error(e)
+            self.sys_log.error(f"TokenBucket : Error in refill: {e}")
+            await self.handle_refill_error(e)
             
-        self.last_tokens_used = self.tokens_used  # Update last_tokens_used for the next cycle
 
-    def handle_refill_error(self, error):
-        """Handles errors during the refill process, including retry-after handling."""
+    async def handle_refill_error(self, error):
+        retry_after = 1
         error_message = str(error)
-        retry_after = 1  # Default to 1 second if 'retry-after' is not found
 
-        # Extract the 'retry-after' value from the error message, if available
         retry_match = re.search(r"'retry-after':\s*'(\d+)'", error_message)
         if retry_match:
             retry_after = int(retry_match.group(1))
         else:
-            self.sys_log.warning("Could not find the 'retry-after' value.")
-        
-        # Extract the 'x-mbx-used-weight-1m' value from the error message, if available
+            self.sys_log.warning("TokenBucket : retry-after not found")
+
         tokens_match = re.search(r"'x-mbx-used-weight-1m':\s*'(\d+)'", error_message)
         if tokens_match:
             self.tokens_used = int(tokens_match.group(1))
         else:
-            self.sys_log.warning("Could not find the 'x-mbx-used-weight-1m' value.")
+            self.sys_log.warning("TokenBucket : used-weight not found")
+
+        await asyncio.sleep(retry_after)
+        await self.refill()
         
-        # Wait for the 'retry-after' duration before retrying
-        time.sleep(retry_after)
-        self.refill()  # Retry the refill after waiting
 
-    def check(self, tokens_needed):
-        with self.lock:
-            self.refill()  # Fetch the latest tokens_used from the server
-            
+    async def check(self, tokens_needed):
+        async with self.lock:
+            await self.refill()
             tokens_available = self.capacity - self.tokens_used
-            self.sys_log.debug(f"tokens_available: {tokens_available}")
+            self.sys_log.debug(f"TokenBucket : tokens_available: {tokens_available}")
             return tokens_available >= tokens_needed
+        
 
-    def wait_for_tokens(self, tokens_needed=20):  # Minimum 20 tokens
-        while not self.check(tokens_needed):
-            time.sleep(1)  # Sleep briefly before rechecking
+    async def wait_for_tokens(self, tokens_needed=20):
+        while not await self.check(tokens_needed):
+            self.sys_log.debug(f"TokenBucket : Waiting for tokens... need: {tokens_needed}")
+            await asyncio.sleep(1)
 
 
 class Bank(UMFutures):
@@ -1183,107 +1177,104 @@ class Bank(UMFutures):
         return df_account
 
             
-    def set_leverage(self,
-                    symbol,
-                    leverage):
-        
+    async def set_leverage(self, symbol, leverage):
         """
-        v2.2
+        v4.0
             show_header=True.
-        v2.3
             while loop completion.
-        v3.0
-            - adj. async wait_for_tokens. 20250410 2212.
-        """
+            adj. async wait_for_tokens. 20250410 2212.
         
+        20250510 1743.
+        """
         while True:
             try:       
-                self.token_bucket.wait_for_tokens()
-                                
+                await self.token_bucket.wait_for_tokens()
+
                 server_time = self.token_bucket.server_time
-                response = self.change_leverage(symbol=symbol, 
-                                    leverage=leverage, 
-                                    recvWindow=6000, 
-                                    timestamp=server_time)  
-                
+                response = self.change_leverage(
+                    symbol=symbol, 
+                    leverage=leverage, 
+                    recvWindow=6000, 
+                    timestamp=server_time
+                )  
+
                 self.sys_log.info('leverage changed to {}'.format(leverage))
                 return
-                
+
             except Exception as e:
                 msg = "error in change_initial_leverage : {}".format(e)
                 self.sys_log.error(msg)
                 self.push_msg(msg)
-                time.sleep(self.config.term.symbolic)
+                await asyncio.sleep(self.config.term.symbolic)
 
 
-    def set_position_mode(self, dualSidePosition='true'):
+
+    async def set_position_mode(self, dualSidePosition='true'):
         """
-        v1.0
+        v3.0
             pass error -4059 -4046
-        v2.0
             show_header=True. (token)
-        v2.1
             get persistency
-        v2.2
             while loop completion.
-
-        Last confirmed: 2024-07-21 22:49
-        """
         
+        20250510 1743.
+        """
         while True:
             try:
-                self.token_bucket.wait_for_tokens() 
-                
+                await self.token_bucket.wait_for_tokens()
+
                 server_time = self.token_bucket.server_time
-                response = self.change_position_mode(dualSidePosition=dualSidePosition,
-                                                    recvWindow=6000,
-                                                    timestamp=server_time)                
-                
+                response = self.change_position_mode(
+                    dualSidePosition=dualSidePosition,
+                    recvWindow=6000,
+                    timestamp=server_time
+                )
+
                 self.sys_log.info("dualSidePosition is true.")
                 return
-                
+
             except Exception as e:
-                if '-4059' in str(e): # 'No need to change position side.'
+                if '-4059' in str(e):  # 'No need to change position side.'
                     return
                 msg = "error in set_position_mode : {}".format(e)
                 self.sys_log.error(msg)
                 self.push_msg(msg)
-                time.sleep(self.config.term.symbolic)
-            
-    def set_margin_type(self, symbol, marginType='CROSSED'): # CROSSED / ISOLATED
-        """
-        v1.0
-            pass error -4046
-        v2.0
-            vivid mode.
-        v2.1
-            show_header=True.
-        v2.2
-            while loop completion.
+                await asyncio.sleep(self.config.term.symbolic)
 
-        Last confirmed: 2024-07-21 22:49
+            
+    async def set_margin_type(self, symbol, marginType='CROSSED'):  # CROSSED / ISOLATED
         """
+        v3.0
+            pass error -4046
+            vivid mode.
+            show_header=True.
+            while loop completion.
         
+        20250510 1743.
+        """
         while True:
-            try:            
-                self.token_bucket.wait_for_tokens() 
-                
+            try:
+                await self.token_bucket.wait_for_tokens()
+
                 server_time = self.token_bucket.server_time
-                response = self.change_margin_type(symbol=symbol, 
-                                                marginType=marginType, 
-                                                recvWindow=6000, 
-                                                timestamp=server_time)                
-                
+                response = self.change_margin_type(
+                    symbol=symbol,
+                    marginType=marginType,
+                    recvWindow=6000,
+                    timestamp=server_time
+                )
+
                 self.sys_log.info("margin type is {} now.".format(marginType))
                 return
-                
+
             except Exception as e:
-                if '-4046' in str(e): # 'No need to change margin type.'
+                if '-4046' in str(e):  # 'No need to change margin type.'
                     return
                 msg = "error in set_margin_type : {}".format(e)
                 self.sys_log.error(msg)
                 self.push_msg(msg)
-                time.sleep(self.config.term.symbolic)
+                await asyncio.sleep(self.config.term.symbolic)
+
       
             
 def get_tickers(self, ):  
@@ -1401,9 +1392,10 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
     try:
         results = await asyncio.gather(*tasks)
     except Exception as e:
-        self.sys_log.error(f"[get_df_new_async] gather failed: {e}")
+        self.sys_log.error(f"[klines_async] gather failed: {e}")
         if retry > 0:
-            await asyncio.sleep(0.5)
+            # await asyncio.sleep(0.5)
+            await self.token_bucket.wait_for_tokens()
             return await get_df_new_async(self, session, symbol, interval, days, end_date, limit, retry=retry - 1)
         return '-1122'
 
@@ -1423,7 +1415,7 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
             df_list.append(df)
             res_error_flags.append(1)
         except Exception as e:
-            self.sys_log.error(f"[{symbol}] Error while processing df: {e}")
+            self.sys_log.error(f"[get_df_new_async] {symbol} {interval} Error while processing df: {e}")
             res_error_flags.append(0)
             
 
@@ -1433,14 +1425,15 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
         return df_total[~df_total.index.duplicated(keep='last')]
 
     if res_error_flags[-2:] == [0, 1]:  # sparse error
-        msg = f"Error in get_df_new_async, sparse data pattern detected: {res_error_flags[-2:]}"
+        msg = f"[get_df_new_async] {symbol} {interval} Error sparse data pattern detected: {res_error_flags[-2:]}"
         self.sys_log.error(msg)
         return None
 
     if not df_list:
-        self.sys_log.warning(f"[{symbol} {interval}] All requests failed or empty, retry left: {retry}")
+        self.sys_log.warning(f"[get_df_new_async] {symbol} {interval} All requests failed or empty, retry left: {retry}")
         if retry > 0:
-            await asyncio.sleep(0.5)
+            # await asyncio.sleep(0.5)
+            await self.token_bucket.wait_for_tokens()
             return await get_df_new_async(self, session, symbol, interval, days, end_date, limit, retry=retry - 1)
         return '-1122'
 
@@ -1454,19 +1447,20 @@ async def get_df_new_async(self, session, symbol, interval, days, end_date=None,
     minute_gap = int((now_rounded - latest_index).total_seconds() // 60)
     itv_number = itv_to_number(interval)
 
-    self.sys_log.debug(f"[{symbol} {interval}] last index: {latest_index} | current: {now_rounded} | gap: {minute_gap}")
+    self.sys_log.debug(f"[get_df_new_async] {symbol} {interval} last index: {latest_index} | current: {now_rounded} | gap: {minute_gap}")
     
     
     if end_date is None:
         
         # 현재 시각이 22:30 이상인데, df_res.index.iloc[-1] 가 22:30 (정상) 이 아닌 22:15 (비정상) / 22:10 (비비정상)를 가리키고 있는 상황
         if minute_gap >= itv_number * 2:
-            self.sys_log.debug(f"[Critical Delay] {minute_gap} >= {itv_number} * 2")
+            self.sys_log.debug(f"[get_df_new_async] Critical Delay, {minute_gap} >= {itv_number} * 2")
             return None
         elif minute_gap >= itv_number:
-            self.sys_log.debug(f"[Minor Delay] {minute_gap} >= {itv_number}, retry left: {retry}")
+            self.sys_log.debug(f"[get_df_new_async] Minor Delay, {minute_gap} >= {itv_number}, retry left: {retry}")
             # if retry > 0:
-            await asyncio.sleep(0.5)
+            # await asyncio.sleep(0.5)
+            await self.token_bucket.wait_for_tokens()
             return await get_df_new_async(self, session, symbol, interval, days, end_date, limit)
             # return None
 
@@ -1671,61 +1665,48 @@ def get_price_entry(self,
     return price_entry
 
 
-def get_balance_available(self, 
-                          asset_type='USDT'):
-    
+async def get_balance_available(self, asset_type='USDT'):
     """
-    v1.2
+    v2.0
         Bank show_header=True.
-    v1.3   
         get persistency.
-    v1.3.1
-        - modify
-            to wait_for_tokens.
-        
-    Last confirmed: 2024-08-22.
+        modify to wait_for_tokens (async). 20250510 1743.
     """
-    
     while True:
-        try:      
-            self.token_bucket.wait_for_tokens() 
-            
+        try:
+            await self.token_bucket.wait_for_tokens()
+
             server_time = self.token_bucket.server_time
             response = self.balance(recvWindow=6000, timestamp=server_time)
-            
+
         except Exception as e:
             msg = "Error in get_balance() : {}".format(e)
             self.sys_log.error(msg)
             self.push_msg(msg)
         else:
             available_asset = float([res['availableBalance'] for res in response['data'] if res['asset'] == asset_type][0])
-            balance_available = self.calc_with_precision(available_asset, 2) # default for Binance
-
+            balance_available = self.calc_with_precision(available_asset, 2)  # default for Binance
             return balance_available
-        
-        time.sleep(self.config.term.balance)
-        
-        
-def get_account_normality(self, 
-                         account,
-                         ):
 
+        await asyncio.sleep(self.config.term.balance)
+     
+        
+async def get_account_normality(self, account):
     """
-    v1.1.1
-        - modify return balance_origin, not allow account = None
-    v1.1.2
-        - modify calc. balance_insufficient, just warn, balance_account_total over case.        
-    v1.2
-        - remove balance_insufficient. 20250409 0519.
+    v2.0
+        modify return balance_origin, not allow account = None
+        modify calc. balance_insufficient, just warn, balance_account_total over case.
+        remove balance_insufficient. 20250409 0519.
             - empty 가 아닌 이상 데이터 가져와라.
+    
+    20250510 1743.
     """
-
     # init.
     consistency = True
     balance = np.nan
     balance_origin = np.nan    
-    balance_available = get_balance_available(self)    
-    
+    balance_available = await get_balance_available(self)
+
     # account selection, 
     if account:
         table_account_row = self.table_account[self.table_account['account'] == account]
@@ -1733,11 +1714,6 @@ def get_account_normality(self,
 
         # check empty
         if not table_account_row.empty:
-            # if table_account_row.balance_insufficient.iloc[0]:
-            #     msg = f"balance_insufficient: \n{table_account_row}"
-            #     self.sys_log.warning(msg)
-            #     self.push_msg(msg)
-            #     consistency = False
             balance = table_account_row.balance.iloc[0]     
             balance_origin = table_account_row.balance_origin.iloc[0]       
         else:
@@ -1746,43 +1722,36 @@ def get_account_normality(self,
             self.push_msg(msg)
             consistency = False
 
-    return consistency, balance, balance_origin, balance_available
-            
-            
-                 
-               
+    return consistency, balance, balance_origin, balance_available               
        
 
-def get_precision(self, symbol):
+async def get_precision(self, symbol):
     """
-    v2.0
+    v3.0
         modify to vivid mode.
-    v2.1
         add token.
-    v2.2
         show_header=True.
-    v2.3
         while loop completion.
-
-    Last confirmed: 2024-07-21 22:49
-    """
     
+    20250510 1743.
+    """
     while True:
-        try:       
-            self.token_bucket.wait_for_tokens() 
-             
-            response = self.exchange_info()  
-            precision_price, precision_quantity = [[data['pricePrecision'], data['quantityPrecision']] 
-                                                         for data in response['data']['symbols'] if data['symbol'] == symbol][0]
+        try:
+            await self.token_bucket.wait_for_tokens()
+
+            response = self.exchange_info()
+            precision_price, precision_quantity = [
+                [data['pricePrecision'], data['quantityPrecision']]
+                for data in response['data']['symbols'] if data['symbol'] == symbol
+            ][0]
+
             return precision_price, precision_quantity
-            
+
         except Exception as e:
             msg = "Error in get_precision : {}".format(e)
             self.sys_log.error(msg)
             self.push_msg(msg)
-            time.sleep(self.config.term.precision)      
-        
-
+            await asyncio.sleep(self.config.term.precision)
 
 
 def get_leverage_brackets(self):
@@ -1889,48 +1858,15 @@ def __________________2():
     pass
 
 
-def get_order_info(self, symbol, orderId):
+async def get_order_info(self, symbol, orderId):
     """
-    v1.0 
-        order_res format.
-            {'orderId': 12877344699,
-              'symbol': 'THETAUSDT',
-              'status': 'NEW',
-              'clientOrderId': 't1eOIqWG2m72oxaMKLZHKE',
-              'price': '1.9500',
-              'avgPrice': '0.00',
-              'origQty': '10.0',
-              'executedQty': '0.0',
-              'cumQty': '0.0',
-              'cumQuote': '0.00000',
-              'timeInForce': 'GTC',
-              'type': 'LIMIT',
-              'reduceOnly': False,
-              'closePosition': False,
-              'side': 'BUY',
-              'positionSide': 'LONG',
-              'stopPrice': '0.0000',
-              'workingType': 'CONTRACT_PRICE',
-              'priceProtect': False,
-              'origType': 'LIMIT',
-              'priceMatch': 'NONE',
-              'selfTradePreventionMode': 'NONE',
-              'goodTillDate': 0,
-              'updateTime': 1713354764631},
-    v2.0 
-        vivid mode.
-    v2.1
-        apply token.
-    v2.2
-        show_header=True.
-        recvWindow has been changed to 6000. (preventing 'Timestamp for this request is outside of the recvWindow' error)
-    v2.3
-        while loop completion.
     v2.3.1
         - update
             add exception for Token error.
         - add orderId in error msg. 20250320 2158.
         - add prevention nan. 20250331 0656.
+    v3.0
+        - adj. asyncio. 20250510 1741.
     """
     
     if pd.isnull(orderId):
@@ -1943,7 +1879,7 @@ def get_order_info(self, symbol, orderId):
     
     while True:        
         try:         
-            self.token_bucket.wait_for_tokens() 
+            await self.token_bucket.wait_for_tokens() 
                    
             server_time = self.token_bucket.server_time
             response = self.query_order(symbol=symbol, 
@@ -1958,8 +1894,8 @@ def get_order_info(self, symbol, orderId):
             self.sys_log.error(msg)
             self.push_msg(msg)
             
-            time.sleep(self.config.term.order_info)
-                                     
+            await asyncio.sleep(self.config.term.order_info)
+                                   
 
 def get_price_realtime(self, symbol, interval):
     """
@@ -2125,7 +2061,7 @@ def __________________3():
     pass
 
 
-def order_cancel(self, symbol, orderId, max_retry=3):
+async def order_cancel(self, symbol, orderId, max_retry=3):
     """
     v1.0
         add table_order logic.
@@ -2138,6 +2074,8 @@ def order_cancel(self, symbol, orderId, max_retry=3):
         - modify error -2011 return True. 20250503 1346.
             - status CANCELED / FILLED 로 간주.
             - 신경 쓰지 말고, 다음 프로세스 진행하라는 의미.
+    v3.0
+        - adj. asyncio. 20250510 1739.
     """
     
     orderId = int(orderId)
@@ -2145,7 +2083,7 @@ def order_cancel(self, symbol, orderId, max_retry=3):
 
     while retry < max_retry:
         try:
-            self.token_bucket.wait_for_tokens()
+            await self.token_bucket.wait_for_tokens()
             server_time = self.token_bucket.server_time
             self.cancel_order(symbol=symbol, orderId=orderId, timestamp=server_time)
             self.sys_log.info(f"{symbol} {orderId} canceled.")
@@ -2161,12 +2099,12 @@ def order_cancel(self, symbol, orderId, max_retry=3):
                 return True  # 추가 시도 불필요
 
             retry += 1
-            time.sleep(self.config.term.order_cancel)
+            await asyncio.sleep(self.config.term.order_cancel)
 
     return False
 
 
-def get_quantity_unexecuted(self, 
+async def get_quantity_unexecuted(self, 
                             symbol,
                             orderId):
 
@@ -2183,11 +2121,11 @@ def get_quantity_unexecuted(self,
     """
 
     # if canceled, return True.
-    if order_cancel(self, 
+    if await order_cancel(self, 
                     symbol,
                     orderId):
     
-        order_info = get_order_info(self, 
+        order_info = await get_order_info(self, 
                                     symbol,
                                     orderId)
 
@@ -2195,7 +2133,7 @@ def get_quantity_unexecuted(self,
             
                 # get price, volume updated precision
             _, \
-            precision_quantity = get_precision(self, symbol)
+            precision_quantity = await get_precision(self, symbol)
             self.sys_log.info('precision_quantity : {}'.format(precision_quantity))
             
             quantity_unexecuted = abs(float(order_info['origQty'])) - abs(float(order_info['executedQty']))
@@ -2212,8 +2150,7 @@ def get_quantity_unexecuted(self,
 
 
 
-
-def order_limit(self, 
+async def order_limit(self, 
                 symbol,
                 side_order, 
                 side_position, 
@@ -2245,7 +2182,7 @@ def order_limit(self,
         error_code = 0
         
         try:        
-            self.token_bucket.wait_for_tokens() 
+            await self.token_bucket.wait_for_tokens() 
 
             server_time = self.token_bucket.server_time
             response = self.new_order(timeInForce=TimeInForce.GTC,
@@ -2267,7 +2204,7 @@ def order_limit(self,
 
             ################################
             # Todo) Error Case
-            ################################\
+            ################################
                 
             # -4014 : 'Price not increased by tick size.',
                 # get_precision doesn't work.
@@ -2279,7 +2216,7 @@ def order_limit(self,
                 else:
                     loop_cnt += 1  # loop_cnt 증가
                     
-                     # 첫 번째 루프(-1), 두 번째 루프(-2), 세 번째 루프(-3)
+                    # 첫 번째 루프(-1), 두 번째 루프(-2), 세 번째 루프(-3)
                     price_precision_new = price_precision_orig - loop_cnt
                     
                     # side_position 은 고정, open / close 에 따라 변동 없다.
@@ -2298,7 +2235,6 @@ def order_limit(self,
                     else:
                         error_code = -4014
                             
-            
             # -4003 : 'quantity less than zero.'
                 # if error cannot be solved in this loop, return
             elif "-4003" in str(e):
@@ -2314,9 +2250,9 @@ def order_limit(self,
             # time.sleep(self.config.term.order_limit)            
 
         return order_result, error_code
-  
+
     
-def order_stop_market(self, 
+async def order_stop_market(self, 
                 symbol,
                 side_order, 
                 side_position, 
@@ -2329,6 +2265,8 @@ def order_stop_market(self,
     v0.2
         - adj. loop_cnt_max 20250321 1943.
         - annot. push_msg. 20250410 2055.
+    v1.0
+        - adj. asyncio. 20250510 1736.
     """
     
     loop_cnt  = 0
@@ -2341,7 +2279,7 @@ def order_stop_market(self,
         error_code = 0
         
         try:        
-            self.token_bucket.wait_for_tokens() 
+            await self.token_bucket.wait_for_tokens() 
             
             server_time = self.token_bucket.server_time            
             response = self.new_order(timeInForce=TimeInForce.GTC,
@@ -2372,7 +2310,7 @@ def order_stop_market(self,
                 if price_precision_prev == 0:
                     error_code = -4014
                 else:
-                     # 첫 번째 루프(0), 두 번째 루프(-1), 세 번째 루프(-2)
+                    # 첫 번째 루프(0), 두 번째 루프(-1), 세 번째 루프(-2)
                     price_precision_new = price_precision_prev - loop_cnt
                     price = self.calc_with_precision(price, price_precision_new)
                     
@@ -2388,7 +2326,6 @@ def order_stop_market(self,
                         error_code = -4014
             
             # -4003, 'quantity less than zero.'
-                # if error cannot be solved in this loop, return
             elif "-4003" in str(e):
                 error_code = -4003
             else:
@@ -2403,8 +2340,7 @@ def order_stop_market(self,
 
 
 
-
-def order_market(self, 
+async def order_market(self, 
                  symbol,
                  side_order,
                  side_position,
@@ -2433,7 +2369,7 @@ def order_market(self,
         
         # while 1:
         try:
-            self.token_bucket.wait_for_tokens() 
+            await self.token_bucket.wait_for_tokens() 
             
             server_time = self.token_bucket.server_time
             response = self.new_order(symbol=symbol,
@@ -2453,7 +2389,7 @@ def order_market(self,
             
             self.sys_log.error(msg)
             self.push_msg(msg)                
-            # time.sleep(self.config.term.order_market)        
+            # time.sleep(self.config.term.order_market)         # ❌ 동기 슬립 제거
 
             # # -2022 ReduceOnly Order is rejected
             # if '-2022' in str(e):
@@ -2470,7 +2406,7 @@ def order_market(self,
             
         else:
             # 4. term for quantity consumption.
-            time.sleep(1)
+            await asyncio.sleep(1)  # ✅ 비동기 슬립
 
             if order_result:
 
@@ -2479,7 +2415,7 @@ def order_market(self,
                 # symbol = order_result['symbol'] # we have symbol column in table already.
                 # orderId = order_result['orderId']        
                 
-                self.order_info = get_order_info(self, 
+                self.order_info = await get_order_info(self, 
                                             order_result['symbol'],
                                             order_result['orderId'])
             
@@ -2492,7 +2428,7 @@ def order_market(self,
 
 
 
-def get_income_info(self, 
+async def get_income_info(self, 
                     table_log,
                     code,
                     side_position,
@@ -2508,6 +2444,8 @@ def get_income_info(self,
     v4.3.2
         - hotfix : replace table_log to _valid. 20250324 0327. 
         - add coerce effect on 'cumQuote' col. 20250412 1044.
+    v5.0
+        - adj. asyncio. 20250510 1806.
     """
 
     # 유효한 데이터 필터링
@@ -2525,7 +2463,7 @@ def get_income_info(self,
     # status != 'NEW'인 경우 order_info로 업데이트
         # table_log_valid, NEW status has 0 cumQuote !
     for idx, row in table_log_valid.iterrows():
-        order_info = get_order_info(self, row.symbol, row.orderId)
+        order_info = await get_order_info(self, row.symbol, row.orderId)
         if order_info:
             start_time = time.time()
             table_log_valid.loc[idx, order_info.keys()] = order_info.values()

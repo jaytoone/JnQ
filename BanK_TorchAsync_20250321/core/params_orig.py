@@ -127,7 +127,7 @@ params = {
     ###### Risk Management ######    
     'leverage_limit_const': 2.5,   # margin 소화가 가능하겠다고 생각하는 유효 범위를 본인이 선택한다.
     
-    'target_loss': 1,  # 목표 손실 금액
+    'target_loss': 100,  # 목표 손실 금액
     'target_loss_pct': 100,  # 목표 손실 비율 (%)
     'target_leverage': 5,  # 레버리지 목표값
     'fee_limit': 0.0002,  # 지정가 수수료
